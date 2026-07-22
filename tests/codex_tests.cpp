@@ -264,6 +264,12 @@ static ut::suite codex_tests = [] {
 
     const auto result = runtime.run(request);
 
+    if (!result.stalled) {
+      throw std::runtime_error(
+          "stall fixture failed: " + result.error + " session=" +
+          result.session_id);
+    }
+
     std::ifstream pid_input(pid_path);
     int process_id = 0;
     pid_input >> process_id;
