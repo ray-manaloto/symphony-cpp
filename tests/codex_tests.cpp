@@ -254,7 +254,7 @@ static ut::suite codex_tests = [] {
                 "exec sleep 30\n";
     }
     symphony::codex::CodexAppServerRuntime runtime(
-        "sh stalled-agent.sh",
+        std::string{"sh "} + script_path.string(),
         std::chrono::milliseconds{1},
         std::chrono::milliseconds{100},
         std::chrono::seconds{1});
