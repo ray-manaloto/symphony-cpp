@@ -20,15 +20,15 @@ release artifact. Conventional headers avoid the fork's documented serialization
 
 ## Library decisions
 
-The owner selected Glaze, `ut`, and vcpkg on 2026-07-22. The current `yaml-cpp`,
-`nlohmann/json`, pinned FetchContent declarations, and minimal test harness are bootstrap mechanisms
-to remove in bounded, always-green migrations. They must not spread into new boundaries.
+The owner selected Glaze, `ut`, and vcpkg on 2026-07-22. Glaze now owns JSON codecs and schema
+generation, and `ut` owns the test framework. The remaining `yaml-cpp` workflow loader is a
+bootstrap mechanism to remove only through a bounded, always-green migration.
 
 | Capability | Preferred candidate | Alternatives under discussion | Required property |
 | --- | --- | --- | --- |
 | Async execution | local sender/receiver boundary; evaluate NVIDIA `stdexec` | Glaze's ASIO substrate behind an adapter | one scheduler authority, cancellation, fake time |
 | HTTP client/server | bounded Glaze HTTP prototype | another ASIO adapter if the prototype gate fails | cancellation, TLS, bounded bodies, graceful shutdown |
-| JSON | Glaze behind `symphony_codec` | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
+| JSON | Glaze behind `symphony_meta` and the Codex protocol adapter | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
 | YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |
 | Child processes | Boost.Process v2 | contained POSIX implementation | separate stderr, process groups, timeouts |
 | Persistence | `klemens-morgenstern/sqlite` behind a serialized executor and repository interface | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |

@@ -1,8 +1,18 @@
 #include "symphony/codex/codex.hpp"
 
 #include <filesystem>
-#include <nlohmann/json.hpp>
+#include <glaze/json/generic.hpp>
 #include <ut/ut.hpp>
+
+namespace {
+glz::generic_u64 parse_json(const std::string_view input) {
+  glz::generic_u64 value;
+  if (const auto error = glz::read_json(value, input)) {
+    throw std::runtime_error(glz::format_error(error));
+  }
+  return value;
+}
+} // namespace
 
 static ut::suite codex_tests = [] {
   ut::test("json line codec frames and validates one object") = [] {
@@ -35,23 +45,24 @@ static ut::suite codex_tests = [] {
     runtime.cancel("session-1");
   };
 
-  ut::test("app-server protocol follows initialize thread and turn schema") =
-      [] {
-        const auto initialize =
-            nlohmann::json::parse(symphony::codex::JsonLineCodec::parse(
-                symphony::codex::AppServerProtocol::initialize_request()));
-        ut::expect(initialize.at("method") == "initialize");
-        ut::expect(initialize.at("params").at("clientInfo").at("name") ==
-                   "symphony_cpp");
+  ut::test(
+      "app-server protocol follows initialize thread and turn schema") = [] {
+    const auto initialize = parse_json(symphony::codex::JsonLineCodec::parse(
+        symphony::codex::AppServerProtocol::initialize_request()));
+    ut::expect(initialize.at("method").get<std::string>() == "initialize");
+    ut::expect(initialize.at("params")
+                   .at("clientInfo")
+                   .at("name")
+                   .get<std::string>() == "symphony_cpp");
 
-        const auto turn =
-            nlohmann::json::parse(symphony::codex::JsonLineCodec::parse(
-                symphony::codex::AppServerProtocol::turn_start_request(
-                    2, "thr_1", "/tmp/work", "Do work")));
-        ut::expect(turn.at("method") == "turn/start");
-        ut::expect(turn.at("params").at("threadId") == "thr_1");
-        ut::expect(turn.at("params").at("input").at(0).at("text") == "Do work");
-      };
+    const auto turn = parse_json(symphony::codex::JsonLineCodec::parse(
+        symphony::codex::AppServerProtocol::turn_start_request(
+            2, "thr_1", "/tmp/work", "Do work")));
+    ut::expect(turn.at("method").get<std::string>() == "turn/start");
+    ut::expect(turn.at("params").at("threadId").get<std::string>() == "thr_1");
+    ut::expect(turn.at("params").at("input")[0].at("text").get<std::string>() ==
+               "Do work");
+  };
 
   ut::test(
       "app-server protocol extracts identities and terminal notifications") =
@@ -66,6 +77,18 @@ static ut::suite codex_tests = [] {
                    symphony::codex::ProtocolEvent::turn_completed);
         ut::expect(completed.turn_id == std::string{"turn_2"});
       };
+
+  ut::test("app-server protocol tolerates additive fields but rejects bad "
+           "ids") = [] {
+    const auto additive = symphony::codex::AppServerProtocol::decode(
+        R"({"id":1,"result":{"thread":{"id":"thr_1","newField":true}},"future":{}})");
+    ut::expect(additive.response_id == std::optional<std::uint64_t>{1});
+    ut::expect(additive.thread_id == std::string{"thr_1"});
+    ut::expect(ut::throws([] {
+      static_cast<void>(symphony::codex::AppServerProtocol::decode(
+          R"({"id":"1","result":{}})"));
+    }));
+  };
 
   ut::test("app-server conversation performs handshake and completes a turn") =
       [] {

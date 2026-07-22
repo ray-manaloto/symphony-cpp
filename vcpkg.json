@@ -6,7 +6,6 @@
   "dependencies": [
     "fmt",
     "glaze",
-    "nlohmann-json",
     "ut",
     "yaml-cpp"
   ]

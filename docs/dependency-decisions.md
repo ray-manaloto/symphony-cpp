@@ -5,9 +5,9 @@ with a link or quote identifying explicit owner authorization.
 
 | Capability | Selected provider | Why this owns the mechanism | Status / re-evaluation trigger |
 | --- | --- | --- | --- |
-| JSON, reflected codecs, schema helpers | Glaze | One C++23/26 codec/reflection stack covers JSON and related formats; P2996 backend is differential-tested. | Selected; remove nlohmann/json after fixture parity. |
+| JSON, reflected codecs, schema helpers | Glaze | One C++23/26 codec/reflection stack covers JSON and related formats; P2996 backend is differential-tested. | Active; nlohmann/json removed after fixture parity. |
 | Operator HTTP API | Glaze HTTP | Existing ASIO HTTP/REST implementation avoids a local server/router. | Prototype gate: cancellation, TLS, size limits, overload, shutdown. |
-| Codex JSON-RPC payloads | Glaze JSON/JSON-RPC facilities plus newline framing adapter | Existing codec/protocol facilities own JSON-RPC semantics; local code owns only Codex-specific DTOs and JSONL process framing. | Validate exact app-server fixtures before deleting bootstrap codec. |
+| Codex JSON-RPC payloads | Glaze JSON facilities plus newline framing adapter | Existing codec facilities own JSON parsing and serialization; local code owns only Codex-specific DTOs, state sequencing, and JSONL process framing. | Active; additive-field and malformed-ID fixtures guard compatibility. |
 | Workflow YAML | Glaze YAML | Avoid a second parser if Symphony fixtures and unknown-key behavior pass. | Remove yaml-cpp after full workflow parity. |
 | Unit tests | `openalgz/ut` | Existing C++23 runtime/compile-time test framework replaces the local registry/macros. | Active through the pinned vcpkg overlay; GCC 16.1 CI is the release gate. |
 | Dependency management | vcpkg manifest mode | Pinned registry, version graph, binary caching, and overlay mechanism. | Active; FetchContent/CPM/vendoring prohibited. |
