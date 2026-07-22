@@ -7,6 +7,11 @@ progress/context tracking, the anti-spin transition, workflow discovery and pars
 fixture workspaces, a JSONL app-server transport boundary, redacted event history, daemon and CLI
 entry points, and conformance tests. Live provider mutation remains disabled.
 
+This project is dependency-first: use a maintained library, tool, generator, or permitted service
+instead of building commodity capability from scratch. Read the
+[dependency-first convention](docs/conventions/dependency-first.md) and
+[decision ledger](docs/dependency-decisions.md) before adding infrastructure.
+
 ## Build
 
 ```sh

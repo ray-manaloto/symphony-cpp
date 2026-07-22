@@ -1,6 +1,8 @@
 # Documentation map
 
 - [Architecture](architecture.md)
+- [Dependency-first convention](conventions/dependency-first.md)
+- [Dependency decision ledger](dependency-decisions.md)
 - [Normative and comparative sources](research/sources.md)
 - [C++26 library-stack evaluation](research/cpp-library-evaluation.md)
 - [Section 18.1 conformance matrix](conformance.md)

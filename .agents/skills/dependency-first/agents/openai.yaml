@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency First"
+  short_description: "Prefer maintained third-party capabilities"
+  default_prompt: "Use $dependency-first before implementing a new subsystem or utility."

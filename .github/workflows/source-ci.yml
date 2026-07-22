@@ -26,6 +26,8 @@ jobs:
           apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build tar unzip zip
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Enforce dependency-first policy
+        run: node scripts/check-dependency-policy.mjs
       - name: Bootstrap pinned vcpkg
         run: ./scripts/bootstrap-vcpkg.sh
       - name: Configure
