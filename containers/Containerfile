@@ -1,0 +1,74 @@
+# syntax=docker/dockerfile:1.10
+ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:1641c7bc30b00e0c5d4858b3e4da750123e9802fdb8086e9baa5afa2bc99393c
+
+FROM ${CODEX_BASE} AS compiler-build-base
+USER root
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    autoconf automake bison build-essential ca-certificates ccache cmake curl flex git gnupg \
+    libgmp-dev libisl-dev libmpc-dev libmpfr-dev libzstd-dev ninja-build python3 texinfo xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+FROM compiler-build-base AS gcc-builder
+ARG GCC_VERSION=16.1.0
+ARG GCC_SHA256=50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79
+ARG GCC_SIGNER=D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62
+WORKDIR /tmp/gcc
+RUN curl --fail --location --proto '=https' --tlsv1.2 \
+      -o gcc.tar.xz "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
+ && curl --fail --location --proto '=https' --tlsv1.2 \
+      -o gcc.tar.xz.sig "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz.sig" \
+ && echo "${GCC_SHA256}  gcc.tar.xz" | sha256sum --check - \
+ && curl --fail --location --proto '=https' --tlsv1.2 \
+      -o signer.asc "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${GCC_SIGNER}" \
+ && gpg --batch --import signer.asc \
+ && test "$(gpg --batch --with-colons --fingerprint "${GCC_SIGNER}" | awk -F: '$1=="fpr" {print $10; exit}')" = "${GCC_SIGNER}" \
+ && gpg --batch --verify gcc.tar.xz.sig gcc.tar.xz \
+ && tar -xf gcc.tar.xz
+RUN mkdir build \
+ && cd build \
+ && ../gcc-${GCC_VERSION}/configure --prefix=/opt/gcc-16.1 --disable-bootstrap \
+      --disable-multilib --enable-languages=c,c++ --with-system-zlib \
+ && make -j"$(nproc)" \
+ && make install-strip \
+ && mkdir -p /opt/gcc-16.1/sources \
+ && cp /tmp/gcc/gcc.tar.xz /tmp/gcc/gcc.tar.xz.sig /tmp/gcc/signer.asc /opt/gcc-16.1/sources/ \
+ && cp /tmp/gcc/gcc-${GCC_VERSION}/COPYING* /opt/gcc-16.1/sources/ \
+ && rm -rf /tmp/gcc/build /tmp/gcc/gcc-${GCC_VERSION} /tmp/gcc/gcc.tar.xz /tmp/gcc/gcc.tar.xz.sig /tmp/gcc/signer.asc
+
+FROM compiler-build-base AS symphony-gcc16
+COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1
+
+FROM compiler-build-base AS clang-builder
+ARG CLANG_P2996_COMMIT=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
+WORKDIR /tmp
+RUN git clone --filter=blob:none https://github.com/bloomberg/clang-p2996.git llvm-project \
+ && cd llvm-project \
+ && git checkout --detach "${CLANG_P2996_COMMIT}" \
+ && test "$(git rev-parse HEAD)" = "${CLANG_P2996_COMMIT}"
+RUN cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/clang-p2996 \
+      -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi' \
+      -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_ASSERTIONS=ON \
+ && cmake --build /tmp/llvm-build --target install -j 2 \
+ && rm -rf /tmp/llvm-build /tmp/llvm-project
+
+FROM compiler-build-base AS symphony-clang-p2996
+COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
+
+FROM compiler-build-base AS symphony-dev
+COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
+ENV PATH=/opt/gcc-16.1/bin:${PATH} \
+    CC=/opt/gcc-16.1/bin/gcc \
+    CXX=/opt/gcc-16.1/bin/g++
+WORKDIR /workspace/symphony-cpp
+COPY . .
+CMD ["bash"]
+
+FROM compiler-build-base AS symphony-ci-clang
+COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996
+ENV PATH=/opt/clang-p2996/bin:${PATH} \
+    CC=/opt/clang-p2996/bin/clang \
+    CXX=/opt/clang-p2996/bin/clang++
+WORKDIR /workspace/symphony-cpp
+COPY . .
+CMD ["bash"]

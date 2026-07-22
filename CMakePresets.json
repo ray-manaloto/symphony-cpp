@@ -1,0 +1,41 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "gcc-debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/gcc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++-16",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "SYMPHONY_ENABLE_REFLECTION": "ON"
+      }
+    },
+    {
+      "name": "gcc-release",
+      "inherits": "gcc-debug",
+      "binaryDir": "${sourceDir}/build/gcc-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "clang-reflection",
+      "inherits": "gcc-debug",
+      "binaryDir": "${sourceDir}/build/clang-reflection",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "/opt/clang-p2996/bin/clang++",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "gcc-debug", "configurePreset": "gcc-debug" },
+    { "name": "gcc-release", "configurePreset": "gcc-release" },
+    { "name": "clang-reflection", "configurePreset": "clang-reflection" }
+  ],
+  "testPresets": [
+    { "name": "gcc-debug", "configurePreset": "gcc-debug", "output": { "outputOnFailure": true } },
+    { "name": "clang-reflection", "configurePreset": "clang-reflection", "output": { "outputOnFailure": true } }
+  ]
+}

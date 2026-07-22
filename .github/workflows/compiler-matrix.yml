@@ -1,0 +1,118 @@
+name: C++26 compiler matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "codex/**"]
+    paths:
+      - ".github/workflows/compiler-matrix.yml"
+      - "containers/**"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "dependencies.lock.json"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: compiler-matrix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  portable:
+    name: Portable C++26 tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure
+        run: cmake -S . -B build/portable -G Ninja -DSYMPHONY_ENABLE_REFLECTION=OFF -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/portable --parallel 4
+      - name: Test
+        run: ctest --test-dir build/portable --output-on-failure
+
+  gcc16:
+    name: GCC 16.1 reflection and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+      - name: Sign in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build pinned GCC development image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          file: containers/Containerfile
+          target: symphony-dev
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: symphony-dev:ci
+          cache-from: type=gha,scope=symphony-gcc16
+          cache-to: type=gha,mode=max,scope=symphony-gcc16
+      - name: GCC reflection suite
+        run: docker run --rm symphony-dev:ci bash -c 'cmake --preset gcc-debug && cmake --build --preset gcc-debug && ctest --preset gcc-debug'
+      - name: Publish tested GCC development image
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/symphony-dev"
+          docker tag symphony-dev:ci "${image}:${GITHUB_SHA}"
+          docker tag symphony-dev:ci "${image}:edge"
+          docker push "${image}:${GITHUB_SHA}"
+          docker push "${image}:edge"
+
+  clang-p2996:
+    name: clang-p2996 differential reflection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+      - name: Sign in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build pinned Clang differential image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          file: containers/Containerfile
+          target: symphony-ci-clang
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: symphony-ci-clang:ci
+          cache-from: type=gha,scope=symphony-clang-p2996
+          cache-to: type=gha,mode=max,scope=symphony-clang-p2996
+      - name: Clang differential reflection suite
+        run: docker run --rm symphony-ci-clang:ci bash -c 'cmake --preset clang-reflection && cmake --build --preset clang-reflection && ctest --preset clang-reflection'
+      - name: Publish tested Clang differential image
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/symphony-ci-clang"
+          docker tag symphony-ci-clang:ci "${image}:${GITHUB_SHA}"
+          docker tag symphony-ci-clang:ci "${image}:edge"
+          docker push "${image}:${GITHUB_SHA}"
+          docker push "${image}:edge"
