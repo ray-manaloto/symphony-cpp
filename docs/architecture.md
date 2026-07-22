@@ -31,7 +31,7 @@ to remove in bounded, always-green migrations. They must not spread into new bou
 | JSON | Glaze behind `symphony_codec` | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
 | YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |
 | Child processes | Boost.Process v2 | contained POSIX implementation | separate stderr, process groups, timeouts |
-| Persistence | proposed SQLite C API + thin RAII repository | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
+| Persistence | `klemens-morgenstern/sqlite` behind a serialized executor and repository interface | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
 | Tests | `openalgz/ut` plus libFuzzer/property fixtures | none concurrently | deterministic state-machine properties and compile-time tests |
 | CLI/logging | CLI11 and spdlog | owner-selected alternatives | typed errors and structured redaction |
 | Formatting | `{fmt}` | standard formatting when supported equivalently | type safety and redact-before-format discipline |
@@ -46,3 +46,6 @@ Glaze REPE is not the Codex transport: it is a distinct, currently unstable prot
 leaves synchronization to the caller. The Glaze HTTP adapter is accepted only after fixture tests
 cover cancellation, malformed input, body/header limits, TLS verification, overload and graceful
 shutdown. Intel's bare-metal libraries remain references, not hosted-Linux runtime dependencies.
+The selected SQLite wrapper is synchronous, so it never runs on the scheduler's I/O thread. A
+repository-owned executor serializes access and supplies cancellation at the queued-operation seam;
+domain types and durable schema do not depend on Boost.Describe/PFR metadata.

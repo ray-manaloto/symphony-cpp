@@ -18,6 +18,7 @@ Primary sources define behavior; comparisons only identify possible gaps. Access
 - [x] [`openalgz/ut`](https://github.com/openalgz/ut), selected unit and compile-time test library
 - [x] [vcpkg manifest mode and versioning](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode), selected dependency manager
 - [x] [`reflect-cpp`](https://github.com/getml/reflect-cpp) and [`sqlgen`](https://github.com/getml/sqlgen), persistence/reflection comparisons
+- [x] [`klemens-morgenstern/sqlite`](https://github.com/klemens-morgenstern/sqlite), selected synchronous SQLite adapter behind the persistence executor
 - [x] [`fmt`](https://github.com/fmtlib/fmt), [`scnlib`](https://github.com/eliaskosunen/scnlib), and [Boost.Decimal](https://github.com/boostorg/decimal)
 - [x] [Intel bare-metal concurrency](https://github.com/intel/cpp-baremetal-concurrency), [senders/receivers](https://github.com/intel/cpp-baremetal-senders-and-receivers), [compile-time init/build](https://github.com/intel/compile-time-init-build), and [standard extensions](https://github.com/intel/cpp-std-extensions)
 - [x] [`mirror_bridge`](https://github.com/FranciscoThiesen/mirror_bridge), [`imrefl`](https://github.com/fullptr/imrefl), and [`splice`](https://github.com/FloofyPlasma/splice), reflection references only

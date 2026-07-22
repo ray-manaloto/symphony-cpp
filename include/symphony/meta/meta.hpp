@@ -24,8 +24,9 @@ template <typename T>
 [[nodiscard]] std::vector<FieldDescriptor> fields() {
 #if defined(SYMPHONY_ENABLE_REFLECTION)
   std::vector<FieldDescriptor> result;
-  constexpr auto members = std::meta::nonstatic_data_members_of(
-      ^^T, std::meta::access_context::current());
+  constexpr auto members = std::define_static_array(
+      std::meta::nonstatic_data_members_of(
+          ^^T, std::meta::access_context::current()));
   template for (constexpr auto member : members) {
     result.push_back({
         std::string{std::meta::identifier_of(member)},
@@ -44,8 +45,9 @@ template <typename T>
 [[nodiscard]] nlohmann::json reflected_json(const T& object) {
 #if defined(SYMPHONY_ENABLE_REFLECTION)
   nlohmann::json result = nlohmann::json::object();
-  constexpr auto members = std::meta::nonstatic_data_members_of(
-      ^^T, std::meta::access_context::current());
+  constexpr auto members = std::define_static_array(
+      std::meta::nonstatic_data_members_of(
+          ^^T, std::meta::access_context::current()));
   template for (constexpr auto member : members) {
     result[std::string{std::meta::identifier_of(member)}] = object.[:member:];
   }
@@ -61,8 +63,9 @@ template <typename T>
 #if defined(SYMPHONY_ENABLE_REFLECTION)
   nlohmann::json properties = nlohmann::json::object();
   nlohmann::json required = nlohmann::json::array();
-  constexpr auto members = std::meta::nonstatic_data_members_of(
-      ^^T, std::meta::access_context::current());
+  constexpr auto members = std::define_static_array(
+      std::meta::nonstatic_data_members_of(
+          ^^T, std::meta::access_context::current()));
   template for (constexpr auto member : members) {
     using Member = std::remove_cvref_t<decltype(std::declval<T>().[:member:])>;
     std::string type = "object";

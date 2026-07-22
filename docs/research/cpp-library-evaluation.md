@@ -18,7 +18,7 @@ as inference; activity counts are deliberately not used as proof of quality.
 | Codex app-server transport | **Hand-written JSONL/JSON-RPC adapter using Glaze JSON only; do not use REPE.** | Symphony speaks JSON-RPC/JSONL, whereas REPE is a different protocol. The REPE server/client/registry are expressly unstable and leave registry synchronization to callers. |
 | Unit tests | **Adopt `ut` for small C++23/26 unit and compile-time tests; add a property/fuzz layer separately.** | `ut` is a single-header C++23 test library with compile-time tests, but it is small and has no evidence here of property testing, death tests, test discovery integration, or broad tooling support. |
 | Dependencies | **Use vcpkg manifest mode with a committed Git `builtin-baseline`, version constraints/overrides, and a committed `vcpkg-configuration.json`.** | Manifest mode gives project-local installs and is required for versioning/registries. Use an overlay port only when a required library is absent from the curated registry, then pin its source hash and add an exit/removal criterion. |
-| Persistence | **Start with SQLite WAL plus a small hand-written repository/event-store interface and serialized DB executor. Evaluate `sqlgen` in a contained spike, not as the initial persistence authority.** | SQLite satisfies deterministic fixture/restart behavior without a service. `sqlgen` is attractive typed SQL but couples persistence model to reflect-cpp and is synchronous in the evidenced API. |
+| Persistence | **Use `klemens-morgenstern/sqlite` with SQLite WAL behind a small repository/event-store interface and serialized DB executor. Evaluate `sqlgen` in a contained spike, not as the initial persistence authority.** | The wrapper augments SQLite with typed queries, prepared statements and RAII transactions without hiding the C API. It and `sqlgen` are synchronous in the evidenced APIs, so neither defines the async boundary. |
 | Reflection | **Keep `symphony_meta` as the only direct P2996 consumer. Use Glaze's P2996 backend only through codec tests.** | The release and differential compiler policy already requires this isolation. The reference projects validate that GCC 16 and clang-p2996 are usable experiments; none should become a runtime dependency. |
 | Quality gates | **Use Clang warnings, `clang-tidy`, CSA checks, sanitizers, and IWYU as separate non-mutating gates.** | `clang-tidy` can run analyzer checks from `compile_commands.json`; IWYU needs a compatible Clang build and should report/verify rather than automatically rewrite headers. |
 
@@ -37,6 +37,7 @@ adoption must first make a pinned overlay-port decision.
 | [openalgz/ut](https://github.com/openalgz/ut) | MIT; C++23 and CMake 3.31 required; single header, optional compile-time tests and optional C++20/23 modules. GitHub records release `v1.2.0` (2026-03-07). No curated `ut` port was found at the direct official registry path on the access date. | Suitable for unit-level state-machine, parser, and reflected-DTO tests. **Inference:** pin source through a minimal overlay port or vendored source only after the test registration/CTest and GCC16/clang-p2996 smoke fixtures pass. Pair with libFuzzer or a property test mechanism; `ut` alone is not enough conformance evidence. |
 | [reflect-cpp](https://github.com/getml/reflect-cpp) | MIT; described by its authors as C++20 reflection-based serialization/deserialization/validation. It supports many optional formats and carries a `vcpkg.json`; [curated `reflectcpp` port verified.](https://github.com/microsoft/vcpkg/tree/master/ports/reflectcpp) The observed state was its `main` branch; no release tag is asserted here. | Valuable comparison and optional inbound configuration/validation adapter. **Inference:** do not adopt beside Glaze in the first architecture: two pervasive reflection/codec systems duplicate type annotations and error models. Re-evaluate only if its validation/JSON-schema features delete measured handwritten code. |
 | [sqlgen](https://github.com/getml/sqlgen) | MIT; C++20, tightly integrated with reflect-cpp; supports SQLite, PostgreSQL, DuckDB, and optional MariaDB, plus parameterized queries. Its documented SQLite example returns directly from `sqlite::connect`; docs show vcpkg installation. [Curated `sqlgen` port verified.](https://github.com/microsoft/vcpkg/tree/master/ports/sqlgen) No upstream release tag is asserted by this report. | Worth a narrow SQLite repository spike. **Inference:** keep it out of domain types and execute all calls on one dedicated persistence executor; do not claim native sender/receiver support from its current documented API. Reject if migrations, transaction semantics, error mapping, or build closure prove heavier than a thin SQLite wrapper. |
+| [`klemens-morgenstern/sqlite`](https://github.com/klemens-morgenstern/sqlite) | Boost Software License headers; active, non-archived repository at observed `master` `6cf149d052dc30cd8715586284ffe398df55d2e9`. It augments SQLite with typed queries, prepared statements, RAII transactions/savepoints, hooks, backup, JSON/custom functions and non-throwing overloads. Its build uses SQLite plus Boost headers/Describe/PFR/System. No asynchronous, coroutine, sender/receiver API or curated vcpkg port was found in the inspected source/registry. | **Adopt as the initial SQLite adapter through a pinned overlay port.** Keep it inside `symphony_persistence`; execute operations on one serialized DB executor and map errors into repository-owned types. Do not expose Boost reflection types or mistake synchronous calls for cancellable I/O. |
 | [{fmt}](https://github.com/fmtlib/fmt) | MIT; no external dependencies; offers compiled or `FMT_HEADER_ONLY` use, type-safe compile-time format checking, and implementation of C++20 `std::format`/C++23 `std::print`. The official repository describes continuous fuzzing. Curated package name: `fmt` (official vcpkg manifest documentation uses it as an example). | **Adopt.** Use for diagnostics and structured log rendering at the redaction boundary; do not format secrets before redaction. Prefer compiled vcpkg target to control compile-time cost. Pin the curated baseline; this report does not assert a release number. |
 | [scnlib](https://github.com/eliaskosunen/scnlib) | Apache-2.0; modern type-safe input parsing, reference implementation for P1729, with modules support and C++23 requirement in current documentation. Repository's branch is `master`; this report does not establish a release tag or curated port. | **Defer.** Command/config parsing is not the current performance or safety bottleneck. Use standard parsing / Glaze configuration decoding until an actual CLI parsing gap warrants a deletion-test spike. |
 | [Boost.Decimal](https://github.com/boostorg/decimal) | BSL-1.0; header-only/no dependency, C++14; IEEE 754 decimal types; documented vcpkg availability and test matrix includes GCC 8+, Clang 6+, MSVC 2019+, Ubuntu/macOS/Windows. Latest release shown by the project: `v6.0.1` (2026-01-27). | **Conditional adopt.** Appropriate for tracker monetary/decimal quantities only when the upstream fixture schema needs exact decimal semantics. Do not introduce it for timestamps, retry intervals, or JSON arbitrary numbers absent an explicit API contract. |
@@ -74,17 +75,20 @@ redacted data with versioned envelopes; do not let a reflection library define
 the durable schema.  This directly supports deterministic replay, restart-safe
 retry, and the one-correction-then-stalled invariant.
 
-Alternatives, in order of exploration:
+Implementation order:
 
-1. **SQLite + `sqlgen` spike:** potentially removes mapper/query boilerplate.
+1. **SQLite + `klemens-morgenstern/sqlite`:** selected initial adapter, isolated
+   behind the repository and serialized executor; accept the overlay only after
+   GCC 16, clang-p2996/libc++, transaction, busy/restart and cancellation-queue fixtures pass.
+2. **SQLite + `sqlgen` spike:** potentially removes mapper/query boilerplate.
    Accept only if transactions, migrations, cancellation handoff, and the
    dependency closure pass the same fixture suite as the handwritten boundary.
-2. **SQLite C API + thin RAII wrapper:** lowest dependency and most explicit
-   control; recommended initial implementation.
-3. **Append-only filesystem NDJSON:** acceptable only as a test oracle/export,
+3. **SQLite C API + repository-owned RAII:** fallback if the selected wrapper's
+   compiler closure, error semantics, or overlay maintenance fails the fixture gate.
+4. **Append-only filesystem NDJSON:** acceptable only as a test oracle/export,
    not the authoritative store: atomic indexing, compaction, concurrent writer
    recovery, and query integrity would become repository-owned work.
-4. **PostgreSQL/DuckDB:** do not introduce for this standalone fixture-first
+5. **PostgreSQL/DuckDB:** do not introduce for this standalone fixture-first
    implementation. SQLgen supports them, but they expand the test and runtime
    boundary without a stated product need.
 
@@ -153,6 +157,7 @@ changed lines. IWYU is a Clang-based include analysis tool.
   [versioning](https://learn.microsoft.com/en-us/vcpkg/users/versioning).
 - [reflect-cpp](https://github.com/getml/reflect-cpp) and
   [sqlgen](https://github.com/getml/sqlgen).
+- [`klemens-morgenstern/sqlite`](https://github.com/klemens-morgenstern/sqlite).
 - [{fmt}](https://github.com/fmtlib/fmt), [scnlib](https://github.com/eliaskosunen/scnlib),
   and [Boost.Decimal](https://github.com/boostorg/decimal).
 - [Intel bare-metal concurrency](https://github.com/intel/cpp-baremetal-concurrency),
