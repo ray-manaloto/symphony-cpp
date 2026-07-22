@@ -244,7 +244,11 @@ static ut::suite codex_tests = [] {
     std::filesystem::create_directories(root);
     const auto pid_path = root / "child.pid";
     const auto command = std::string{"echo $$ > "} + pid_path.string() +
-                         "; exec sleep 30";
+                         "; printf '%s\\n' "
+                         "'{\"id\":0,\"result\":{}}' "
+                         "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
+                         "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
+                         "exec sleep 30";
     symphony::codex::CodexAppServerRuntime runtime(
         command,
         std::chrono::milliseconds{1},
