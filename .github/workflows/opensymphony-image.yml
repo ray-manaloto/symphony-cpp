@@ -2,6 +2,11 @@ name: OpenSymphony orchestrator image
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["codex/implementation"]
+    paths:
+      - .github/workflows/opensymphony-image.yml
+      - containers/OpenSymphony.Containerfile
 
 permissions:
   contents: read
