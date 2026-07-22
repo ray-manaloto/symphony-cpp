@@ -30,12 +30,25 @@ class FakeClock final : public Clock {
   time_point now_{};
 };
 
+class SystemClock final : public Clock {
+ public:
+  [[nodiscard]] time_point now() const override;
+};
+
 struct SchedulerConfig {
   std::vector<std::string> active_states{"Todo", "In Progress"};
   std::vector<std::string> terminal_states{"Done", "Cancelled"};
+  std::vector<std::string> required_labels;
   std::size_t max_concurrent{1};
+  std::map<std::string, std::size_t> max_concurrent_by_state;
   std::chrono::milliseconds retry_base{1000};
+  std::chrono::milliseconds failure_retry_base{10000};
   std::chrono::milliseconds retry_cap{300000};
+  std::chrono::milliseconds hook_timeout{60000};
+  std::optional<std::string> after_create_hook;
+  std::optional<std::string> before_run_hook;
+  std::optional<std::string> after_run_hook;
+  std::optional<std::string> before_remove_hook;
 };
 
 struct RunState {
@@ -58,6 +71,8 @@ class Scheduler {
 
   void tick(std::string_view prompt_template);
   void reconcile();
+  void startup_cleanup();
+  void reconfigure(SchedulerConfig config);
   [[nodiscard]] const std::map<std::string, RunState>& runs() const noexcept;
 
  private:
@@ -65,6 +80,8 @@ class Scheduler {
   void execute(RunState& run, std::string_view prompt_template);
   [[nodiscard]] bool active_state(std::string_view state) const;
   [[nodiscard]] bool terminal_state(std::string_view state) const;
+  [[nodiscard]] bool eligible(const domain::Issue& issue) const;
+  [[nodiscard]] bool state_capacity(const domain::Issue& issue) const;
 
   SchedulerConfig config_;
   tracker::IssueTracker& tracker_;
@@ -76,4 +93,3 @@ class Scheduler {
 };
 
 }  // namespace symphony::scheduler
-

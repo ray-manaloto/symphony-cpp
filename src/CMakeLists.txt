@@ -6,6 +6,7 @@ endfunction()
 
 symphony_library(symphony_domain domain/domain.cpp)
 symphony_library(symphony_meta meta/meta.cpp)
+target_link_libraries(symphony_meta PUBLIC nlohmann_json::nlohmann_json)
 symphony_library(symphony_workflow workflow/workflow.cpp)
 target_link_libraries(symphony_workflow PUBLIC yaml-cpp::yaml-cpp)
 symphony_library(symphony_tracker tracker/tracker.cpp)

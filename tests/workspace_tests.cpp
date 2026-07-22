@@ -26,3 +26,33 @@ TEST("fixture workspace creates hooks and removes only contained paths") {
   std::filesystem::remove_all(root);
 }
 
+TEST("local workspace executes argv hooks inside the workspace") {
+  const auto root = std::filesystem::temp_directory_path() / "symphony-local-workspaces";
+  std::filesystem::remove_all(root);
+  symphony::workspace::LocalWorkspaceExecutor executor(root);
+  const symphony::domain::Issue issue{"id-local", "SYM-LOCAL", "", "Todo", {}};
+  const auto workspace = executor.create(issue);
+  executor.run_hook(
+      workspace,
+      "before_run",
+      {"/usr/bin/touch", "hook-ran"},
+      std::chrono::seconds{1});
+  REQUIRE(std::filesystem::exists(workspace.path / "hook-ran"));
+  executor.remove(workspace);
+  std::filesystem::remove_all(root);
+}
+
+TEST("local workspace kills timed-out hooks") {
+  const auto root = std::filesystem::temp_directory_path() / "symphony-timeout-workspaces";
+  std::filesystem::remove_all(root);
+  symphony::workspace::LocalWorkspaceExecutor executor(root);
+  const symphony::domain::Issue issue{"id-timeout", "SYM-TIMEOUT", "", "Todo", {}};
+  const auto workspace = executor.create(issue);
+  REQUIRE_THROWS(executor.run_hook(
+      workspace,
+      "before_run",
+      {"/bin/sh", "-c", "sleep 1"},
+      std::chrono::milliseconds{20}));
+  executor.remove(workspace);
+  std::filesystem::remove_all(root);
+}

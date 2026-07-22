@@ -12,6 +12,7 @@ int main(int argc, char** argv) {
       if (argc != 3) throw std::runtime_error("usage: symphonyctl validate PATH");
       symphony::workflow::ProcessEnvironment environment;
       const auto document = symphony::workflow::WorkflowLoader{}.load(argv[2], environment);
+      symphony::workflow::validate_for_dispatch(document.config, {"fake", "github", "linear"});
       std::cout << "valid " << document.path << " " << document.fingerprint << '\n';
       return 0;
     }
@@ -29,4 +30,3 @@ int main(int argc, char** argv) {
     return 1;
   }
 }
-

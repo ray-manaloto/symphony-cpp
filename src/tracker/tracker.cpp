@@ -1,15 +1,28 @@
 #include "symphony/tracker/tracker.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 namespace symphony::tracker {
+namespace {
+std::string normalized(std::string value) {
+  std::ranges::transform(value, value.begin(), [](const unsigned char character) {
+    return static_cast<char>(std::tolower(character));
+  });
+  return value;
+}
+}  // namespace
 void FakeTracker::upsert(domain::Issue issue) { issues_.insert_or_assign(issue.id, std::move(issue)); }
 
 std::vector<domain::Issue> FakeTracker::list_by_states(const std::vector<std::string>& states) {
   std::vector<domain::Issue> result;
   for (const auto& [id, issue] : issues_) {
     static_cast<void>(id);
-    if (std::ranges::find(states, issue.state) != states.end()) result.push_back(issue);
+    if (std::ranges::any_of(states, [&](const auto& state) {
+          return normalized(state) == normalized(issue.state);
+        })) {
+      result.push_back(issue);
+    }
   }
   std::ranges::sort(result, {}, &domain::Issue::identifier);
   return result;
@@ -29,4 +42,3 @@ LinearAdapter::LinearAdapter(const bool mutation_enabled) : mutation_enabled_(mu
 std::vector<domain::Issue> LinearAdapter::list_by_states(const std::vector<std::string>&) { return {}; }
 std::optional<domain::Issue> LinearAdapter::refresh_by_id(std::string_view) { return std::nullopt; }
 }  // namespace symphony::tracker
-

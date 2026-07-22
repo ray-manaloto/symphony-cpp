@@ -47,32 +47,46 @@ std::uint64_t unsigned_value(const std::string& text, const std::string_view key
   return result;
 }
 
-void validate_keys(
-    const YAML::Node& node,
-    const std::initializer_list<std::string_view> allowed,
-    const std::string_view prefix) {
-  if (!node || !node.IsMap()) throw std::runtime_error(std::string{prefix} + " must be a YAML mapping");
-  for (const auto& entry : node) {
-    const auto key = entry.first.as<std::string>();
-    if (std::ranges::find(allowed, key) == allowed.end()) {
-      throw std::runtime_error("unknown workflow key: " + std::string{prefix} + key);
-    }
-  }
+void require_map(const YAML::Node& node, const std::string_view key) {
+  if (!node || !node.IsMap()) throw std::runtime_error(std::string{key} + " must be a YAML mapping");
 }
 
-std::string scalar(const YAML::Node& node, const Environment& env, const std::string_view key) {
+std::string scalar(const YAML::Node& node, const std::string_view key) {
   if (!node || !node.IsScalar()) throw std::runtime_error(std::string{key} + " must be a scalar");
-  return expand(node.as<std::string>(), env);
+  return node.as<std::string>();
 }
 
 std::vector<std::string> string_list(
     const YAML::Node& node,
-    const Environment& env,
     const std::string_view key) {
   if (!node || !node.IsSequence()) throw std::runtime_error(std::string{key} + " must be a sequence");
   std::vector<std::string> result;
-  for (const auto& item : node) result.push_back(scalar(item, env, key));
+  for (const auto& item : node) result.push_back(scalar(item, key));
   return result;
+}
+
+std::string normalized_state(std::string value) {
+  value = trim(std::move(value));
+  std::ranges::transform(value, value.begin(), [](const unsigned char character) {
+    return static_cast<char>(std::tolower(character));
+  });
+  return value;
+}
+
+std::filesystem::path workspace_root(
+    const YAML::Node& node,
+    const Environment& env,
+    const std::filesystem::path& workflow_path) {
+  auto value = scalar(node, "workspace.root");
+  if (value.starts_with('$')) value = expand(std::move(value), env);
+  if (value == "~" || value.starts_with("~/")) {
+    const auto home = env.get("HOME");
+    if (!home || home->empty()) throw std::runtime_error("HOME is required for workspace.root '~'");
+    value = *home + value.substr(1);
+  }
+  std::filesystem::path root{value};
+  if (root.is_relative()) root = workflow_path.parent_path() / root;
+  return std::filesystem::absolute(root).lexically_normal();
 }
 
 std::string content_fingerprint(const std::string_view content) {
@@ -126,47 +140,87 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
   }
   if (!closed) throw std::runtime_error("unterminated YAML front matter");
   const auto root = YAML::Load(yaml_text.str());
-  validate_keys(root, {"poll_interval_ms", "agent", "hooks", "codex", "tracker"}, "");
-
-  if (const auto node = root["poll_interval_ms"]) {
-    document.config.poll_interval = std::chrono::milliseconds{
-        unsigned_value(scalar(node, env, "poll_interval_ms"), "poll_interval_ms")};
+  require_map(root, "workflow front matter");
+  if (const auto polling = root["polling"]) {
+    require_map(polling, "polling");
+    if (const auto node = polling["interval_ms"]) {
+      document.config.polling.interval = std::chrono::milliseconds{
+          unsigned_value(scalar(node, "polling.interval_ms"), "polling.interval_ms")};
+    }
+  }
+  if (const auto workspace = root["workspace"]) {
+    require_map(workspace, "workspace");
+    if (const auto node = workspace["root"]) {
+      document.config.workspace.root = workspace_root(node, env, path);
+    }
   }
   if (const auto agent = root["agent"]) {
-    validate_keys(agent, {"max_concurrent", "max_retry_backoff_ms"}, "agent.");
-    if (const auto node = agent["max_concurrent"]) {
-      document.config.agent.max_concurrent = static_cast<std::uint32_t>(
-          unsigned_value(scalar(node, env, "agent.max_concurrent"), "agent.max_concurrent"));
+    require_map(agent, "agent");
+    if (const auto node = agent["max_concurrent_agents"]) {
+      document.config.agent.max_concurrent_agents = static_cast<std::uint32_t>(unsigned_value(
+          scalar(node, "agent.max_concurrent_agents"), "agent.max_concurrent_agents"));
+    }
+    if (const auto node = agent["max_turns"]) {
+      document.config.agent.max_turns = static_cast<std::uint32_t>(
+          unsigned_value(scalar(node, "agent.max_turns"), "agent.max_turns"));
     }
     if (const auto node = agent["max_retry_backoff_ms"]) {
       document.config.agent.max_retry_backoff = std::chrono::milliseconds{unsigned_value(
-          scalar(node, env, "agent.max_retry_backoff_ms"), "agent.max_retry_backoff_ms")};
+          scalar(node, "agent.max_retry_backoff_ms"), "agent.max_retry_backoff_ms")};
+    }
+    if (const auto limits = agent["max_concurrent_agents_by_state"]) {
+      require_map(limits, "agent.max_concurrent_agents_by_state");
+      for (const auto& entry : limits) {
+        try {
+          const auto limit = unsigned_value(entry.second.as<std::string>(), "state concurrency");
+          if (limit > 0) {
+            document.config.agent.max_concurrent_agents_by_state.emplace(
+                normalized_state(entry.first.as<std::string>()),
+                static_cast<std::uint32_t>(limit));
+          }
+        } catch (const std::exception&) {
+          // The specification requires invalid per-state entries to be ignored.
+        }
+      }
     }
   }
   if (const auto hooks = root["hooks"]) {
-    validate_keys(hooks, {"timeout_ms", "after_create", "before_run", "after_run", "before_remove"}, "hooks.");
+    require_map(hooks, "hooks");
     if (const auto node = hooks["timeout_ms"]) {
       document.config.hooks.timeout = std::chrono::milliseconds{
-          unsigned_value(scalar(node, env, "hooks.timeout_ms"), "hooks.timeout_ms")};
+          unsigned_value(scalar(node, "hooks.timeout_ms"), "hooks.timeout_ms")};
     }
-    if (const auto node = hooks["after_create"]) document.config.hooks.after_create = string_list(node, env, "hooks.after_create");
-    if (const auto node = hooks["before_run"]) document.config.hooks.before_run = string_list(node, env, "hooks.before_run");
-    if (const auto node = hooks["after_run"]) document.config.hooks.after_run = string_list(node, env, "hooks.after_run");
-    if (const auto node = hooks["before_remove"]) document.config.hooks.before_remove = string_list(node, env, "hooks.before_remove");
+    if (const auto node = hooks["after_create"]; node && !node.IsNull()) document.config.hooks.after_create = scalar(node, "hooks.after_create");
+    if (const auto node = hooks["before_run"]; node && !node.IsNull()) document.config.hooks.before_run = scalar(node, "hooks.before_run");
+    if (const auto node = hooks["after_run"]; node && !node.IsNull()) document.config.hooks.after_run = scalar(node, "hooks.after_run");
+    if (const auto node = hooks["before_remove"]; node && !node.IsNull()) document.config.hooks.before_remove = scalar(node, "hooks.before_remove");
   }
   if (const auto codex = root["codex"]) {
-    validate_keys(codex, {"command"}, "codex.");
-    if (const auto node = codex["command"]) document.config.codex.command = scalar(node, env, "codex.command");
+    require_map(codex, "codex");
+    if (const auto node = codex["command"]) document.config.codex.command = scalar(node, "codex.command");
+    if (const auto node = codex["approval_policy"]) document.config.codex.approval_policy = scalar(node, "codex.approval_policy");
+    if (const auto node = codex["thread_sandbox"]) document.config.codex.thread_sandbox = scalar(node, "codex.thread_sandbox");
+    if (const auto node = codex["turn_sandbox_policy"]) document.config.codex.turn_sandbox_policy = scalar(node, "codex.turn_sandbox_policy");
+    if (const auto node = codex["turn_timeout_ms"]) document.config.codex.turn_timeout = std::chrono::milliseconds{unsigned_value(scalar(node, "codex.turn_timeout_ms"), "codex.turn_timeout_ms")};
+    if (const auto node = codex["read_timeout_ms"]) document.config.codex.read_timeout = std::chrono::milliseconds{unsigned_value(scalar(node, "codex.read_timeout_ms"), "codex.read_timeout_ms")};
+    if (const auto node = codex["stall_timeout_ms"]) document.config.codex.stall_timeout = std::chrono::milliseconds{std::stoll(scalar(node, "codex.stall_timeout_ms"))};
   }
   if (const auto tracker = root["tracker"]) {
-    validate_keys(tracker, {"active_states", "terminal_states"}, "tracker.");
-    if (const auto node = tracker["active_states"]) document.config.active_states = string_list(node, env, "tracker.active_states");
-    if (const auto node = tracker["terminal_states"]) document.config.terminal_states = string_list(node, env, "tracker.terminal_states");
+    require_map(tracker, "tracker");
+    if (const auto node = tracker["kind"]) document.config.tracker.kind = scalar(node, "tracker.kind");
+    if (const auto node = tracker["provider"]) {
+      if (!node.IsMap()) throw std::runtime_error("tracker.provider must be a YAML mapping");
+      document.config.tracker.provider_yaml = YAML::Dump(node);
+    }
+    if (const auto node = tracker["required_labels"]) document.config.tracker.required_labels = string_list(node, "tracker.required_labels");
+    if (const auto node = tracker["active_states"]) document.config.tracker.active_states = string_list(node, "tracker.active_states");
+    if (const auto node = tracker["terminal_states"]) document.config.tracker.terminal_states = string_list(node, "tracker.terminal_states");
   }
   document.prompt.assign(std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{});
   if (trim(document.prompt).empty()) throw std::runtime_error("workflow prompt must not be empty");
-  if (document.config.poll_interval <= std::chrono::milliseconds::zero() ||
-      document.config.agent.max_concurrent == 0 ||
+  if (document.config.polling.interval <= std::chrono::milliseconds::zero() ||
+      document.config.agent.max_concurrent_agents == 0 ||
+      document.config.agent.max_turns == 0 ||
       document.config.hooks.timeout <= std::chrono::milliseconds::zero()) {
     throw std::runtime_error("workflow durations and concurrency must be positive");
   }
@@ -179,9 +233,10 @@ std::optional<WorkflowDocument> WorkflowWatcher::reload_if_changed(
     const Environment& env) {
   auto document = loader_.load(path, env);
   if (document.fingerprint == last_fingerprint_) return std::nullopt;
-  last_fingerprint_ = document.fingerprint;
   return document;
 }
+
+void WorkflowWatcher::accept(const WorkflowDocument& document) { last_fingerprint_ = document.fingerprint; }
 
 std::string render_prompt(
     const std::string_view prompt,
@@ -197,5 +252,18 @@ std::string render_prompt(
     throw std::runtime_error("unknown or malformed prompt variable");
   }
   return rendered;
+}
+
+void validate_for_dispatch(
+    const WorkflowConfig& config,
+    const std::vector<std::string>& supported_tracker_kinds) {
+  if (trim(config.tracker.kind).empty()) throw std::runtime_error("tracker.kind is required for dispatch");
+  if (std::ranges::find(supported_tracker_kinds, config.tracker.kind) == supported_tracker_kinds.end()) {
+    throw std::runtime_error("unsupported tracker.kind: " + config.tracker.kind);
+  }
+  if (config.tracker.active_states.empty() || config.tracker.terminal_states.empty()) {
+    throw std::runtime_error("tracker active_states and terminal_states are required");
+  }
+  if (trim(config.codex.command).empty()) throw std::runtime_error("codex.command must not be empty");
 }
 }  // namespace symphony::workflow

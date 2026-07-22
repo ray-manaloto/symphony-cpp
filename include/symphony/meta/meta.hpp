@@ -1,8 +1,13 @@
 #pragma once
 
 #include <string>
+#include <concepts>
 #include <string_view>
 #include <vector>
+#include <type_traits>
+#include <utility>
+
+#include <nlohmann/json.hpp>
 
 #if defined(SYMPHONY_ENABLE_REFLECTION)
 #include <meta>
@@ -33,5 +38,44 @@ template <typename T>
 }
 
 [[nodiscard]] std::string json_escape(std::string_view input);
+
+template <typename T>
+[[nodiscard]] nlohmann::json reflected_json(const T& object) {
+#if defined(SYMPHONY_ENABLE_REFLECTION)
+  nlohmann::json result = nlohmann::json::object();
+  template for (constexpr auto member : std::meta::nonstatic_data_members_of(
+                    ^^T, std::meta::access_context::current())) {
+    result[std::string{std::meta::identifier_of(member)}] = object.[:member:];
+  }
+  return result;
+#else
+  static_assert(sizeof(T) == 0, "reflected JSON requires SYMPHONY_ENABLE_REFLECTION");
+  return {};
+#endif
+}
+
+template <typename T>
+[[nodiscard]] nlohmann::json reflected_schema() {
+#if defined(SYMPHONY_ENABLE_REFLECTION)
+  nlohmann::json properties = nlohmann::json::object();
+  nlohmann::json required = nlohmann::json::array();
+  template for (constexpr auto member : std::meta::nonstatic_data_members_of(
+                    ^^T, std::meta::access_context::current())) {
+    using Member = std::remove_cvref_t<decltype(std::declval<T>().[:member:])>;
+    std::string type = "object";
+    if constexpr (std::same_as<Member, bool>) type = "boolean";
+    else if constexpr (std::integral<Member>) type = "integer";
+    else if constexpr (std::floating_point<Member>) type = "number";
+    else if constexpr (std::convertible_to<Member, std::string_view>) type = "string";
+    const std::string name{std::meta::identifier_of(member)};
+    properties[name] = {{"type", type}};
+    required.push_back(name);
+  }
+  return {{"type", "object"}, {"properties", properties}, {"required", required}};
+#else
+  static_assert(sizeof(T) == 0, "reflected schema requires SYMPHONY_ENABLE_REFLECTION");
+  return {};
+#endif
+}
 
 }  // namespace symphony::meta

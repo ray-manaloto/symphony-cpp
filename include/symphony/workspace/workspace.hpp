@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,11 +14,13 @@ namespace symphony::workspace {
 struct Workspace {
   std::filesystem::path path;
   std::string issue_id;
+  bool newly_created{false};
 };
 
 class WorkspaceExecutor {
  public:
   virtual ~WorkspaceExecutor() = default;
+  [[nodiscard]] virtual std::optional<Workspace> find(const domain::Issue& issue) const = 0;
   [[nodiscard]] virtual Workspace create(const domain::Issue& issue) = 0;
   virtual void run_hook(
       const Workspace& workspace,
@@ -30,6 +33,7 @@ class WorkspaceExecutor {
 class FixtureWorkspaceExecutor final : public WorkspaceExecutor {
  public:
   explicit FixtureWorkspaceExecutor(std::filesystem::path root);
+  [[nodiscard]] std::optional<Workspace> find(const domain::Issue& issue) const override;
   [[nodiscard]] Workspace create(const domain::Issue& issue) override;
   void run_hook(
       const Workspace& workspace,
@@ -45,7 +49,23 @@ class FixtureWorkspaceExecutor final : public WorkspaceExecutor {
   std::vector<std::string> hook_history_;
 };
 
+class LocalWorkspaceExecutor final : public WorkspaceExecutor {
+ public:
+  explicit LocalWorkspaceExecutor(std::filesystem::path root);
+  [[nodiscard]] std::optional<Workspace> find(const domain::Issue& issue) const override;
+  [[nodiscard]] Workspace create(const domain::Issue& issue) override;
+  void run_hook(
+      const Workspace& workspace,
+      std::string_view hook_name,
+      const std::vector<std::string>& command,
+      std::chrono::milliseconds timeout) override;
+  void remove(const Workspace& workspace) override;
+
+ private:
+  [[nodiscard]] std::filesystem::path contained(const std::filesystem::path& candidate) const;
+  std::filesystem::path root_;
+};
+
 [[nodiscard]] std::string workspace_leaf(const domain::Issue& issue);
 
 }  // namespace symphony::workspace
-

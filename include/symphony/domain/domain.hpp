@@ -37,6 +37,7 @@ struct Attempt {
   std::uint32_t number{1};
   std::uint32_t corrective_continuations{0};
   std::uint32_t unchanged_results{0};
+  std::uint32_t failure_retries{0};
   ContextState context_state{ContextState::fresh};
   std::optional<ProgressFingerprint> last_progress;
 };
@@ -55,4 +56,3 @@ struct RetryState {
 [[nodiscard]] std::string_view to_string(ContextState state) noexcept;
 
 }  // namespace symphony::domain
-

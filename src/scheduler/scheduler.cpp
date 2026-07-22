@@ -1,13 +1,27 @@
 #include "symphony/scheduler/scheduler.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 #include "symphony/workflow/workflow.hpp"
 
 namespace symphony::scheduler {
+namespace {
+std::string normalized(std::string_view value) {
+  const auto first = value.find_first_not_of(" \t\r\n");
+  const auto last = value.find_last_not_of(" \t\r\n");
+  if (first == std::string_view::npos) return {};
+  std::string result{value.substr(first, last - first + 1)};
+  std::ranges::transform(result, result.begin(), [](const unsigned char character) {
+    return static_cast<char>(std::tolower(character));
+  });
+  return result;
+}
+}  // namespace
 Clock::time_point FakeClock::now() const { return now_; }
 void FakeClock::advance(const std::chrono::milliseconds delta) { now_ += delta; }
+Clock::time_point SystemClock::now() const { return std::chrono::steady_clock::now(); }
 
 Scheduler::Scheduler(
     SchedulerConfig config,
@@ -26,10 +40,30 @@ Scheduler::Scheduler(
 }
 
 bool Scheduler::active_state(const std::string_view state) const {
-  return std::ranges::find(config_.active_states, state) != config_.active_states.end();
+  const auto target = normalized(state);
+  return std::ranges::any_of(config_.active_states, [&](const auto& value) { return normalized(value) == target; });
 }
 bool Scheduler::terminal_state(const std::string_view state) const {
-  return std::ranges::find(config_.terminal_states, state) != config_.terminal_states.end();
+  const auto target = normalized(state);
+  return std::ranges::any_of(config_.terminal_states, [&](const auto& value) { return normalized(value) == target; });
+}
+
+bool Scheduler::eligible(const domain::Issue& issue) const {
+  if (!active_state(issue.state)) return false;
+  return std::ranges::all_of(config_.required_labels, [&](const auto& required) {
+    const auto target = normalized(required);
+    if (target.empty()) return false;
+    return std::ranges::any_of(issue.labels, [&](const auto& label) { return normalized(label) == target; });
+  });
+}
+
+bool Scheduler::state_capacity(const domain::Issue& issue) const {
+  const auto found = config_.max_concurrent_by_state.find(normalized(issue.state));
+  if (found == config_.max_concurrent_by_state.end()) return true;
+  const auto count = std::ranges::count_if(runs_, [&](const auto& entry) {
+    return normalized(entry.second.issue.state) == normalized(issue.state);
+  });
+  return static_cast<std::size_t>(count) < found->second;
 }
 
 void Scheduler::tick(const std::string_view prompt_template) {
@@ -44,8 +78,12 @@ void Scheduler::tick(const std::string_view prompt_template) {
   }
   if (runs_.size() >= config_.max_concurrent) return;
   for (const auto& issue : tracker_.list_by_states(config_.active_states)) {
-    if (runs_.contains(issue.id)) continue;
-    dispatch(issue, prompt_template);
+    if (runs_.contains(issue.id) || !eligible(issue) || !state_capacity(issue)) continue;
+    try {
+      dispatch(issue, prompt_template);
+    } catch (const std::exception& error) {
+      events_.append({"dispatch_failed", issue.id, issue.identifier, {}, error.what()});
+    }
     if (runs_.size() >= config_.max_concurrent) break;
   }
 }
@@ -54,6 +92,15 @@ void Scheduler::dispatch(const domain::Issue& issue, const std::string_view prom
   RunState run;
   run.issue = issue;
   run.workspace = workspaces_.create(issue);
+  if (run.workspace.newly_created && config_.after_create_hook) {
+    try {
+      workspaces_.run_hook(
+          run.workspace, "after_create", {"bash", "-lc", *config_.after_create_hook}, config_.hook_timeout);
+    } catch (...) {
+      workspaces_.remove(run.workspace);
+      throw;
+    }
+  }
   auto [position, inserted] = runs_.emplace(issue.id, std::move(run));
   if (!inserted) return;
   events_.append({"dispatch", issue.id, issue.identifier, {}, "fixture dispatch"});
@@ -62,7 +109,24 @@ void Scheduler::dispatch(const domain::Issue& issue, const std::string_view prom
 
 void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
   const auto prompt = workflow::render_prompt(prompt_template, run.issue, run.attempt);
-  const auto result = runtime_.run({run.issue, run.attempt, run.workspace, prompt});
+  codex::RunResult result;
+  try {
+    if (config_.before_run_hook) {
+      workspaces_.run_hook(
+          run.workspace, "before_run", {"bash", "-lc", *config_.before_run_hook}, config_.hook_timeout);
+    }
+    result = runtime_.run({run.issue, run.attempt, run.workspace, prompt});
+  } catch (const std::exception& error) {
+    result.error = error.what();
+  }
+  if (config_.after_run_hook) {
+    try {
+      workspaces_.run_hook(
+          run.workspace, "after_run", {"bash", "-lc", *config_.after_run_hook}, config_.hook_timeout);
+    } catch (const std::exception& error) {
+      events_.append({"hook_failed", run.issue.id, run.issue.identifier, result.session_id, error.what()});
+    }
+  }
   run.session_id = result.session_id;
   bool schedule_retry = true;
   if (result.progress) {
@@ -80,8 +144,14 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     run.attempt.context_state = domain::ContextState::failed;
   }
   if (schedule_retry) {
-    const auto ordinal = run.attempt.number - 1;
-    run.retry_at = clock_.now() + domain::retry_delay(ordinal, config_.retry_base, config_.retry_cap);
+    const auto clean_exit = result.normal_exit && !result.cancelled && result.error.empty();
+    const auto delay = clean_exit
+        ? config_.retry_base
+        : domain::retry_delay(
+              run.attempt.failure_retries++,
+              config_.failure_retry_base,
+              config_.retry_cap);
+    run.retry_at = clock_.now() + delay;
     ++run.attempt.number;
   } else {
     run.retry_at.reset();
@@ -94,6 +164,17 @@ void Scheduler::reconcile() {
     if (!refreshed || !active_state(refreshed->state)) {
       if (!iterator->second.session_id.empty()) runtime_.cancel(iterator->second.session_id);
       if (refreshed && terminal_state(refreshed->state)) {
+        if (config_.before_remove_hook) {
+          try {
+            workspaces_.run_hook(
+                iterator->second.workspace,
+                "before_remove",
+                {"bash", "-lc", *config_.before_remove_hook},
+                config_.hook_timeout);
+          } catch (const std::exception& error) {
+            events_.append({"hook_failed", refreshed->id, refreshed->identifier, {}, error.what()});
+          }
+        }
         workspaces_.remove(iterator->second.workspace);
         events_.append({"terminal_cleanup", refreshed->id, refreshed->identifier, {}, "workspace removed"});
       }
@@ -105,5 +186,30 @@ void Scheduler::reconcile() {
   }
 }
 
+void Scheduler::startup_cleanup() {
+  for (const auto& issue : tracker_.list_by_states(config_.terminal_states)) {
+    const auto workspace = workspaces_.find(issue);
+    if (!workspace) continue;
+    if (config_.before_remove_hook) {
+      try {
+        workspaces_.run_hook(
+            *workspace,
+            "before_remove",
+            {"bash", "-lc", *config_.before_remove_hook},
+            config_.hook_timeout);
+      } catch (const std::exception& error) {
+        events_.append({"hook_failed", issue.id, issue.identifier, {}, error.what()});
+      }
+    }
+    workspaces_.remove(*workspace);
+    events_.append({"startup_terminal_cleanup", issue.id, issue.identifier, {}, "workspace removed"});
+  }
+}
+
 const std::map<std::string, RunState>& Scheduler::runs() const noexcept { return runs_; }
+
+void Scheduler::reconfigure(SchedulerConfig config) {
+  if (config.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
+  config_ = std::move(config);
+}
 }  // namespace symphony::scheduler

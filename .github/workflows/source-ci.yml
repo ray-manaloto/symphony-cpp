@@ -1,0 +1,34 @@
+name: Source CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gcc16:
+    name: GCC 16.1 source and reflection tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: gcc:16.1@sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb
+    steps:
+      - name: Install build frontend
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends ca-certificates ccache cmake git ninja-build
+          rm -rf /var/lib/apt/lists/*
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure
+        run: cmake --preset gcc-debug
+      - name: Build
+        run: cmake --build --preset gcc-debug --parallel 4
+      - name: Test
+        run: ctest --preset gcc-debug

@@ -2,18 +2,6 @@ name: C++26 compiler matrix
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, "codex/**"]
-    paths:
-      - ".github/workflows/compiler-matrix.yml"
-      - "containers/**"
-      - "cmake/**"
-      - "include/**"
-      - "src/**"
-      - "tests/**"
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "dependencies.lock.json"
 
 permissions:
   contents: read
@@ -24,19 +12,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  portable:
-    name: Portable C++26 tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Configure
-        run: cmake -S . -B build/portable -G Ninja -DSYMPHONY_ENABLE_REFLECTION=OFF -DCMAKE_BUILD_TYPE=Debug
-      - name: Build
-        run: cmake --build build/portable --parallel 4
-      - name: Test
-        run: ctest --test-dir build/portable --output-on-failure
-
   gcc16:
     name: GCC 16.1 reflection and tests
     runs-on: ubuntu-24.04
