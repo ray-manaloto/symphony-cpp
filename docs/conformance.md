@@ -19,6 +19,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
+| Retry queue metadata and slot-exhaustion requeue | scheduler tests | Implemented with one-based attempts, monotonic due times, timer handles, retained claims, and the normative capacity error |
 | Terminal/non-active reconciliation | scheduler tests | Implemented |
 | Terminal cleanup | scheduler/workspace tests | Implemented for startup sweep and active transition |
 | Structured contextual logs | observability tests | Implemented |
@@ -33,7 +34,7 @@ The following required evidence is not yet complete and prevents a conformance c
 
 - tracker normalization, pagination, malformed-record behavior, compact adapter profiles, and
   portable error mapping;
-- retry-entry metadata, slot exhaustion, and stalled-session termination;
+- stalled-session termination;
 - Codex turn timeout, stderr separation, approval/user-input policy, and unsupported tool calls;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - positional workflow CLI behavior and process lifecycle exit tests;
