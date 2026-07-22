@@ -9,6 +9,8 @@ Accessed 2026-07-22.
 | GCC 16.1.0 tar.xz | SHA-256 `50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79`; signature key fingerprint `D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62` | Release compiler source |
 | Docker Official GCC 16.1 | AMD64 manifest `sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb` | Fast source/reflection CI only |
 | bloomberg/clang-p2996 | `7220baffd57ea5b0f8cf59bee494dd5b7cc2b748` | Differential reflection compiler |
+| openai/openai-openapi | `f9400172ebe08522ab228b771d885e3bd5456e42`; `openapi.yaml` SHA-256 `0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7` | OpenAI REST API reference schema |
+| OpenAPI Generator | `v7.24.0`; image digest `sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88` | Disposable C++ Boost.Beast reference generation |
 
 The Codex Universal MIT notice and image SBOM are stored under its `LICENSES/` directory. The
 owning repository explicitly permits publishing and distribution. Derived images retain that

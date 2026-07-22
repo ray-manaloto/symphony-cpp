@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <atomic>
+#include <cstdint>
 #include <deque>
 #include <optional>
 #include <string>
@@ -40,7 +41,6 @@ class FakeAgentRuntime final : public AgentRuntime {
   void enqueue(RunResult result);
   [[nodiscard]] RunResult run(const RunRequest& request) override;
   void cancel(std::string_view session_id) override;
-  void reconfigure(std::string command, std::chrono::milliseconds read_timeout);
   [[nodiscard]] std::size_t run_count() const noexcept;
 
  private:
@@ -55,6 +55,7 @@ class CodexAppServerRuntime final : public AgentRuntime {
       std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000});
   [[nodiscard]] RunResult run(const RunRequest& request) override;
   void cancel(std::string_view session_id) override;
+  void reconfigure(std::string command, std::chrono::milliseconds read_timeout);
 
  private:
   std::string command_;
@@ -72,6 +73,7 @@ enum class ProtocolEvent { response, notification, turn_completed, turn_failed, 
 
 struct ProtocolUpdate {
   ProtocolEvent event{ProtocolEvent::notification};
+  std::optional<std::uint64_t> response_id;
   std::string method;
   std::string thread_id;
   std::string turn_id;

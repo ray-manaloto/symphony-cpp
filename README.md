@@ -19,6 +19,11 @@ ctest --preset gcc-debug
 The compiler images are deliberately expensive source builds. Their source hashes, signatures, base
 image digest, and fork commit are pinned in [docs/upstream-lock.md](docs/upstream-lock.md).
 
+Generate an inspectable C++ model/client surface from the pinned official OpenAI OpenAPI 3.1 schema
+with `./scripts/generate-openai-api.sh`. Output is disposable under
+`.build/generated/openai-api`; GitHub Actions also publishes it as a short-lived build artifact.
+This describes the OpenAI REST API and does not replace Symphony's Codex app-server transport.
+
 ## Commands
 
 ```sh

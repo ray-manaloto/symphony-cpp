@@ -240,6 +240,12 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
   }
   if (message.contains("id")) {
     update.event = ProtocolEvent::response;
+    if (!message["id"].is_number_unsigned()) {
+      update.event = ProtocolEvent::malformed;
+      update.error = "response id must be an unsigned integer";
+      return update;
+    }
+    update.response_id = message["id"].get<std::uint64_t>();
     if (const auto result = message.find("result"); result != message.end()) {
       if (const auto thread = result->find("thread"); thread != result->end()) {
         update.thread_id = thread->value("id", "");
@@ -287,10 +293,10 @@ RunResult AppServerConversation::run(
     const std::size_t max_messages) {
   RunResult result;
   channel.write(AppServerProtocol::initialize_request(0));
-  channel.write(AppServerProtocol::initialized_notification());
-  channel.write(AppServerProtocol::thread_start_request(1, request.workspace.path));
   std::string thread_id;
   std::string turn_id;
+  bool initialized = false;
+  bool thread_requested = false;
   bool turn_started = false;
   for (std::size_t count = 0; count < max_messages; ++count) {
     const auto line = channel.read(read_timeout);
@@ -307,10 +313,26 @@ RunResult AppServerConversation::run(
     }
     if (!update.thread_id.empty()) thread_id = update.thread_id;
     if (!update.turn_id.empty()) turn_id = update.turn_id;
-    if (!thread_id.empty() && !turn_started) {
+    if (update.event == ProtocolEvent::malformed) {
+      result.error = update.error.empty() ? "malformed app-server message" : update.error;
+      return result;
+    }
+    if (update.response_id == 0 && !initialized) {
+      channel.write(AppServerProtocol::initialized_notification());
+      channel.write(AppServerProtocol::thread_start_request(1, request.workspace.path));
+      initialized = true;
+      thread_requested = true;
+      continue;
+    }
+    if (update.response_id == 1 && thread_requested && !turn_started) {
+      if (thread_id.empty()) {
+        result.error = "thread/start response has no thread identity";
+        return result;
+      }
       channel.write(AppServerProtocol::turn_start_request(
           2, thread_id, request.workspace.path, request.prompt));
       turn_started = true;
+      continue;
     }
     if (update.event == ProtocolEvent::turn_completed) {
       if (thread_id.empty() || turn_id.empty()) {

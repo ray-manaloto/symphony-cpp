@@ -12,8 +12,14 @@ Primary sources define behavior; comparisons only identify possible gaps. Access
 - [x] [Tart Guest Agent](https://github.com/openai/tart-guest-agent), deferred guest operations
 - [x] [OpenAI Softnet](https://github.com/openai/softnet), deferred privileged network isolation
 - [x] [OpenAI Orchard](https://github.com/openai/orchard), deferred multi-host scheduling
+- [x] [OpenAI OpenAPI](https://github.com/openai/openai-openapi), pinned REST API schema and generated C++ reference surface
+- [x] [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator), pinned C++ Boost.Beast reference generator
 
 Research preflight: both lanes are reused. Primary-source and recent-practitioner reports were
 completed on 2026-07-22 in the predecessor research workstream. Consequential implementation claims
 above were rechecked against owning repositories; the recent-practitioner lane is discovery only.
 
+The generated OpenAI REST client is an inspectable reference artifact, not Symphony's agent
+transport. Symphony Draft v1 requires the Codex app-server JSONL/JSON-RPC protocol. OpenAI does not
+publish an official C++ SDK, and the selected generator does not fully support OpenAPI 3.1 unions,
+polymorphism, or authorization, so generated output must not silently become production runtime code.

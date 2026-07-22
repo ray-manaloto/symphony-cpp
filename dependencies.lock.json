@@ -12,6 +12,18 @@
       "commit": "65ee68451d8eb2b5f3a30b410476ab83deb3289b",
       "archive_sha256": "13ef31d691947940a08909f8e0772f1d7d68e5da1678ee812a49c4bb0c996b2f",
       "version": "3.12.0"
+    },
+    "openai-openapi": {
+      "repository": "https://github.com/openai/openai-openapi.git",
+      "commit": "f9400172ebe08522ab228b771d885e3bd5456e42",
+      "spec_sha256": "0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7",
+      "format": "OpenAPI 3.1"
+    },
+    "openapi-generator": {
+      "repository": "https://github.com/OpenAPITools/openapi-generator.git",
+      "version": "7.24.0",
+      "image": "docker.io/openapitools/openapi-generator-cli:v7.24.0@sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88",
+      "generator": "cpp-boost-beast-client"
     }
   }
 }

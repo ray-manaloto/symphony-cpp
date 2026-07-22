@@ -38,6 +38,7 @@ TEST("app-server protocol follows initialize thread and turn schema") {
 TEST("app-server protocol extracts identities and terminal notifications") {
   const auto thread = symphony::codex::AppServerProtocol::decode(
       R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+  REQUIRE_EQ(thread.response_id, std::optional<std::uint64_t>{1});
   REQUIRE_EQ(thread.thread_id, std::string{"thr_1"});
   const auto completed = symphony::codex::AppServerProtocol::decode(
       R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
