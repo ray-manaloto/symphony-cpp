@@ -11,13 +11,16 @@ entry points, and conformance tests. Live provider mutation remains disabled.
 
 ```sh
 docker buildx build --platform linux/amd64 --target symphony-dev -f containers/Containerfile .
+./scripts/bootstrap-vcpkg.sh
 cmake --preset gcc-debug
 cmake --build --preset gcc-debug
 ctest --preset gcc-debug
 ```
 
 The compiler images are deliberately expensive source builds. Their source hashes, signatures, base
-image digest, and fork commit are pinned in [docs/upstream-lock.md](docs/upstream-lock.md).
+image digest, fork commit, and vcpkg registry baseline are pinned in source. The container already
+contains the manifest dependencies; source builds bootstrap the same repository-local vcpkg checkout.
+See [docs/upstream-lock.md](docs/upstream-lock.md).
 
 Generate an inspectable C++ model/client surface from the pinned official OpenAI OpenAPI 3.1 schema
 with `./scripts/generate-openai-api.sh`. Output is disposable under

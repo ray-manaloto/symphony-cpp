@@ -10,7 +10,11 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.build/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "SYMPHONY_ENABLE_REFLECTION": "ON"
+      },
+      "environment": {
+        "VCPKG_ROOT": "${sourceDir}/.build/vcpkg"
       }
     },
     {
@@ -24,8 +28,10 @@
       "inherits": "gcc-debug",
       "binaryDir": "${sourceDir}/build/clang-reflection",
       "cacheVariables": {
+        "CMAKE_C_COMPILER": "/opt/clang-p2996/bin/clang",
         "CMAKE_CXX_COMPILER": "/opt/clang-p2996/bin/clang++",
-        "CMAKE_CXX_FLAGS": "-stdlib=libc++"
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-clang-p2996"
       }
     }
   ],

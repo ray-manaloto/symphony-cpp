@@ -18,25 +18,31 @@ Reflection is isolated in `symphony_meta`. GCC 16.1 supplies the release semanti
 clang-p2996 job compiles the same reflected fixtures and records differences; it never creates a
 release artifact. Conventional headers avoid the fork's documented serialization limitations.
 
-## Library decision boundary
+## Library decisions
 
-The current `yaml-cpp`, `nlohmann/json`, POSIX subprocess, in-memory event store, and minimal test
-harness are bootstrap mechanisms, not accepted architecture. Do not expand them across boundaries
-until the following choices are agreed with the project owner:
+The owner selected Glaze, `ut`, and vcpkg on 2026-07-22. The current `yaml-cpp`,
+`nlohmann/json`, pinned FetchContent declarations, and minimal test harness are bootstrap mechanisms
+to remove in bounded, always-green migrations. They must not spread into new boundaries.
 
 | Capability | Preferred candidate | Alternatives under discussion | Required property |
 | --- | --- | --- | --- |
-| Async execution | Boost.Asio coroutines | sender/receiver or a smaller event loop | one scheduler authority, cancellation, fake time |
-| HTTP client/server | Boost.Beast | libcurl plus a small server; another cohesive stack | async cancellation, TLS, bounded bodies |
-| JSON | nlohmann/json behind a codec | Boost.JSON, Glaze, simdjson | strict JSON-RPC plus reflection adapters |
-| YAML | yaml-cpp behind the workflow loader | another YAML 1.2 implementation | preserve provider-owned configuration |
+| Async execution | local sender/receiver boundary; evaluate NVIDIA `stdexec` | Glaze's ASIO substrate behind an adapter | one scheduler authority, cancellation, fake time |
+| HTTP client/server | bounded Glaze HTTP prototype | another ASIO adapter if the prototype gate fails | cancellation, TLS, bounded bodies, graceful shutdown |
+| JSON | Glaze behind `symphony_codec` | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
+| YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |
 | Child processes | Boost.Process v2 | contained POSIX implementation | separate stderr, process groups, timeouts |
-| Persistence | SQLite | append-only filesystem store | restart-safe retries and events |
-| Tests | Catch2 plus RapidCheck | GoogleTest plus a property framework | deterministic state-machine properties |
+| Persistence | proposed SQLite C API + thin RAII repository | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
+| Tests | `openalgz/ut` plus libFuzzer/property fixtures | none concurrently | deterministic state-machine properties and compile-time tests |
 | CLI/logging | CLI11 and spdlog | owner-selected alternatives | typed errors and structured redaction |
-| Dependencies | pinned FetchContent | Conan or vcpkg lockfiles | immutable, reproducible, auditable inputs |
+| Formatting | `{fmt}` | standard formatting when supported equivalently | type safety and redact-before-format discipline |
+| Dependencies | vcpkg manifest mode at a Git baseline | minimal pinned overlay ports | immutable, reproducible, auditable inputs |
 
 Whichever libraries are selected, domain types depend only on the standard library and the thin
 `symphony_meta` reflection adapter. Tracker, workspace, runtime, clock, event-store, and status
 boundaries remain abstract. Generated OpenAI OpenAPI C++ is a disposable REST reference artifact;
 the Codex app-server JSON-RPC protocol remains the Symphony agent transport.
+
+Glaze REPE is not the Codex transport: it is a distinct, currently unstable protocol whose registry
+leaves synchronization to the caller. The Glaze HTTP adapter is accepted only after fixture tests
+cover cancellation, malformed input, body/header limits, TLS verification, overload and graceful
+shutdown. Intel's bare-metal libraries remain references, not hosted-Linux runtime dependencies.

@@ -23,9 +23,11 @@ jobs:
       - name: Install build frontend
         run: |
           apt-get update
-          apt-get install --yes --no-install-recommends ca-certificates ccache cmake git ninja-build
+          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build tar unzip zip
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Bootstrap pinned vcpkg
+        run: ./scripts/bootstrap-vcpkg.sh
       - name: Configure
         run: cmake --preset gcc-debug
       - name: Build

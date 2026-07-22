@@ -62,6 +62,8 @@ ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CXX=/opt/gcc-16.1/bin/g++
 WORKDIR /workspace/symphony-cpp
 COPY . .
+RUN ./scripts/bootstrap-vcpkg.sh \
+ && .build/vcpkg/vcpkg install --clean-after-build
 CMD ["bash"]
 
 FROM compiler-build-base AS symphony-ci-clang
@@ -71,4 +73,7 @@ ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CXX=/opt/clang-p2996/bin/clang++
 WORKDIR /workspace/symphony-cpp
 COPY . .
+RUN ./scripts/bootstrap-vcpkg.sh \
+ && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
+      --overlay-triplets vcpkg-triplets --clean-after-build
 CMD ["bash"]
