@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 const requiredFiles = [
   "AGENTS.md",
@@ -27,12 +27,20 @@ for (const path of requiredFiles) {
   }
 }
 
-const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
-  .split("\0")
-  .filter(Boolean)
-  .filter((path) => path.endsWith(".cmake") || path.endsWith("CMakeLists.txt"));
+const skippedDirectories = new Set([".build", ".git", "build", "fixtures", "vcpkg_installed"]);
+const cmakeInputs = [];
+function collectCmakeInputs(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (!skippedDirectories.has(entry.name)) collectCmakeInputs(join(directory, entry.name));
+    } else if (entry.name === "CMakeLists.txt" || entry.name.endsWith(".cmake")) {
+      cmakeInputs.push(join(directory, entry.name));
+    }
+  }
+}
+collectCmakeInputs(".");
 
-for (const path of tracked) {
+for (const path of cmakeInputs) {
   let content;
   try {
     content = readFileSync(path, "utf8");
