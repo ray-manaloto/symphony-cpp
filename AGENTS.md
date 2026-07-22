@@ -14,3 +14,5 @@ This repository implements OpenAI Symphony Draft v1 as a standalone C++26 servic
 - The repository-local `.codex/goals/active.json` marks only the controller bootstrap as complete.
   Ongoing work is tracked through the native Codex goal until this standalone project deliberately
   adopts its own controller; never borrow goal state or leases from another repository.
+- Public pushes use `scripts/check-adaptive-orchestration.mjs` only as an exact-range redacted
+  publication gate. It is not part of the C++ service, daemon runtime, or orchestration controller.

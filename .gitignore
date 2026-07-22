@@ -1,6 +1,6 @@
 /build/
+/.build/
 /.cache/
 /.ccache/
 /.env
 compile_commands.json
-
