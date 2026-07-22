@@ -15,6 +15,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Lifecycle hooks and 60s default | workflow, scheduler, and workspace tests | Implemented in fixture and contained POSIX executors |
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
 | Codex default command | config default test | Implemented |
+| Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for cumulative token usage, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
@@ -33,8 +34,7 @@ The following required evidence is not yet complete and prevents a conformance c
 - tracker normalization, pagination, malformed-record behavior, compact adapter profiles, and
   portable error mapping;
 - retry-entry metadata, slot exhaustion, and stalled-session termination;
-- Codex turn timeout, stderr separation, approval/user-input policy, unsupported tool calls, usage,
-  and rate-limit telemetry;
+- Codex turn timeout, stderr separation, approval/user-input policy, and unsupported tool calls;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - positional workflow CLI behavior and process lifecycle exit tests;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential
