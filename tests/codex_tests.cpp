@@ -243,14 +243,18 @@ static ut::suite codex_tests = [] {
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     const auto pid_path = root / "child.pid";
-    const auto command = std::string{"echo $$ > "} + pid_path.string() +
-                         "; printf '%s\\n' "
-                         "'{\"id\":0,\"result\":{}}' "
-                         "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
-                         "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
-                         "exec sleep 30";
+    const auto script_path = root / "stalled-agent.sh";
+    {
+      std::ofstream script(script_path);
+      script << "echo $$ > child.pid\n"
+                "printf '%s\\n' "
+                "'{\"id\":0,\"result\":{}}' "
+                "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
+                "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'\n"
+                "exec sleep 30\n";
+    }
     symphony::codex::CodexAppServerRuntime runtime(
-        command,
+        "sh stalled-agent.sh",
         std::chrono::milliseconds{1},
         std::chrono::milliseconds{100},
         std::chrono::seconds{1});
