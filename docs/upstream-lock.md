@@ -10,6 +10,7 @@ Accessed 2026-07-22.
 | Docker Official GCC 16.1 | AMD64 manifest `sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb` | Fast source/reflection CI only |
 | bloomberg/clang-p2996 | `7220baffd57ea5b0f8cf59bee494dd5b7cc2b748` | Differential reflection compiler |
 | Microsoft vcpkg registry | `4493042c759d3bdff26164695dbee500d1e696c8` | Manifest dependency graph and bootstrap tool |
+| openalgz/ut | `v1.2.0` / `864c810899c497640784baa82c93e2fad4a3f7ce`; source tarball SHA-512 `dd5acfc244ec7a746cbffafc4739728cccef02f591ae714db22a20b7d5d70352aaade16ae92cca528ae4715a1f57952335e9cba184053b283562a28fca784994` | Unit-test framework supplied by the repository overlay port |
 | openai/openai-openapi | `f9400172ebe08522ab228b771d885e3bd5456e42`; `openapi.yaml` SHA-256 `0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7` | OpenAI REST API reference schema |
 | OpenAPI Generator | `v7.24.0`; image digest `sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88` | Disposable C++ Boost.Beast reference generation |
 

@@ -9,5 +9,5 @@ add_executable(symphony_tests
 target_sources(symphony_tests PRIVATE reflection_tests.cpp)
 target_link_libraries(symphony_tests PRIVATE
   symphony_domain symphony_meta symphony_workflow symphony_scheduler symphony_tracker
-  symphony_workspace symphony_codex symphony_observability)
+  symphony_workspace symphony_codex symphony_observability ut::ut)
 add_test(NAME symphony_tests COMMAND symphony_tests)

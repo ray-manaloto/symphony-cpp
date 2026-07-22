@@ -2,5 +2,6 @@
 /.build/
 /.cache/
 /.ccache/
+/vcpkg_installed/
 /.env
 compile_commands.json

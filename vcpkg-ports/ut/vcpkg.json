@@ -1,0 +1,17 @@
+{
+  "name": "ut",
+  "version-semver": "1.2.0",
+  "description": "Runtime and compile-time C++ unit testing",
+  "homepage": "https://github.com/openalgz/ut",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

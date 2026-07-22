@@ -9,7 +9,7 @@ with a link or quote identifying explicit owner authorization.
 | Operator HTTP API | Glaze HTTP | Existing ASIO HTTP/REST implementation avoids a local server/router. | Prototype gate: cancellation, TLS, size limits, overload, shutdown. |
 | Codex JSON-RPC payloads | Glaze JSON/JSON-RPC facilities plus newline framing adapter | Existing codec/protocol facilities own JSON-RPC semantics; local code owns only Codex-specific DTOs and JSONL process framing. | Validate exact app-server fixtures before deleting bootstrap codec. |
 | Workflow YAML | Glaze YAML | Avoid a second parser if Symphony fixtures and unknown-key behavior pass. | Remove yaml-cpp after full workflow parity. |
-| Unit tests | `openalgz/ut` | Existing C++23 runtime/compile-time test framework replaces the local registry/macros. | Overlay and migrate after GCC/Clang smoke gate. |
+| Unit tests | `openalgz/ut` | Existing C++23 runtime/compile-time test framework replaces the local registry/macros. | Active through the pinned vcpkg overlay; GCC 16.1 CI is the release gate. |
 | Dependency management | vcpkg manifest mode | Pinned registry, version graph, binary caching, and overlay mechanism. | Active; FetchContent/CPM/vendoring prohibited. |
 | Formatting | `{fmt}` | Maintained type-safe formatting; compatible with future standard formatting. | Selected; use only after redaction. |
 | Async execution | NVIDIA `stdexec` behind a project execution seam | Reference implementation of C++26 `std::execution` for hosted systems. | Compatibility spike required; replace with standard library when complete. |
