@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -51,12 +52,22 @@ struct SchedulerConfig {
   std::optional<std::string> before_remove_hook;
 };
 
+struct RetryEntry {
+  std::string issue_id;
+  std::string identifier;
+  std::uint32_t attempt{1};
+  Clock::time_point due_at;
+  std::uint64_t timer_handle{0};
+  std::optional<std::string> error;
+};
+
 struct RunState {
   domain::Issue issue;
   domain::Attempt attempt;
   workspace::Workspace workspace;
-  std::optional<Clock::time_point> retry_at;
+  std::optional<RetryEntry> retry;
   std::string session_id;
+  bool running{false};
 };
 
 class Scheduler {
@@ -80,11 +91,17 @@ class Scheduler {
  private:
   void dispatch(const domain::Issue& issue, std::string_view prompt_template);
   void execute(RunState& run, std::string_view prompt_template);
+  void queue_retry(
+      RunState& run,
+      std::uint32_t attempt,
+      std::chrono::milliseconds delay,
+      std::optional<std::string> error);
   [[nodiscard]] bool active_state(std::string_view state) const;
   [[nodiscard]] bool terminal_state(std::string_view state) const;
   [[nodiscard]] bool routable(const domain::Issue& issue) const;
   [[nodiscard]] bool eligible(const domain::Issue& issue) const;
   [[nodiscard]] bool state_capacity(const domain::Issue& issue) const;
+  [[nodiscard]] std::size_t running_count() const;
 
   SchedulerConfig config_;
   tracker::IssueTracker& tracker_;
@@ -95,6 +112,7 @@ class Scheduler {
   std::map<std::string, RunState> runs_;
   codex::TokenUsage codex_totals_;
   std::optional<codex::RateLimits> latest_rate_limits_;
+  std::uint64_t next_timer_handle_{1};
 };
 
 }  // namespace symphony::scheduler

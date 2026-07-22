@@ -75,22 +75,38 @@ bool Scheduler::state_capacity(const domain::Issue& issue) const {
   const auto found = config_.max_concurrent_by_state.find(normalized(issue.state));
   if (found == config_.max_concurrent_by_state.end()) return true;
   const auto count = std::ranges::count_if(runs_, [&](const auto& entry) {
-    return normalized(entry.second.issue.state) == normalized(issue.state);
+    return entry.second.running &&
+           normalized(entry.second.issue.state) == normalized(issue.state);
   });
   return static_cast<std::size_t>(count) < found->second;
+}
+
+std::size_t Scheduler::running_count() const {
+  return static_cast<std::size_t>(std::ranges::count_if(
+      runs_, [](const auto& entry) { return entry.second.running; }));
 }
 
 void Scheduler::tick(const std::string_view prompt_template) {
   reconcile();
   for (auto& [id, run] : runs_) {
     static_cast<void>(id);
-    if (run.retry_at && *run.retry_at <= clock_.now() &&
+    if (run.retry && run.retry->due_at <= clock_.now() &&
         run.attempt.context_state != domain::ContextState::stalled_no_progress) {
-      run.retry_at.reset();
+      if (running_count() >= config_.max_concurrent || !state_capacity(run.issue)) {
+        queue_retry(
+            run,
+            run.retry->attempt,
+            config_.retry_base,
+            std::string{"no available orchestrator slots"});
+        events_.append({"retry_deferred", run.issue.id, run.issue.identifier, {},
+                        "no available orchestrator slots"});
+        continue;
+      }
+      run.retry.reset();
       execute(run, prompt_template);
     }
   }
-  if (runs_.size() >= config_.max_concurrent) return;
+  if (running_count() >= config_.max_concurrent) return;
   auto candidates = tracker_.list_by_states(config_.active_states);
   std::ranges::sort(candidates, [](const domain::Issue& left, const domain::Issue& right) {
     const auto priority_key = [](const std::optional<int> priority) {
@@ -113,7 +129,7 @@ void Scheduler::tick(const std::string_view prompt_template) {
     } catch (const std::exception& error) {
       events_.append({"dispatch_failed", issue.id, issue.identifier, {}, error.what()});
     }
-    if (runs_.size() >= config_.max_concurrent) break;
+    if (running_count() >= config_.max_concurrent) break;
   }
 }
 
@@ -138,6 +154,7 @@ void Scheduler::dispatch(const domain::Issue& issue, const std::string_view prom
 
 void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
   const auto prompt = workflow::render_prompt(prompt_template, run.issue, run.attempt);
+  run.running = true;
   codex::RunResult result;
   try {
     if (config_.before_run_hook) {
@@ -172,6 +189,10 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     if (!latest_rate_limits_) latest_rate_limits_.emplace();
     codex::merge_rate_limits(*latest_rate_limits_, *result.rate_limits);
   }
+  const auto still_running = !result.normal_exit && !result.cancelled &&
+                             result.error.empty();
+  if (still_running) return;
+  run.running = false;
   bool schedule_retry = true;
   if (result.progress) {
     const auto decision = domain::observe_progress(run.attempt, domain::fingerprint(*result.progress));
@@ -189,17 +210,41 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
   }
   if (schedule_retry) {
     const auto clean_exit = result.normal_exit && !result.cancelled && result.error.empty();
-    const auto delay = clean_exit
-        ? config_.retry_base
-        : domain::retry_delay(
-              run.attempt.failure_retries++,
-              config_.failure_retry_base,
-              config_.retry_cap);
-    run.retry_at = clock_.now() + delay;
+    std::uint32_t retry_attempt = 1;
+    auto delay = config_.retry_base;
+    if (!clean_exit) {
+      retry_attempt = ++run.attempt.failure_retries;
+      delay = domain::retry_delay(
+          retry_attempt - 1,
+          config_.failure_retry_base,
+          config_.retry_cap);
+    }
+    queue_retry(
+        run,
+        retry_attempt,
+        delay,
+        result.error.empty() ? std::nullopt
+                             : std::optional<std::string>{result.error});
     ++run.attempt.number;
   } else {
-    run.retry_at.reset();
+    run.retry.reset();
   }
+}
+
+void Scheduler::queue_retry(
+    RunState& run,
+    const std::uint32_t attempt,
+    const std::chrono::milliseconds delay,
+    std::optional<std::string> error) {
+  auto handle = next_timer_handle_++;
+  if (handle == 0) handle = next_timer_handle_++;
+  run.retry = RetryEntry{
+      run.issue.id,
+      run.issue.identifier,
+      attempt,
+      clock_.now() + delay,
+      handle,
+      std::move(error)};
 }
 
 void Scheduler::reconcile() {
@@ -207,7 +252,9 @@ void Scheduler::reconcile() {
     const auto refreshed = tracker_.refresh_by_id(iterator->first);
     if (!refreshed || terminal_state(refreshed->state) ||
         !active_state(refreshed->state) || !routable(*refreshed)) {
-      if (!iterator->second.session_id.empty()) runtime_.cancel(iterator->second.session_id);
+      if (iterator->second.running && !iterator->second.session_id.empty()) {
+        runtime_.cancel(iterator->second.session_id);
+      }
       if (refreshed && terminal_state(refreshed->state)) {
         if (config_.before_remove_hook) {
           try {

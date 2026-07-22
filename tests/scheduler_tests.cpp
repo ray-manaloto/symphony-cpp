@@ -243,6 +243,67 @@ static ut::suite scheduler_tests = [] {
     std::filesystem::remove_all(root);
   };
 
+  ut::test("failure retry records complete one-based queue metadata") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Retry metadata", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-retry-metadata-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    runtime.enqueue(RunResult{false, false, std::nullopt, "failed", "exit"});
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+                                             events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    const auto& retry = *scheduler.runs().at("1").retry;
+    ut::expect(retry.issue_id == "1");
+    ut::expect(retry.identifier == "SYM-1");
+    ut::expect(retry.attempt == std::uint32_t{1});
+    ut::expect(retry.due_at == symphony::scheduler::Clock::time_point{} +
+                                  std::chrono::seconds{10});
+    ut::expect(retry.timer_handle != std::uint64_t{0});
+    ut::expect(retry.error == std::optional<std::string>{"exit"});
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("due retry requeues when a running worker exhausts slots") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Will retry", "Todo", {}});
+    tracker.upsert({"2", "SYM-2", "Occupies slot", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-retry-slot-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    runtime.enqueue(RunResult{false, false, std::nullopt, "failed", "exit"});
+    runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    config.max_concurrent = 2;
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+                                             runtime, events, clock);
+    scheduler.tick("{{ issue.identifier }}");
+    config.max_concurrent = 1;
+    scheduler.reconfigure(config);
+
+    clock.advance(std::chrono::seconds{10});
+    scheduler.tick("{{ issue.identifier }}");
+
+    ut::expect(runtime.run_count() == std::size_t{2});
+    const auto& retry = *scheduler.runs().at("1").retry;
+    ut::expect(retry.attempt == std::uint32_t{1});
+    ut::expect(retry.error ==
+               std::optional<std::string>{"no available orchestrator slots"});
+    ut::expect(retry.due_at == symphony::scheduler::Clock::time_point{} +
+                                  std::chrono::seconds{11});
+    std::filesystem::remove_all(root);
+  };
+
   ut::test("scheduler aggregates usage and merges sparse rate-limit updates") = [] {
     symphony::tracker::FakeTracker tracker;
     tracker.upsert({"1", "SYM-1", "Telemetry", "Todo", {}});
