@@ -5,11 +5,15 @@
 
 namespace symphony::tracker {
 namespace {
-std::string normalized(std::string value) {
-  std::ranges::transform(value, value.begin(), [](const unsigned char character) {
+std::string normalized(const std::string_view value) {
+  const auto first = value.find_first_not_of(" \t\r\n");
+  const auto last = value.find_last_not_of(" \t\r\n");
+  if (first == std::string_view::npos) return {};
+  std::string result{value.substr(first, last - first + 1)};
+  std::ranges::transform(result, result.begin(), [](const unsigned char character) {
     return static_cast<char>(std::tolower(character));
   });
-  return value;
+  return result;
 }
 }  // namespace
 void FakeTracker::upsert(domain::Issue issue) { issues_.insert_or_assign(issue.id, std::move(issue)); }

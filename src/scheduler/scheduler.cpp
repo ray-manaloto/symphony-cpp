@@ -48,13 +48,21 @@ bool Scheduler::terminal_state(const std::string_view state) const {
   return std::ranges::any_of(config_.terminal_states, [&](const auto& value) { return normalized(value) == target; });
 }
 
-bool Scheduler::eligible(const domain::Issue& issue) const {
-  if (!active_state(issue.state)) return false;
+bool Scheduler::routable(const domain::Issue& issue) const {
+  if (!issue.dispatchable) return false;
   return std::ranges::all_of(config_.required_labels, [&](const auto& required) {
     const auto target = normalized(required);
     if (target.empty()) return false;
     return std::ranges::any_of(issue.labels, [&](const auto& label) { return normalized(label) == target; });
   });
+}
+
+bool Scheduler::eligible(const domain::Issue& issue) const {
+  if (normalized(issue.id).empty() || normalized(issue.identifier).empty() ||
+      normalized(issue.title).empty() || normalized(issue.state).empty()) {
+    return false;
+  }
+  return active_state(issue.state) && !terminal_state(issue.state) && routable(issue);
 }
 
 bool Scheduler::state_capacity(const domain::Issue& issue) const {
@@ -77,7 +85,22 @@ void Scheduler::tick(const std::string_view prompt_template) {
     }
   }
   if (runs_.size() >= config_.max_concurrent) return;
-  for (const auto& issue : tracker_.list_by_states(config_.active_states)) {
+  auto candidates = tracker_.list_by_states(config_.active_states);
+  std::ranges::sort(candidates, [](const domain::Issue& left, const domain::Issue& right) {
+    const auto priority_key = [](const std::optional<int> priority) {
+      return priority && *priority >= 1 && *priority <= 4 ? *priority : 5;
+    };
+    if (priority_key(left.priority) != priority_key(right.priority)) {
+      return priority_key(left.priority) < priority_key(right.priority);
+    }
+    if (left.created_at != right.created_at) {
+      if (!left.created_at) return false;
+      if (!right.created_at) return true;
+      return *left.created_at < *right.created_at;
+    }
+    return left.identifier < right.identifier;
+  });
+  for (const auto& issue : candidates) {
     if (runs_.contains(issue.id) || !eligible(issue) || !state_capacity(issue)) continue;
     try {
       dispatch(issue, prompt_template);
@@ -161,7 +184,8 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
 void Scheduler::reconcile() {
   for (auto iterator = runs_.begin(); iterator != runs_.end();) {
     const auto refreshed = tracker_.refresh_by_id(iterator->first);
-    if (!refreshed || !active_state(refreshed->state)) {
+    if (!refreshed || terminal_state(refreshed->state) ||
+        !active_state(refreshed->state) || !routable(*refreshed)) {
       if (!iterator->second.session_id.empty()) runtime_.cancel(iterator->second.session_id);
       if (refreshed && terminal_state(refreshed->state)) {
         if (config_.before_remove_hook) {

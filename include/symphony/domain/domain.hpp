@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace symphony::domain {
@@ -14,11 +15,27 @@ enum class ProgressDecision { progressed, corrective_continuation, stalled_no_pr
 enum class IssueActivity { active, terminal, inactive };
 
 struct Issue {
+  Issue() = default;
+  Issue(
+      std::string issue_id,
+      std::string issue_identifier,
+      std::string issue_title,
+      std::string issue_state,
+      std::vector<std::string> issue_labels)
+      : id(std::move(issue_id)),
+        identifier(std::move(issue_identifier)),
+        title(std::move(issue_title)),
+        state(std::move(issue_state)),
+        labels(std::move(issue_labels)) {}
+
   std::string id;
   std::string identifier;
   std::string title;
   std::string state;
   std::vector<std::string> labels;
+  std::optional<int> priority;
+  std::optional<std::chrono::system_clock::time_point> created_at;
+  bool dispatchable{true};
 };
 
 struct ProgressSnapshot {

@@ -10,6 +10,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
 | Single-authority polling | deterministic scheduler tests | Implemented |
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
+| Candidate completeness, routability, and dispatch ordering | scheduler fixture tests | Implemented for normalized core fields, adapter `dispatchable`, priority, creation time, and identifier tie-breaks |
 | Safe per-issue workspaces | workspace tests | Implemented |
 | Lifecycle hooks and 60s default | workflow, scheduler, and workspace tests | Implemented in fixture and contained POSIX executors |
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
@@ -31,8 +32,7 @@ The following required evidence is not yet complete and prevents a conformance c
 
 - tracker normalization, pagination, malformed-record behavior, compact adapter profiles, and
   portable error mapping;
-- priority/creation-time dispatch ordering, explicit `dispatchable`, retry-entry metadata, slot
-  exhaustion, and stalled-session termination;
+- retry-entry metadata, slot exhaustion, and stalled-session termination;
 - Codex turn timeout, stderr separation, approval/user-input policy, unsupported tool calls, usage,
   and rate-limit telemetry;
 - logging-sink failure isolation and repeated telemetry aggregation;

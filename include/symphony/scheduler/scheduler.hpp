@@ -80,6 +80,7 @@ class Scheduler {
   void execute(RunState& run, std::string_view prompt_template);
   [[nodiscard]] bool active_state(std::string_view state) const;
   [[nodiscard]] bool terminal_state(std::string_view state) const;
+  [[nodiscard]] bool routable(const domain::Issue& issue) const;
   [[nodiscard]] bool eligible(const domain::Issue& issue) const;
   [[nodiscard]] bool state_capacity(const domain::Issue& issue) const;
 

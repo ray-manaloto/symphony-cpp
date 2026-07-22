@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <optional>
 
 #include <ut/ut.hpp>
 
@@ -64,7 +65,7 @@ static ut::suite scheduler_tests = [] {
   ut::test(
       "scheduler matches required labels and states case insensitively") = [] {
     symphony::tracker::FakeTracker tracker;
-    tracker.upsert({"1", "SYM-1", "Eligible", "todo", {" Ready ", "backend"}});
+    tracker.upsert({"1", "SYM-1", "Eligible", " todo ", {" Ready ", "backend"}});
     tracker.upsert({"2", "SYM-2", "Missing label", "TODO", {"backend"}});
     const auto root =
         std::filesystem::temp_directory_path() / "symphony-eligibility-test";
@@ -82,6 +83,91 @@ static ut::suite scheduler_tests = [] {
     scheduler.tick("{{ issue.identifier }}");
     ut::expect(scheduler.runs().contains("1"));
     ut::expect(!scheduler.runs().contains("2"));
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("scheduler requires complete adapter-dispatchable candidates") = [] {
+    symphony::tracker::FakeTracker tracker;
+    symphony::domain::Issue missing_title{"1", "SYM-1", "", "Todo", {}};
+    symphony::domain::Issue provider_blocked{"2", "SYM-2", "Blocked", "Todo", {}};
+    provider_blocked.dispatchable = false;
+    tracker.upsert(std::move(missing_title));
+    tracker.upsert(std::move(provider_blocked));
+    const auto root =
+        std::filesystem::temp_directory_path() / "symphony-candidate-validity-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+                                             events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    ut::expect(scheduler.runs().empty());
+    ut::expect(runtime.run_count() == std::size_t{0});
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("scheduler orders valid priorities then creation time") = [] {
+    symphony::tracker::FakeTracker tracker;
+    const auto epoch = std::chrono::system_clock::time_point{};
+    symphony::domain::Issue later{"1", "SYM-9", "Later", "Todo", {}};
+    later.priority = 2;
+    later.created_at = epoch + std::chrono::seconds{2};
+    symphony::domain::Issue earlier{"2", "SYM-8", "Earlier", "Todo", {}};
+    earlier.priority = 2;
+    earlier.created_at = epoch + std::chrono::seconds{1};
+    symphony::domain::Issue highest{"3", "SYM-7", "Highest", "Todo", {}};
+    highest.priority = 1;
+    highest.created_at = epoch + std::chrono::seconds{3};
+    tracker.upsert(std::move(later));
+    tracker.upsert(std::move(earlier));
+    tracker.upsert(std::move(highest));
+    const auto root =
+        std::filesystem::temp_directory_path() / "symphony-candidate-order-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
+    runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    config.max_concurrent = 2;
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces, runtime,
+                                             events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    ut::expect(scheduler.runs().contains("3"));
+    ut::expect(scheduler.runs().contains("2"));
+    ut::expect(!scheduler.runs().contains("1"));
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("reconciliation releases active issue made unroutable by adapter") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Initially routable", "Todo", {}});
+    const auto root =
+        std::filesystem::temp_directory_path() / "symphony-routability-refresh-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+                                             events, clock);
+    scheduler.tick("{{ issue.identifier }}");
+    auto unroutable = *tracker.refresh_by_id("1");
+    unroutable.dispatchable = false;
+    tracker.upsert(std::move(unroutable));
+
+    scheduler.reconcile();
+
+    ut::expect(scheduler.runs().empty());
     std::filesystem::remove_all(root);
   };
 
