@@ -1,6 +1,9 @@
 #include "symphony/codex/codex.hpp"
 
+#include <cerrno>
+#include <csignal>
 #include <filesystem>
+#include <fstream>
 #include <glaze/json/generic.hpp>
 #include <ut/ut.hpp>
 
@@ -231,6 +234,36 @@ static ut::suite codex_tests = [] {
     const auto result = runtime.run(request);
     ut::expect(result.normal_exit);
     ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("Codex runtime terminates the process group after a stall") = [] {
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-codex-stall-runtime-test";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    const auto pid_path = root / "child.pid";
+    const auto command = std::string{"echo $$ > "} + pid_path.string() +
+                         "; exec sleep 30";
+    symphony::codex::CodexAppServerRuntime runtime(
+        command,
+        std::chrono::milliseconds{1},
+        std::chrono::milliseconds{2},
+        std::chrono::seconds{1});
+    symphony::codex::RunRequest request;
+    request.workspace.path = std::filesystem::absolute(root);
+    request.prompt = "fixture";
+
+    const auto result = runtime.run(request);
+
+    std::ifstream pid_input(pid_path);
+    int process_id = 0;
+    pid_input >> process_id;
+    errno = 0;
+    ut::expect(result.stalled);
+    ut::expect(process_id > 0);
+    ut::expect(::kill(process_id, 0) == -1);
+    ut::expect(errno == ESRCH);
     std::filesystem::remove_all(root);
   };
 };
