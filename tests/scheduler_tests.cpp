@@ -304,6 +304,34 @@ static ut::suite scheduler_tests = [] {
     std::filesystem::remove_all(root);
   };
 
+  ut::test("stalled worker emits a distinct event and queues failure retry") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Stalled", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-stalled-session-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    RunResult stalled{false, false, std::nullopt, "thr-turn", "app-server stalled"};
+    stalled.stalled = true;
+    runtime.enqueue(std::move(stalled));
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+                                             events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    const auto recent = events.recent(10);
+    ut::expect(std::ranges::any_of(recent, [](const auto& event) {
+      return event.type == "stalled_session" && event.issue_id == "1";
+    }));
+    ut::expect(scheduler.runs().at("1").retry->attempt == std::uint32_t{1});
+    ut::expect(scheduler.runs().at("1").retry->error ==
+               std::optional<std::string>{"app-server stalled"});
+    std::filesystem::remove_all(root);
+  };
+
   ut::test("scheduler aggregates usage and merges sparse rate-limit updates") = [] {
     symphony::tracker::FakeTracker tracker;
     tracker.upsert({"1", "SYM-1", "Telemetry", "Todo", {}});

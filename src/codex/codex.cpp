@@ -3,6 +3,7 @@
 #include <array>
 #include <cerrno>
 #include <stdexcept>
+#include <thread>
 
 #include <csignal>
 #include <poll.h>
@@ -270,8 +271,14 @@ void FakeAgentRuntime::cancel(std::string_view) {}
 std::size_t FakeAgentRuntime::run_count() const noexcept { return run_count_; }
 
 CodexAppServerRuntime::CodexAppServerRuntime(
-    std::string command, const std::chrono::milliseconds read_timeout)
-    : command_(std::move(command)), read_timeout_(read_timeout) {
+    std::string command,
+    const std::chrono::milliseconds read_timeout,
+    const std::chrono::milliseconds stall_timeout,
+    const std::chrono::milliseconds turn_timeout)
+    : command_(std::move(command)),
+      read_timeout_(read_timeout),
+      stall_timeout_(stall_timeout),
+      turn_timeout_(turn_timeout) {
   if (command_.empty())
     throw std::invalid_argument("Codex command must not be empty");
   if (read_timeout_ <= std::chrono::milliseconds::zero()) {
@@ -288,7 +295,8 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
   }
   PosixProtocolChannel channel(command_, request.workspace.path,
                                active_process_);
-  return AppServerConversation::run(channel, request, read_timeout_);
+  return AppServerConversation::run(
+      channel, request, read_timeout_, 10000, stall_timeout_, turn_timeout_);
 }
 
 void CodexAppServerRuntime::cancel(std::string_view) {
@@ -298,7 +306,10 @@ void CodexAppServerRuntime::cancel(std::string_view) {
 }
 
 void CodexAppServerRuntime::reconfigure(
-    std::string command, const std::chrono::milliseconds read_timeout) {
+    std::string command,
+    const std::chrono::milliseconds read_timeout,
+    const std::chrono::milliseconds stall_timeout,
+    const std::chrono::milliseconds turn_timeout) {
   if (active_process_.load() > 0)
     throw std::runtime_error("cannot reconfigure active Codex process");
   if (command.empty() || read_timeout <= std::chrono::milliseconds::zero()) {
@@ -306,6 +317,8 @@ void CodexAppServerRuntime::reconfigure(
   }
   command_ = std::move(command);
   read_timeout_ = read_timeout;
+  stall_timeout_ = stall_timeout;
+  turn_timeout_ = turn_timeout;
 }
 
 std::string JsonLineCodec::frame(const std::string_view json) {
@@ -446,9 +459,11 @@ void FakeProtocolChannel::write(const std::string_view frame) {
   writes_.emplace_back(frame);
 }
 std::optional<std::string>
-FakeProtocolChannel::read(std::chrono::milliseconds) {
-  if (reads_.empty())
+FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
+  if (reads_.empty()) {
+    std::this_thread::sleep_for(timeout);
     return std::nullopt;
+  }
   auto line = std::move(reads_.front());
   reads_.pop_front();
   return line;
@@ -460,7 +475,9 @@ const std::vector<std::string> &FakeProtocolChannel::writes() const noexcept {
 RunResult
 AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
                            const std::chrono::milliseconds read_timeout,
-                           const std::size_t max_messages) {
+                           const std::size_t max_messages,
+                           const std::chrono::milliseconds stall_timeout,
+                           const std::chrono::milliseconds turn_timeout) {
   RunResult result;
   channel.write(AppServerProtocol::initialize_request(0));
   std::string thread_id;
@@ -468,12 +485,37 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
   bool initialized = false;
   bool thread_requested = false;
   bool turn_started = false;
+  const auto started_at = std::chrono::steady_clock::now();
+  auto last_event = started_at;
   for (std::size_t count = 0; count < max_messages; ++count) {
     const auto line = channel.read(read_timeout);
     if (!line) {
+      const auto now = std::chrono::steady_clock::now();
+      if (turn_timeout > std::chrono::milliseconds::zero() &&
+          now - started_at > turn_timeout) {
+        result.timed_out = true;
+        result.error = "app-server turn timeout";
+        result.session_id = thread_id.empty() || turn_id.empty()
+                                ? ""
+                                : thread_id + '-' + turn_id;
+        return result;
+      }
+      if (stall_timeout > std::chrono::milliseconds::zero()) {
+        if (now - last_event > stall_timeout) {
+          result.stalled = true;
+          result.error = "app-server stalled";
+          result.session_id = thread_id.empty() || turn_id.empty()
+                                  ? ""
+                                  : thread_id + '-' + turn_id;
+          return result;
+        }
+        continue;
+      }
+      if (turn_timeout > std::chrono::milliseconds::zero()) continue;
       result.error = "app-server read timeout";
       return result;
     }
+    last_event = std::chrono::steady_clock::now();
     ProtocolUpdate update;
     try {
       update = AppServerProtocol::decode(*line);

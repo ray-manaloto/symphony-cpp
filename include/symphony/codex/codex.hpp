@@ -73,6 +73,8 @@ struct RunResult {
 
   bool normal_exit{false};
   bool cancelled{false};
+  bool stalled{false};
+  bool timed_out{false};
   std::optional<domain::ProgressSnapshot> progress;
   std::string session_id;
   std::string error;
@@ -103,14 +105,22 @@ class CodexAppServerRuntime final : public AgentRuntime {
  public:
   explicit CodexAppServerRuntime(
       std::string command = "codex app-server",
-      std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000});
+      std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000},
+      std::chrono::milliseconds stall_timeout = std::chrono::milliseconds{300000},
+      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000});
   [[nodiscard]] RunResult run(const RunRequest& request) override;
   void cancel(std::string_view session_id) override;
-  void reconfigure(std::string command, std::chrono::milliseconds read_timeout);
+  void reconfigure(
+      std::string command,
+      std::chrono::milliseconds read_timeout,
+      std::chrono::milliseconds stall_timeout,
+      std::chrono::milliseconds turn_timeout);
 
  private:
   std::string command_;
   std::chrono::milliseconds read_timeout_;
+  std::chrono::milliseconds stall_timeout_;
+  std::chrono::milliseconds turn_timeout_;
   std::atomic<int> active_process_{-1};
 };
 
@@ -173,7 +183,9 @@ class AppServerConversation {
       ProtocolChannel& channel,
       const RunRequest& request,
       std::chrono::milliseconds read_timeout,
-      std::size_t max_messages = 10000);
+      std::size_t max_messages = 10000,
+      std::chrono::milliseconds stall_timeout = std::chrono::milliseconds::zero(),
+      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds::zero());
 };
 
 }  // namespace symphony::codex

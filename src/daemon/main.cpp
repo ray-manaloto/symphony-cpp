@@ -54,7 +54,9 @@ int main(int argc, char** argv) {
     symphony::workspace::FixtureWorkspaceExecutor workspaces(workflow.config.workspace.root);
     symphony::codex::CodexAppServerRuntime runtime(
         workflow.config.codex.command,
-        workflow.config.codex.read_timeout);
+        workflow.config.codex.read_timeout,
+        workflow.config.codex.stall_timeout,
+        workflow.config.codex.turn_timeout);
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);
@@ -74,7 +76,11 @@ int main(int argc, char** argv) {
             }
             workspaces = symphony::workspace::FixtureWorkspaceExecutor(changed->config.workspace.root);
           }
-          runtime.reconfigure(changed->config.codex.command, changed->config.codex.read_timeout);
+          runtime.reconfigure(
+              changed->config.codex.command,
+              changed->config.codex.read_timeout,
+              changed->config.codex.stall_timeout,
+              changed->config.codex.turn_timeout);
           scheduler.reconfigure(scheduler_config(changed->config));
           watcher.accept(*changed);
           workflow = std::move(*changed);

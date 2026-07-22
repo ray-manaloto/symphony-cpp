@@ -168,6 +168,47 @@ static ut::suite codex_tests = [] {
         ut::expect(bad.error.find("malformed") != std::string::npos);
       };
 
+  ut::test("app-server conversation distinguishes a stalled session") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    request.prompt = "Do work";
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel,
+        request,
+        std::chrono::milliseconds{1},
+        100,
+        std::chrono::milliseconds{2});
+
+    ut::expect(result.stalled);
+    ut::expect(!result.normal_exit);
+    ut::expect(result.error == std::string{"app-server stalled"});
+    ut::expect(result.session_id == std::string{"thr_1-turn_2"});
+  };
+
+  ut::test("disabled stall detection retains the independent turn deadline") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel,
+        request,
+        std::chrono::milliseconds{1},
+        100,
+        std::chrono::milliseconds{0},
+        std::chrono::milliseconds{2});
+
+    ut::expect(!result.stalled);
+    ut::expect(result.timed_out);
+    ut::expect(result.error == std::string{"app-server turn timeout"});
+  };
+
   ut::test(
       "Codex runtime launches JSONL app-server in the issue workspace") = [] {
     const auto root =

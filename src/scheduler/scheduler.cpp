@@ -189,6 +189,14 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     if (!latest_rate_limits_) latest_rate_limits_.emplace();
     codex::merge_rate_limits(*latest_rate_limits_, *result.rate_limits);
   }
+  if (result.stalled) {
+    events_.append({"stalled_session", run.issue.id, run.issue.identifier,
+                    result.session_id, "Codex activity exceeded stall timeout"});
+  }
+  if (result.timed_out) {
+    events_.append({"turn_timeout", run.issue.id, run.issue.identifier,
+                    result.session_id, "Codex turn exceeded turn timeout"});
+  }
   const auto still_running = !result.normal_exit && !result.cancelled &&
                              result.error.empty();
   if (still_running) return;
