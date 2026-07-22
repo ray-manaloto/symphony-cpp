@@ -1,10 +1,12 @@
 # Documentation map
 
 - [Architecture](architecture.md)
+- [Cross-project coordination](cross-project-coordination.md)
 - [Dependency-first convention](conventions/dependency-first.md)
 - [Dependency decision ledger](dependency-decisions.md)
 - [Normative and comparative sources](research/sources.md)
 - [C++26 library-stack evaluation](research/cpp-library-evaluation.md)
+- [Elixir reference versus Rust OpenSymphony runtime comparison](research/elixir-vs-rust-runtime-comparison.md)
 - [Section 18.1 conformance matrix](conformance.md)
 - [Pinned upstream inputs](upstream-lock.md)
 - [ADR-0001: compiler and reflection policy](adr/0001-compiler-reflection-policy.md)

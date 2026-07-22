@@ -43,3 +43,7 @@ symphonyd --workflow ./WORKFLOW.md --once
 CI publishes only tested compiler images to this repository's GHCR namespace. It does not publish a
 service deployment, install privileged VM components, mutate a live tracker, or use production
 credentials.
+
+The pinned external OpenSymphony development orchestrator is documented under
+[`ops/opensymphony`](ops/opensymphony/README.md). It runs behind a container boundary and remains
+separate from the C++ service and its normative conformance path.

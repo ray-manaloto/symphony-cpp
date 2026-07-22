@@ -19,6 +19,7 @@ with a link or quote identifying explicit owner authorization.
 | CLI parsing | Glaze CLI facilities first | Reuse selected stack before adding another CLI library. | Evaluate against `symphonyctl` command/help/completion contract. |
 | Exact decimal arithmetic | Boost.Decimal | Existing IEEE decimal types. | Add only when an upstream contract requires exact decimals. |
 | Symphony domain transitions and scheduler policy | OpenAI Symphony Draft v1 implemented locally | Normative product behavior has no reusable conforming C++ implementation in the recorded search; the owner explicitly approved the standalone C++ plan. | Keep pure and fixture-driven; commodity mechanisms still require dependencies. |
+| Development-work orchestrator | OpenSymphony `v2.10.0` as an external tool | It supplies Linear-driven scheduling, isolated issue workspaces, retries, recovery, Codex harnessing, and operator surfaces while leaving the standalone C++ product implementation independent. | Owner-approved bounded adoption. Run only in a containment boundary with the Codex harness; never link or vendor Rust into `symphony-cpp`. The dedicated Linear project is selected; worker activation remains gated on one-command secret injection, contained Codex login, healthy dry run, and one explicitly activated fixture-only canary. |
 
 Comparative evidence and access dates live in [`docs/research/sources.md`](research/sources.md) and
 [`docs/research/cpp-library-evaluation.md`](research/cpp-library-evaluation.md).

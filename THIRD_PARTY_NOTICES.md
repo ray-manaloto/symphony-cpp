@@ -23,6 +23,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 The base image's component notices and SPDX SBOM remain at `/LICENSES/` in derived images.
 
+## OpenSymphony
+
+The external development-orchestrator image contains OpenSymphony v2.10.0, distributed under the
+MIT License. Its exact source revision is recorded in `docs/research/sources.md`, and its license is
+included in that image at `/LICENSES/OpenSymphony-LICENSE`.
+
+## OpenAI Codex CLI
+
+The external development-orchestrator image contains OpenAI Codex CLI 0.145.0, distributed under
+the Apache License 2.0. The npm package retains its license and notices in the installed package.
+
 ## GCC 16.1
 
 The GCC toolchain is distributed under GPLv3 and related runtime-library exceptions. The exact
@@ -33,4 +44,3 @@ signed corresponding-source archive, signature, signer key, and COPYING files ar
 
 Bloomberg's clang-p2996 fork derives from LLVM and is distributed under Apache-2.0 with LLVM
 exceptions. Its exact source revision is recorded in `docs/upstream-lock.md`.
-

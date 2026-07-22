@@ -4,4 +4,5 @@
 /.ccache/
 /vcpkg_installed/
 /.env
+/.opensymphony/
 compile_commands.json

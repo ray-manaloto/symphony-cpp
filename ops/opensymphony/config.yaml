@@ -1,0 +1,9 @@
+target_repo: /target
+
+control_plane:
+  bind: 0.0.0.0:2468
+
+memory:
+  auto_capture: false
+  auto_archive: false
+  serve: false

@@ -6,7 +6,7 @@ Primary sources define behavior; comparisons only identify possible gaps. Access
 - [x] [GCC 16.1 release sources](https://ftp.gnu.org/gnu/gcc/gcc-16.1.0/)
 - [x] [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996), pinned at `7220baff`
 - [x] [OpenAI codex-universal](https://github.com/openai/codex-universal), image digest pinned separately
-- [x] [OpenSymphony](https://opensymphony.dev/), comparative only
+- [x] [OpenSymphony](https://github.com/kumanday/OpenSymphony), comparative only, pinned at `0cc21ddd` (`v2.10.0`)
 - [x] [Verdent Symphony architecture deep dive](https://www.verdent.ai/guides/openai-symphony-architecture-deep-dive), comparative only
 - [x] [OpenAI Tart](https://github.com/openai/tart), deferred Apple-Silicon executor
 - [x] [Tart Guest Agent](https://github.com/openai/tart-guest-agent), deferred guest operations
@@ -31,6 +31,12 @@ Research preflight: both lanes were refreshed on 2026-07-22. The primary-source 
 [`cpp-library-evaluation.md`](cpp-library-evaluation.md). The recent-practitioner raw report is under
 `.build/research/last30days`; it was noisy and thin, so it did not override primary documentation.
 Consequential implementation claims were rechecked against owning repositories.
+
+The runtime comparison is in
+[`elixir-vs-rust-runtime-comparison.md`](elixir-vs-rust-runtime-comparison.md). Run the official
+Elixir implementation first as the pinned Draft v1 and Codex app-server behavioral oracle. Use
+Rust OpenSymphony second, fixture-only, for differential scenarios and feature mining; its
+OpenHands-default runtime and product extensions are not conformance authority.
 
 The generated OpenAI REST client is an inspectable reference artifact, not Symphony's agent
 transport. Symphony Draft v1 requires the Codex app-server JSONL/JSON-RPC protocol. OpenAI does not
