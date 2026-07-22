@@ -23,7 +23,7 @@ workspace:
 
 hooks:
   after_create: |
-    git clone --depth 1 --branch codex/implementation https://github.com/sortakool/symphony-cpp.git .
+    git clone --depth 1 --branch codex/implementation https://github.com/ray-manaloto/symphony-cpp.git .
   before_run: |
     git status --short --branch
   after_run: |

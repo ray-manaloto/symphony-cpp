@@ -20,7 +20,7 @@ GitHub Actions so the compiler-heavy build does not consume the development Mac.
 ## First-run ceremony
 
 1. Dispatch `.github/workflows/opensymphony-image.yml` and wait for the tested
-   `ghcr.io/sortakool/symphony-orchestrator:edge` package.
+   `ghcr.io/ray-manaloto/symphony-orchestrator:edge` package.
 2. Human-create a least-privilege Linear key and store it through the existing
    fnox/Doppler/macOS secrets authority as `LINEAR_API_KEY`. Do not paste it into
    Codex, a shell argument, a project file, or logs.

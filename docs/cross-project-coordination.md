@@ -4,7 +4,7 @@ The two repositories are separate ChatGPT/Codex project contexts:
 
 - [`ray-manaloto/honeymoon-period`](https://github.com/ray-manaloto/honeymoon-period) owns product
   requirements and any decision to consume or integrate the standalone service.
-- [`sortakool/symphony-cpp`](https://github.com/sortakool/symphony-cpp) owns the C++26
+- [`ray-manaloto/symphony-cpp`](https://github.com/ray-manaloto/symphony-cpp) owns the C++26
   implementation, conformance, toolchains, containers, and development orchestration.
 
 Neither repository may edit the other's worktree or borrow its goal, lease,

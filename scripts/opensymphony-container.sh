@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mode="${1:-dry-run}"
-image="${OPENSYMPHONY_IMAGE:-ghcr.io/sortakool/symphony-orchestrator:edge}"
+image="${OPENSYMPHONY_IMAGE:-ghcr.io/ray-manaloto/symphony-orchestrator:edge}"
 
 case "${mode}" in
   login)

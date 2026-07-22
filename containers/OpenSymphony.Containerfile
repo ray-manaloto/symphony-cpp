@@ -50,7 +50,7 @@ RUN apt-get update \
 COPY --from=builder /opt/opensymphony/bin/opensymphony /usr/local/bin/opensymphony
 COPY --from=builder /opt/licenses/OpenSymphony-LICENSE /LICENSES/OpenSymphony-LICENSE
 
-LABEL org.opencontainers.image.source="https://github.com/sortakool/symphony-cpp" \
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
       org.opencontainers.image.description="Contained OpenSymphony development orchestrator for symphony-cpp" \
       dev.opensymphony.source.commit="${OPENSYMPHONY_COMMIT}"
 
