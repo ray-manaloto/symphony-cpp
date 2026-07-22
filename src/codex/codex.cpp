@@ -59,6 +59,35 @@ struct Identity {
 struct ResultBody {
   std::optional<Identity> thread;
   std::optional<Identity> turn;
+  struct TokenUsageBreakdown {
+    std::uint64_t inputTokens{0};
+    std::uint64_t cachedInputTokens{0};
+    std::uint64_t outputTokens{0};
+    std::uint64_t reasoningOutputTokens{0};
+    std::uint64_t totalTokens{0};
+    std::uint64_t cacheWriteInputTokens{0};
+  };
+  struct ThreadTokenUsage {
+    TokenUsageBreakdown last;
+    TokenUsageBreakdown total;
+    std::optional<std::int64_t> modelContextWindow;
+  };
+  struct RateLimitWindowBody {
+    std::int32_t usedPercent{0};
+    std::optional<std::int64_t> windowDurationMins;
+    std::optional<std::int64_t> resetsAt;
+  };
+  struct RateLimitSnapshotBody {
+    std::optional<std::string> limitId;
+    std::optional<std::string> limitName;
+    std::optional<std::string> planType;
+    std::optional<std::string> rateLimitReachedType;
+    std::optional<bool> spendControlReached;
+    std::optional<RateLimitWindowBody> primary;
+    std::optional<RateLimitWindowBody> secondary;
+  };
+  std::optional<ThreadTokenUsage> tokenUsage;
+  std::optional<RateLimitSnapshotBody> rateLimits;
 };
 
 struct ErrorBody {
@@ -82,6 +111,18 @@ template <typename T> std::string encode_frame(const T &value) {
   return JsonLineCodec::frame(*json);
 }
 } // namespace protocol_detail
+
+void merge_rate_limits(RateLimits& current, const RateLimits& update) {
+  if (update.limit_id) current.limit_id = update.limit_id;
+  if (update.limit_name) current.limit_name = update.limit_name;
+  if (update.plan_type) current.plan_type = update.plan_type;
+  if (update.reached_type) current.reached_type = update.reached_type;
+  if (update.spend_control_reached.has_value()) {
+    current.spend_control_reached = update.spend_control_reached;
+  }
+  if (update.primary) current.primary = update.primary;
+  if (update.secondary) current.secondary = update.secondary;
+}
 
 namespace {
 class PosixProtocolChannel final : public ProtocolChannel {
@@ -361,6 +402,31 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
       update.thread_id = message.params->thread->id;
     if (message.params->turn)
       update.turn_id = message.params->turn->id;
+    if (message.params->tokenUsage) {
+      const auto& total = message.params->tokenUsage->total;
+      update.token_usage = TokenUsage{
+          total.inputTokens,
+          total.cachedInputTokens,
+          total.outputTokens,
+          total.reasoningOutputTokens,
+          total.totalTokens};
+    }
+    if (message.params->rateLimits) {
+      const auto map_window = [](const auto& source)
+          -> std::optional<RateLimitWindow> {
+        if (!source) return std::nullopt;
+        return RateLimitWindow{
+            source->usedPercent, source->windowDurationMins, source->resetsAt};
+      };
+      const auto& source = *message.params->rateLimits;
+      RateLimits limits{source.limitId, map_window(source.primary),
+                        map_window(source.secondary)};
+      limits.limit_name = source.limitName;
+      limits.plan_type = source.planType;
+      limits.reached_type = source.rateLimitReachedType;
+      limits.spend_control_reached = source.spendControlReached;
+      update.rate_limits = std::move(limits);
+    }
   }
   if (update.method == "turn/completed")
     update.event = ProtocolEvent::turn_completed;
@@ -420,6 +486,11 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       thread_id = update.thread_id;
     if (!update.turn_id.empty())
       turn_id = update.turn_id;
+    if (update.token_usage) result.token_usage = update.token_usage;
+    if (update.rate_limits) {
+      if (!result.rate_limits) result.rate_limits.emplace();
+      merge_rate_limits(*result.rate_limits, *update.rate_limits);
+    }
     if (update.event == ProtocolEvent::malformed) {
       result.error =
           update.error.empty() ? "malformed app-server message" : update.error;

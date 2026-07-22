@@ -78,6 +78,23 @@ static ut::suite codex_tests = [] {
         ut::expect(completed.turn_id == std::string{"turn_2"});
       };
 
+  ut::test("app-server protocol decodes token and sparse rate-limit telemetry") = [] {
+    const auto usage = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":7,"cachedInputTokens":3,"outputTokens":5,"reasoningOutputTokens":2,"totalTokens":12},"total":{"inputTokens":17,"cachedInputTokens":6,"outputTokens":9,"reasoningOutputTokens":4,"totalTokens":26},"modelContextWindow":200000}}})");
+    ut::expect(usage.token_usage.has_value());
+    ut::expect(usage.token_usage->input_tokens == std::uint64_t{17});
+    ut::expect(usage.token_usage->cached_input_tokens == std::uint64_t{6});
+    ut::expect(usage.token_usage->output_tokens == std::uint64_t{9});
+    ut::expect(usage.token_usage->total_tokens == std::uint64_t{26});
+
+    const auto limits = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1234}}}})");
+    ut::expect(limits.rate_limits.has_value());
+    ut::expect(limits.rate_limits->limit_id == std::optional<std::string>{"codex"});
+    ut::expect(limits.rate_limits->primary.has_value());
+    ut::expect(limits.rate_limits->primary->used_percent == 42);
+  };
+
   ut::test("app-server protocol tolerates additive fields but rejects bad "
            "ids") = [] {
     const auto additive = symphony::codex::AppServerProtocol::decode(
@@ -108,6 +125,32 @@ static ut::suite codex_tests = [] {
         ut::expect(result.session_id == std::string{"thr_1-turn_2"});
         ut::expect(channel.writes().size() == std::size_t{4});
       };
+
+  ut::test("app-server conversation returns latest telemetry with completion") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":4,"cachedInputTokens":1,"outputTokens":2,"reasoningOutputTokens":1,"totalTokens":6},"total":{"inputTokens":4,"cachedInputTokens":1,"outputTokens":2,"reasoningOutputTokens":1,"totalTokens":6}}}})");
+    channel.enqueue(
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":{"usedPercent":9}}}})");
+    channel.enqueue(
+        R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    request.prompt = "Do work";
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel, request, std::chrono::seconds{1});
+
+    ut::expect(result.normal_exit);
+    ut::expect(result.token_usage.has_value());
+    ut::expect(result.token_usage->total_tokens == std::uint64_t{6});
+    ut::expect(result.rate_limits.has_value());
+    ut::expect(result.rate_limits->primary->used_percent == 9);
+  };
 
   ut::test(
       "app-server conversation fails closed on timeout and malformed output") =

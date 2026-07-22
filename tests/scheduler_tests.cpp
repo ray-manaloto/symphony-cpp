@@ -242,4 +242,43 @@ static ut::suite scheduler_tests = [] {
     ut::expect(runtime.run_count() == std::size_t{2});
     std::filesystem::remove_all(root);
   };
+
+  ut::test("scheduler aggregates usage and merges sparse rate-limit updates") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Telemetry", "Todo", {}});
+    const auto root =
+        std::filesystem::temp_directory_path() / "symphony-telemetry-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    symphony::codex::RunResult first{true, false, std::nullopt, "s1", {}};
+    first.token_usage = symphony::codex::TokenUsage{10, 4, 6, 2, 16};
+    first.rate_limits = symphony::codex::RateLimits{
+        "codex", symphony::codex::RateLimitWindow{25, 300, 1000}, std::nullopt};
+    symphony::codex::RunResult second{true, false, std::nullopt, "s2", {}};
+    second.token_usage = symphony::codex::TokenUsage{3, 1, 2, 1, 5};
+    second.rate_limits = symphony::codex::RateLimits{
+        std::nullopt, std::nullopt,
+        symphony::codex::RateLimitWindow{50, 10080, 2000}};
+    runtime.enqueue(std::move(first));
+    runtime.enqueue(std::move(second));
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+                                             events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+    clock.advance(std::chrono::seconds{1});
+    scheduler.tick("{{ issue.identifier }}");
+
+    ut::expect(scheduler.codex_totals().input_tokens == std::uint64_t{13});
+    ut::expect(scheduler.codex_totals().cached_input_tokens == std::uint64_t{5});
+    ut::expect(scheduler.codex_totals().output_tokens == std::uint64_t{8});
+    ut::expect(scheduler.codex_totals().total_tokens == std::uint64_t{21});
+    ut::expect(scheduler.latest_rate_limits()->limit_id ==
+               std::optional<std::string>{"codex"});
+    ut::expect(scheduler.latest_rate_limits()->primary->used_percent == 25);
+    ut::expect(scheduler.latest_rate_limits()->secondary->used_percent == 50);
+    std::filesystem::remove_all(root);
+  };
 };

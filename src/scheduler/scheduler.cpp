@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <stdexcept>
 
 #include "symphony/workflow/workflow.hpp"
@@ -17,6 +18,11 @@ std::string normalized(std::string_view value) {
     return static_cast<char>(std::tolower(character));
   });
   return result;
+}
+
+void saturating_add(std::uint64_t& total, const std::uint64_t value) {
+  const auto maximum = std::numeric_limits<std::uint64_t>::max();
+  total = value > maximum - total ? maximum : total + value;
 }
 }  // namespace
 Clock::time_point FakeClock::now() const { return now_; }
@@ -151,6 +157,21 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     }
   }
   run.session_id = result.session_id;
+  if (result.token_usage) {
+    saturating_add(codex_totals_.input_tokens, result.token_usage->input_tokens);
+    saturating_add(
+        codex_totals_.cached_input_tokens,
+        result.token_usage->cached_input_tokens);
+    saturating_add(codex_totals_.output_tokens, result.token_usage->output_tokens);
+    saturating_add(
+        codex_totals_.reasoning_output_tokens,
+        result.token_usage->reasoning_output_tokens);
+    saturating_add(codex_totals_.total_tokens, result.token_usage->total_tokens);
+  }
+  if (result.rate_limits) {
+    if (!latest_rate_limits_) latest_rate_limits_.emplace();
+    codex::merge_rate_limits(*latest_rate_limits_, *result.rate_limits);
+  }
   bool schedule_retry = true;
   if (result.progress) {
     const auto decision = domain::observe_progress(run.attempt, domain::fingerprint(*result.progress));
@@ -231,6 +252,14 @@ void Scheduler::startup_cleanup() {
 }
 
 const std::map<std::string, RunState>& Scheduler::runs() const noexcept { return runs_; }
+
+const codex::TokenUsage& Scheduler::codex_totals() const noexcept {
+  return codex_totals_;
+}
+
+const std::optional<codex::RateLimits>& Scheduler::latest_rate_limits() const noexcept {
+  return latest_rate_limits_;
+}
 
 void Scheduler::reconfigure(SchedulerConfig config) {
   if (config.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");

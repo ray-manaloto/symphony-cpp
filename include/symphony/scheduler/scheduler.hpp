@@ -74,6 +74,8 @@ class Scheduler {
   void startup_cleanup();
   void reconfigure(SchedulerConfig config);
   [[nodiscard]] const std::map<std::string, RunState>& runs() const noexcept;
+  [[nodiscard]] const codex::TokenUsage& codex_totals() const noexcept;
+  [[nodiscard]] const std::optional<codex::RateLimits>& latest_rate_limits() const noexcept;
 
  private:
   void dispatch(const domain::Issue& issue, std::string_view prompt_template);
@@ -91,6 +93,8 @@ class Scheduler {
   observability::EventStore& events_;
   Clock& clock_;
   std::map<std::string, RunState> runs_;
+  codex::TokenUsage codex_totals_;
+  std::optional<codex::RateLimits> latest_rate_limits_;
 };
 
 }  // namespace symphony::scheduler

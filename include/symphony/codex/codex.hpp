@@ -7,12 +7,48 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "symphony/domain/domain.hpp"
 #include "symphony/workspace/workspace.hpp"
 
 namespace symphony::codex {
+
+struct TokenUsage {
+  std::uint64_t input_tokens{0};
+  std::uint64_t cached_input_tokens{0};
+  std::uint64_t output_tokens{0};
+  std::uint64_t reasoning_output_tokens{0};
+  std::uint64_t total_tokens{0};
+};
+
+struct RateLimitWindow {
+  std::int32_t used_percent{0};
+  std::optional<std::int64_t> window_duration_minutes;
+  std::optional<std::int64_t> resets_at;
+};
+
+struct RateLimits {
+  RateLimits() = default;
+  RateLimits(
+      std::optional<std::string> id,
+      std::optional<RateLimitWindow> primary_window,
+      std::optional<RateLimitWindow> secondary_window)
+      : limit_id(std::move(id)),
+        primary(std::move(primary_window)),
+        secondary(std::move(secondary_window)) {}
+
+  std::optional<std::string> limit_id;
+  std::optional<std::string> limit_name;
+  std::optional<std::string> plan_type;
+  std::optional<std::string> reached_type;
+  std::optional<bool> spend_control_reached;
+  std::optional<RateLimitWindow> primary;
+  std::optional<RateLimitWindow> secondary;
+};
+
+void merge_rate_limits(RateLimits& current, const RateLimits& update);
 
 struct RunRequest {
   domain::Issue issue;
@@ -22,11 +58,26 @@ struct RunRequest {
 };
 
 struct RunResult {
+  RunResult() = default;
+  RunResult(
+      bool exited_normally,
+      bool was_cancelled,
+      std::optional<domain::ProgressSnapshot> progress_snapshot,
+      std::string session,
+      std::string error_message)
+      : normal_exit(exited_normally),
+        cancelled(was_cancelled),
+        progress(std::move(progress_snapshot)),
+        session_id(std::move(session)),
+        error(std::move(error_message)) {}
+
   bool normal_exit{false};
   bool cancelled{false};
   std::optional<domain::ProgressSnapshot> progress;
   std::string session_id;
   std::string error;
+  std::optional<TokenUsage> token_usage;
+  std::optional<RateLimits> rate_limits;
 };
 
 class AgentRuntime {
@@ -78,6 +129,8 @@ struct ProtocolUpdate {
   std::string thread_id;
   std::string turn_id;
   std::string error;
+  std::optional<TokenUsage> token_usage;
+  std::optional<RateLimits> rate_limits;
 };
 
 class AppServerProtocol {
