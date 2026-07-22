@@ -252,7 +252,7 @@ static ut::suite codex_tests = [] {
     symphony::codex::CodexAppServerRuntime runtime(
         command,
         std::chrono::milliseconds{1},
-        std::chrono::milliseconds{2},
+        std::chrono::milliseconds{100},
         std::chrono::seconds{1});
     symphony::codex::RunRequest request;
     request.workspace.path = std::filesystem::absolute(root);
@@ -265,6 +265,7 @@ static ut::suite codex_tests = [] {
     pid_input >> process_id;
     errno = 0;
     ut::expect(result.stalled);
+    ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
     ut::expect(process_id > 0);
     ut::expect(::kill(process_id, 0) == -1);
     ut::expect(errno == ESRCH);
