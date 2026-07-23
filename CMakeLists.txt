@@ -37,7 +37,8 @@ if(SYMPHONY_ENABLE_TSAN)
   endif()
   target_compile_options(symphony_options INTERFACE
     -fsanitize=thread
-    -fno-omit-frame-pointer)
+    -fno-omit-frame-pointer
+    $<$<CXX_COMPILER_ID:GNU>:-Wno-error=tsan>)
   target_link_options(symphony_options INTERFACE
     -fsanitize=thread
     -fno-omit-frame-pointer)
