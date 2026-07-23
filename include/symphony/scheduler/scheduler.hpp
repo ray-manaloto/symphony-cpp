@@ -42,6 +42,11 @@ struct SchedulerConfig {
   std::vector<std::string> required_labels;
   std::size_t max_concurrent{1};
   std::uint32_t max_turns{20};
+  std::optional<std::string> model;
+  std::optional<std::string> reasoning_effort;
+  std::optional<std::string> escalation_model;
+  std::optional<std::string> escalation_reasoning_effort;
+  std::optional<std::string> repeated_failure_reasoning_effort;
   std::map<std::string, std::size_t> max_concurrent_by_state;
   std::chrono::milliseconds retry_base{1000};
   std::chrono::milliseconds failure_retry_base{10000};

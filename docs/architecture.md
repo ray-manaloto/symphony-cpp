@@ -63,20 +63,25 @@ failure result and the turn continues. Workflow-configured approval and thread-s
 through as strings; turn sandbox policy passes through as a Glaze-validated raw JSON object so this
 repository does not duplicate Codex's evolving enums.
 
-The worker model and reasoning effort are also workflow pass-through strings owned by the targeted
-Codex schema. The contained 0.145.0 catalog verified `gpt-5.6-sol` with `high` effort before both
-were pinned. The model is present on thread and turn startup; effort uses Codex's turn-level
-`effort` field. Neither the standalone service nor external OpenSymphony maintains a copied model
-catalog.
+The worker model and reasoning effort are workflow pass-through strings owned by the targeted Codex
+schema. The contained 0.145.0 catalog verified `gpt-5.6-sol` with `high` effort before both were
+pinned. The model is present on thread and turn startup; effort uses Codex's turn-level `effort`
+field. Between fresh worker sessions, the scheduler may select configured escalation values after
+one abnormal failure or an unchanged progress fingerprint, and a configured ceiling after the same
+failure repeats. A changed progress fingerprint clears that evidence. Neither the standalone
+service nor external OpenSymphony maintains a copied model catalog.
 
 Codex remains responsible for the compaction mechanism. Symphony preserves the reported model
 context-window size, recognizes both the legacy `thread/compacted` notification and the current
-`contextCompaction` completed item, counts them, and emits an operator event. The repository does
-not yet request proactive compaction at a local threshold; that remains an explicit context-policy
-gap.
+`contextCompaction` completed item, counts them, and emits an operator event. Once compaction is
+observed, the current worker session exits normally at the next completed turn without requesting a
+continuation; a retry starts from the durable workspace in a fresh process and thread. The
+repository does not request proactive compaction and cannot yet preempt an internal compaction from
+reliable context-utilization evidence; that remains an explicit context-policy gap.
 
 One worker invocation owns one app-server process and coding-agent thread. After each successful
 turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a
 continuation-only prompt on the same thread until the current workflow snapshot's positive
-`agent.max_turns` cap is reached. The worker then exits normally and retains the normative short
-continuation retry so a still-active issue can begin a new bounded session.
+`agent.max_turns` cap is reached. The repository workflow uses four turns per worker session to
+bound copied context and failure scope. The worker then exits normally and retains the normative
+short continuation retry so a still-active issue can begin a new bounded session.

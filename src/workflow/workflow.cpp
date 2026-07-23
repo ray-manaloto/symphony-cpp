@@ -200,6 +200,9 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
     if (const auto node = codex["command"]) document.config.codex.command = scalar(node, "codex.command");
     if (const auto node = codex["model"]) document.config.codex.model = scalar(node, "codex.model");
     if (const auto node = codex["reasoning_effort"]) document.config.codex.reasoning_effort = scalar(node, "codex.reasoning_effort");
+    if (const auto node = codex["escalation_model"]) document.config.codex.escalation_model = scalar(node, "codex.escalation_model");
+    if (const auto node = codex["escalation_reasoning_effort"]) document.config.codex.escalation_reasoning_effort = scalar(node, "codex.escalation_reasoning_effort");
+    if (const auto node = codex["repeated_failure_reasoning_effort"]) document.config.codex.repeated_failure_reasoning_effort = scalar(node, "codex.repeated_failure_reasoning_effort");
     if (const auto node = codex["approval_policy"]) document.config.codex.approval_policy = scalar(node, "codex.approval_policy");
     if (const auto node = codex["thread_sandbox"]) document.config.codex.thread_sandbox = scalar(node, "codex.thread_sandbox");
     if (const auto node = codex["turn_sandbox_policy"]) document.config.codex.turn_sandbox_policy = scalar(node, "codex.turn_sandbox_policy");
@@ -272,6 +275,19 @@ void validate_for_dispatch(
   }
   if (config.codex.reasoning_effort && trim(*config.codex.reasoning_effort).empty()) {
     throw std::runtime_error("codex.reasoning_effort must not be empty");
+  }
+  if (config.codex.escalation_model && trim(*config.codex.escalation_model).empty()) {
+    throw std::runtime_error("codex.escalation_model must not be empty");
+  }
+  if (config.codex.escalation_reasoning_effort &&
+      trim(*config.codex.escalation_reasoning_effort).empty()) {
+    throw std::runtime_error(
+        "codex.escalation_reasoning_effort must not be empty");
+  }
+  if (config.codex.repeated_failure_reasoning_effort &&
+      trim(*config.codex.repeated_failure_reasoning_effort).empty()) {
+    throw std::runtime_error(
+        "codex.repeated_failure_reasoning_effort must not be empty");
   }
 }
 }  // namespace symphony::workflow

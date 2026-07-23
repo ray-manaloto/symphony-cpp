@@ -37,6 +37,8 @@ ProgressDecision observe_progress(Attempt& attempt, const ProgressFingerprint& c
   if (!attempt.last_progress || *attempt.last_progress != current) {
     attempt.last_progress = current;
     attempt.unchanged_results = 0;
+    attempt.repeated_failures = 0;
+    attempt.last_failure_signature.reset();
     attempt.context_state = ContextState::active;
     return ProgressDecision::progressed;
   }
@@ -77,4 +79,3 @@ std::string_view to_string(const ContextState state) noexcept {
   return "unknown";
 }
 }  // namespace symphony::domain
-

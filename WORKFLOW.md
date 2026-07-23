@@ -34,13 +34,16 @@ hooks:
 
 agent:
   max_concurrent_agents: 1
-  max_turns: 20
+  max_turns: 4
   max_retry_backoff_ms: 300000
   stall_timeout_ms: 300000
 
 codex:
   model: gpt-5.6-sol
   reasoning_effort: high
+  escalation_model: gpt-5.6-sol
+  escalation_reasoning_effort: xhigh
+  repeated_failure_reasoning_effort: max
 
 routing:
   harness: codex_app_server

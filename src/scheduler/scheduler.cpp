@@ -24,6 +24,61 @@ void saturating_add(std::uint64_t& total, const std::uint64_t value) {
   const auto maximum = std::numeric_limits<std::uint64_t>::max();
   total = value > maximum - total ? maximum : total + value;
 }
+
+std::uint64_t failure_signature(const std::string_view value) {
+  std::uint64_t hash = 14695981039346656037ULL;
+  for (const auto byte : value) {
+    hash ^= static_cast<unsigned char>(byte);
+    hash *= 1099511628211ULL;
+  }
+  return hash;
+}
+
+void record_failure(domain::Attempt& attempt, const std::string_view failure) {
+  const auto signature = failure_signature(failure);
+  if (attempt.last_failure_signature == signature) {
+    if (attempt.repeated_failures < std::numeric_limits<std::uint32_t>::max()) {
+      ++attempt.repeated_failures;
+    }
+  } else {
+    attempt.last_failure_signature = signature;
+    attempt.repeated_failures = 1;
+  }
+}
+
+struct SelectedPolicy {
+  std::optional<std::string> model;
+  std::optional<std::string> reasoning_effort;
+  std::string_view reason{"baseline"};
+};
+
+SelectedPolicy select_policy(const SchedulerConfig& config,
+                             const domain::Attempt& attempt) {
+  SelectedPolicy selected{config.model, config.reasoning_effort, "baseline"};
+  if (attempt.repeated_failures >= 2) {
+    if (config.escalation_model) selected.model = config.escalation_model;
+    if (config.repeated_failure_reasoning_effort) {
+      selected.reasoning_effort = config.repeated_failure_reasoning_effort;
+    } else if (config.escalation_reasoning_effort) {
+      selected.reasoning_effort = config.escalation_reasoning_effort;
+    }
+    selected.reason = "repeated_failure";
+  } else if (attempt.repeated_failures > 0) {
+    if (config.escalation_model) selected.model = config.escalation_model;
+    if (config.escalation_reasoning_effort) {
+      selected.reasoning_effort = config.escalation_reasoning_effort;
+    }
+    selected.reason = "failure_retry";
+  } else if (attempt.context_state ==
+             domain::ContextState::corrective_continuation) {
+    if (config.escalation_model) selected.model = config.escalation_model;
+    if (config.escalation_reasoning_effort) {
+      selected.reasoning_effort = config.escalation_reasoning_effort;
+    }
+    selected.reason = "no_progress";
+  }
+  return selected;
+}
 }  // namespace
 Clock::time_point FakeClock::now() const { return now_; }
 void FakeClock::advance(const std::chrono::milliseconds delta) { now_ += delta; }
@@ -168,6 +223,17 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     request.workspace = run.workspace;
     request.prompt = prompt;
     request.max_turns = config_.max_turns;
+    const auto policy = select_policy(config_, run.attempt);
+    request.model = policy.model;
+    request.reasoning_effort = policy.reasoning_effort;
+    events_.append({
+        "agent_policy_selected",
+        run.issue.id,
+        run.issue.identifier,
+        {},
+        "model=" + policy.model.value_or("default") +
+            " effort=" + policy.reasoning_effort.value_or("default") +
+            " reason=" + std::string{policy.reason}});
     request.continuation_prompt_after_turn =
         [this, &run](const std::uint32_t completed_turns)
         -> std::optional<std::string> {
@@ -263,6 +329,9 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     std::uint32_t retry_attempt = 1;
     auto delay = config_.retry_base;
     if (!clean_exit) {
+      record_failure(run.attempt,
+                     result.error.empty() ? std::string_view{"cancelled"}
+                                          : std::string_view{result.error});
       retry_attempt = ++run.attempt.failure_retries;
       delay = domain::retry_delay(
           retry_attempt - 1,

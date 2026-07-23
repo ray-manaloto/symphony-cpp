@@ -24,6 +24,13 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
   config.required_labels = workflow.tracker.required_labels;
   config.max_concurrent = workflow.agent.max_concurrent_agents;
   config.max_turns = workflow.agent.max_turns;
+  config.model = workflow.codex.model;
+  config.reasoning_effort = workflow.codex.reasoning_effort;
+  config.escalation_model = workflow.codex.escalation_model;
+  config.escalation_reasoning_effort =
+      workflow.codex.escalation_reasoning_effort;
+  config.repeated_failure_reasoning_effort =
+      workflow.codex.repeated_failure_reasoning_effort;
   for (const auto& [state, limit] : workflow.agent.max_concurrent_agents_by_state) {
     config.max_concurrent_by_state.emplace(state, limit);
   }

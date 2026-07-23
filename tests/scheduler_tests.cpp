@@ -128,6 +128,9 @@ static ut::suite scheduler_tests = [] {
         symphony::scheduler::FakeClock clock;
         symphony::scheduler::SchedulerConfig config;
         config.max_turns = 1;
+        config.model = "gpt-5.6-sol";
+        config.reasoning_effort = "high";
+        config.escalation_reasoning_effort = "xhigh";
         symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
                                                  runtime, events, clock);
 
@@ -138,6 +141,10 @@ static ut::suite scheduler_tests = [] {
         scheduler.tick("Work on {{ issue.identifier }} attempt {{ attempt }}");
 
         ut::expect(runtime.run_count() == std::size_t{3});
+        ut::expect(runtime.last_model() ==
+                   std::optional<std::string>{"gpt-5.6-sol"});
+        ut::expect(runtime.last_reasoning_effort() ==
+                   std::optional<std::string>{"xhigh"});
         ut::expect(scheduler.runs().at("1").attempt.context_state ==
                    symphony::domain::ContextState::stalled_no_progress);
         std::filesystem::remove_all(root);
@@ -343,6 +350,49 @@ static ut::suite scheduler_tests = [] {
     clock.advance(std::chrono::seconds{1});
     scheduler.tick("{{ issue.identifier }}");
     ut::expect(runtime.run_count() == std::size_t{2});
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("scheduler escalates repeated failure effort with explicit reasons") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Repeated failure", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-policy-escalation-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    runtime.enqueue(RunResult{false, false, std::nullopt, "s1", "same failure"});
+    runtime.enqueue(RunResult{false, false, std::nullopt, "s2", "same failure"});
+    runtime.enqueue(RunResult{false, false, std::nullopt, "s3", "same failure"});
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    config.max_turns = 1;
+    config.model = "gpt-5.6-sol";
+    config.reasoning_effort = "high";
+    config.escalation_model = "gpt-5.6-sol";
+    config.escalation_reasoning_effort = "xhigh";
+    config.repeated_failure_reasoning_effort = "max";
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+                                             runtime, events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+    ut::expect(runtime.last_reasoning_effort() ==
+               std::optional<std::string>{"high"});
+    clock.advance(std::chrono::seconds{10});
+    scheduler.tick("{{ issue.identifier }}");
+    ut::expect(runtime.last_reasoning_effort() ==
+               std::optional<std::string>{"xhigh"});
+    clock.advance(std::chrono::seconds{20});
+    scheduler.tick("{{ issue.identifier }}");
+    ut::expect(runtime.last_reasoning_effort() ==
+               std::optional<std::string>{"max"});
+
+    const auto recent = events.recent(20);
+    ut::expect(std::ranges::any_of(recent, [](const auto& event) {
+      return event.type == "agent_policy_selected" &&
+             event.message.find("reason=repeated_failure") != std::string::npos;
+    }));
     std::filesystem::remove_all(root);
   };
 

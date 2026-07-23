@@ -57,6 +57,8 @@ struct RunRequest {
   domain::Attempt attempt;
   workspace::Workspace workspace;
   std::string prompt;
+  std::optional<std::string> model;
+  std::optional<std::string> reasoning_effort;
   std::uint32_t max_turns{1};
   std::function<std::optional<std::string>(std::uint32_t completed_turns)>
       continuation_prompt_after_turn;
@@ -110,10 +112,14 @@ class FakeAgentRuntime final : public AgentRuntime {
   [[nodiscard]] RunResult run(const RunRequest& request) override;
   void cancel(std::string_view session_id) override;
   [[nodiscard]] std::size_t run_count() const noexcept;
+  [[nodiscard]] const std::optional<std::string>& last_model() const noexcept;
+  [[nodiscard]] const std::optional<std::string>& last_reasoning_effort() const noexcept;
 
  private:
   std::deque<RunResult> results_;
   std::size_t run_count_{0};
+  std::optional<std::string> last_model_;
+  std::optional<std::string> last_reasoning_effort_;
 };
 
 class CodexAppServerRuntime final : public AgentRuntime {

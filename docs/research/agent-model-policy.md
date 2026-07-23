@@ -55,11 +55,16 @@ then expand only after measured throughput and defect-recall evidence.
   both the external OpenSymphony and standalone C++ paths now use Sol/high.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction initially; observe compaction frequency before setting a local
-  threshold.
-- Enforce a turn budget independently of context size. A compaction is not a new attempt and does
-  not reset retry/no-progress policy.
-- Escalate effort for the next bounded turn after a failed verification or ambiguous diagnosis;
-  do not keep every turn at the maximum tier.
+  threshold. End the bounded worker session after any observed compaction, then resume from durable
+  workspace and tracker state in a fresh process and thread.
+- Enforce a turn budget independently of context size. The repository workflow uses four turns per
+  session. A compaction is not progress and does not reset retry/no-progress policy.
+- Select Sol/high at baseline, Sol/xhigh for the next session after one abnormal failure or verified
+  no-progress result, and Sol/max only after the same failure repeats. Return to baseline only after
+  the progress fingerprint changes; a clean process exit alone is insufficient.
+- OpenSymphony v2.10.0 cannot apply an equivalent per-session effort route. Monitor its terminal
+  reasons and repeated outcomes, but change its read-only overlay only through an explicit operator
+  update until upstream exposes bounded routing.
 - Record model, effort, context window, input/output/cached tokens, compactions, and terminal reason
   without logging prompts, issue content, credentials, or hidden reasoning.
 

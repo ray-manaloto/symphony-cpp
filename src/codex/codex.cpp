@@ -281,8 +281,10 @@ void FakeAgentRuntime::enqueue(RunResult result) {
   results_.push_back(std::move(result));
 }
 
-RunResult FakeAgentRuntime::run(const RunRequest &) {
+RunResult FakeAgentRuntime::run(const RunRequest &request) {
   ++run_count_;
+  last_model_ = request.model;
+  last_reasoning_effort_ = request.reasoning_effort;
   if (results_.empty()) {
     RunResult result;
     result.error = "no fixture result queued";
@@ -295,6 +297,13 @@ RunResult FakeAgentRuntime::run(const RunRequest &) {
 
 void FakeAgentRuntime::cancel(std::string_view) {}
 std::size_t FakeAgentRuntime::run_count() const noexcept { return run_count_; }
+const std::optional<std::string>& FakeAgentRuntime::last_model() const noexcept {
+  return last_model_;
+}
+const std::optional<std::string>&
+FakeAgentRuntime::last_reasoning_effort() const noexcept {
+  return last_reasoning_effort_;
+}
 
 CodexAppServerRuntime::CodexAppServerRuntime(
     std::string command,
@@ -333,6 +342,10 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
     stall_timeout = stall_timeout_;
     turn_timeout = turn_timeout_;
     policy = policy_;
+  }
+  if (request.model) policy.model = request.model;
+  if (request.reasoning_effort) {
+    policy.reasoning_effort = request.reasoning_effort;
   }
   BoostProcessProtocolChannel channel(command, request.workspace.path);
   {
@@ -720,6 +733,10 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       if (result.turns_completed <
           std::numeric_limits<std::uint32_t>::max()) {
         ++result.turns_completed;
+      }
+      if (result.compaction_count > 0) {
+        result.normal_exit = true;
+        return result;
       }
       std::optional<std::string> continuation;
       if (request.continuation_prompt_after_turn) {

@@ -44,6 +44,9 @@ static ut::suite workflow_tests = [] {
         "7\nhooks:\n  timeout_ms: 42\n  before_run: |\n    echo "
         "fixture\ncodex:\n  command: codex app-server "
         "--fixture\n  model: gpt-5.6-sol\n  reasoning_effort: high"
+        "\n  escalation_model: gpt-5.6-sol"
+        "\n  escalation_reasoning_effort: xhigh"
+        "\n  repeated_failure_reasoning_effort: max"
         "\nfuture_extension:\n  enabled: true\n---\nWork on {{ "
         "issue.identifier }} attempt {{ attempt }}.\n");
     FakeEnvironment env;
@@ -61,6 +64,12 @@ static ut::suite workflow_tests = [] {
                std::optional<std::string>{"gpt-5.6-sol"});
     ut::expect(document.config.codex.reasoning_effort ==
                std::optional<std::string>{"high"});
+    ut::expect(document.config.codex.escalation_model ==
+               std::optional<std::string>{"gpt-5.6-sol"});
+    ut::expect(document.config.codex.escalation_reasoning_effort ==
+               std::optional<std::string>{"xhigh"});
+    ut::expect(document.config.codex.repeated_failure_reasoning_effort ==
+               std::optional<std::string>{"max"});
     ut::expect(document.prompt.find("issue.identifier") != std::string::npos);
     std::filesystem::remove(path);
   };

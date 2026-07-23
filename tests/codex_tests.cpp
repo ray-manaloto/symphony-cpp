@@ -249,6 +249,37 @@ static ut::suite codex_tests = [] {
     ut::expect(result.compaction_count == std::uint32_t{1});
   };
 
+  ut::test("app-server rolls over instead of continuing after compaction") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_1"}}})");
+    channel.enqueue(
+        R"({"method":"item/completed","params":{"threadId":"thr_1","turnId":"turn_1","item":{"id":"compact_1","type":"contextCompaction"}}})");
+    channel.enqueue(
+        R"({"method":"turn/completed","params":{"turn":{"id":"turn_1"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    request.prompt = "Full prompt";
+    request.max_turns = 2;
+    std::uint32_t continuation_checks = 0;
+    request.continuation_prompt_after_turn =
+        [&](const std::uint32_t) -> std::optional<std::string> {
+      ++continuation_checks;
+      return "Continue";
+    };
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel, request, std::chrono::seconds{1});
+
+    ut::expect(result.normal_exit);
+    ut::expect(result.compaction_count == std::uint32_t{1});
+    ut::expect(result.turns_completed == std::uint32_t{1});
+    ut::expect(continuation_checks == std::uint32_t{0});
+    ut::expect(channel.writes().size() == std::size_t{4});
+  };
+
   ut::test(
       "app-server conversation fails closed on timeout and malformed output") =
       [] {

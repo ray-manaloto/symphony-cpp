@@ -45,9 +45,13 @@ static ut::suite domain_tests = [] {
     const auto second = fingerprint({"two", "step", {}, {}});
     static_cast<void>(observe_progress(attempt, first));
     static_cast<void>(observe_progress(attempt, first));
+    attempt.repeated_failures = 2;
+    attempt.last_failure_signature = 42;
     ut::expect(observe_progress(attempt, second) ==
                ProgressDecision::progressed);
     ut::expect(attempt.unchanged_results == 0U);
+    ut::expect(attempt.repeated_failures == 0U);
+    ut::expect(!attempt.last_failure_signature);
   };
 
   ut::test("retry delay grows exponentially and caps") = [] {
