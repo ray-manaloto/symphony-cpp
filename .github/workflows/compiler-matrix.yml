@@ -2,6 +2,12 @@ name: C++26 compiler matrix
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_images:
+        description: Publish tested development images to GHCR
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -24,6 +30,7 @@ jobs:
           df -h /
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
       - name: Sign in to GHCR
+        if: ${{ inputs.publish_images }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
         with:
           registry: ghcr.io
@@ -44,6 +51,7 @@ jobs:
       - name: GCC reflection suite
         run: docker run --rm symphony-dev:ci bash -c 'cmake --preset gcc-debug && cmake --build --preset gcc-debug && ctest --preset gcc-debug'
       - name: Publish tested GCC development image
+        if: ${{ inputs.publish_images }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image="ghcr.io/${owner}/symphony-dev"
@@ -64,6 +72,7 @@ jobs:
           df -h /
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
       - name: Sign in to GHCR
+        if: ${{ inputs.publish_images }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
         with:
           registry: ghcr.io
@@ -84,6 +93,7 @@ jobs:
       - name: Clang differential reflection suite
         run: docker run --rm symphony-ci-clang:ci bash -c 'cmake --preset clang-reflection && cmake --build --preset clang-reflection && ctest --preset clang-reflection'
       - name: Publish tested Clang differential image
+        if: ${{ inputs.publish_images }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image="ghcr.io/${owner}/symphony-ci-clang"
