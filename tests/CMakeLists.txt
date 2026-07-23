@@ -38,6 +38,12 @@ add_test(
   NAME symphony_persistence_provider_tests
   COMMAND symphony_persistence_provider_tests)
 
+add_executable(symphony_persistence_tests test_main.cpp persistence_tests.cpp)
+set_property(TARGET symphony_persistence_tests PROPERTY CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(symphony_persistence_tests PRIVATE
+  symphony_persistence ut::ut)
+add_test(NAME symphony_persistence_tests COMMAND symphony_persistence_tests)
+
 add_executable(symphony_reflection_tests test_main.cpp reflection_tests.cpp)
 target_link_libraries(symphony_reflection_tests PRIVATE
   symphony_options symphony_reflection_options symphony_meta ut::ut)
