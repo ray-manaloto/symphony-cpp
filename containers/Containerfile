@@ -53,7 +53,14 @@ RUN cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/clang-p2996 \
       -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind' \
       -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_ASSERTIONS=ON \
- && cmake --build /tmp/llvm-build --target install -j 2 \
+      -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
+      -DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;runtimes' \
+      -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF \
+      -DLLVM_INCLUDE_TESTS=OFF -DCLANG_INCLUDE_DOCS=OFF -DCLANG_INCLUDE_TESTS=OFF \
+ && cmake --build /tmp/llvm-build --target install-distribution-stripped -j 2 \
+ && test -x /opt/clang-p2996/bin/clang++ \
+ && test -x /opt/clang-p2996/bin/ld.lld \
+ && test -f /opt/clang-p2996/include/c++/v1/meta \
  && rm -rf /tmp/llvm-build /tmp/llvm-project
 
 FROM compiler-build-base AS symphony-clang-p2996
