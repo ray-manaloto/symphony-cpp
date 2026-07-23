@@ -17,15 +17,34 @@ jobs:
     name: GCC 16.1 source and reflection tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.build/cache/ccache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/cache/vcpkg/archives
     container:
       image: gcc:16.1@sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb
     steps:
       - name: Install build frontend
         run: |
           apt-get update
-          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build nodejs tar unzip zip
+          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build nodejs tar unzip zip zstd
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Restore pinned vcpkg binary cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: source-vcpkg-gcc16-v1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**', 'scripts/bootstrap-vcpkg.sh') }}
+          restore-keys: source-vcpkg-gcc16-v1-
+      - name: Restore GCC compiler cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: source-ccache-gcc16-v1-${{ github.sha }}
+          restore-keys: source-ccache-gcc16-v1-
+      - name: Bound compiler cache
+        run: |
+          ccache --max-size=750M
+          ccache --zero-stats
       - name: Enforce dependency-first policy
         run: node scripts/check-dependency-policy.mjs
       - name: Bootstrap pinned vcpkg
@@ -48,3 +67,6 @@ jobs:
         run: cmake --build --preset gcc-tsan --parallel 4
       - name: Test TSan
         run: ctest --preset gcc-tsan
+      - name: Report compiler cache
+        if: ${{ always() }}
+        run: ccache --show-stats
