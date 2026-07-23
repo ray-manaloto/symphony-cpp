@@ -94,6 +94,22 @@ struct ErrorBody {
   std::string message{"app-server error"};
 };
 
+struct ToolContentItem {
+  std::string type{"inputText"};
+  std::string text;
+};
+
+struct ToolFailureResult {
+  bool success{false};
+  std::string output;
+  std::vector<ToolContentItem> contentItems;
+};
+
+template <typename Result> struct Response {
+  std::uint64_t id;
+  Result result;
+};
+
 struct ProtocolMessage {
   std::optional<std::uint64_t> id;
   std::optional<std::string> method;
@@ -397,6 +413,17 @@ std::string AppServerProtocol::turn_start_request(
                                        {{"text", std::string{prompt}}}}});
 }
 
+std::string AppServerProtocol::unsupported_tool_response(
+    const std::uint64_t id) {
+  constexpr std::string_view message = "Unsupported dynamic tool";
+  return protocol_detail::encode_frame(protocol_detail::Response{
+      id,
+      protocol_detail::ToolFailureResult{
+          false,
+          std::string{message},
+          {{"inputText", std::string{message}}}}});
+}
+
 ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
   ProtocolUpdate update;
   const auto normalized = JsonLineCodec::parse(line, 10U * 1024U * 1024U);
@@ -411,7 +438,7 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
     update.error = message.error->message;
     return update;
   }
-  if (message.id) {
+  if (message.id && !message.method) {
     update.event = ProtocolEvent::response;
     update.response_id = message.id;
     if (message.result) {
@@ -428,6 +455,7 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
     update.error = "notification has no method";
     return update;
   }
+  update.response_id = message.id;
   if (message.params) {
     if (message.params->thread)
       update.thread_id = message.params->thread->id;
@@ -465,6 +493,15 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
     update.event = ProtocolEvent::turn_failed;
   else if (update.method == "turn/cancelled")
     update.event = ProtocolEvent::turn_cancelled;
+  else if (update.method == "item/commandExecution/requestApproval" ||
+           update.method == "item/fileChange/requestApproval" ||
+           update.method == "execCommandApproval" ||
+           update.method == "applyPatchApproval")
+    update.event = ProtocolEvent::approval_required;
+  else if (update.method == "item/tool/requestUserInput")
+    update.event = ProtocolEvent::user_input_required;
+  else if (update.method == "item/tool/call")
+    update.event = ProtocolEvent::unsupported_tool_call;
   else
     update.event = ProtocolEvent::notification;
   return update;
@@ -564,6 +601,29 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       result.error =
           update.error.empty() ? "malformed app-server message" : update.error;
       return result;
+    }
+    if (update.event == ProtocolEvent::approval_required) {
+      result.error = "app-server approval required";
+      result.session_id = thread_id.empty() || turn_id.empty()
+                              ? ""
+                              : thread_id + '-' + turn_id;
+      return result;
+    }
+    if (update.event == ProtocolEvent::user_input_required) {
+      result.error = "app-server user input required";
+      result.session_id = thread_id.empty() || turn_id.empty()
+                              ? ""
+                              : thread_id + '-' + turn_id;
+      return result;
+    }
+    if (update.event == ProtocolEvent::unsupported_tool_call) {
+      if (!update.response_id) {
+        result.error = "unsupported tool call has no request id";
+        return result;
+      }
+      channel.write(AppServerProtocol::unsupported_tool_response(
+          *update.response_id));
+      continue;
     }
     if (update.response_id == 0 && !initialized) {
       channel.write(AppServerProtocol::initialized_notification());

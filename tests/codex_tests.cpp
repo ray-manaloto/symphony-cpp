@@ -186,6 +186,53 @@ static ut::suite codex_tests = [] {
     ut::expect(result.error == std::string{"app-server stdout closed"});
   };
 
+  ut::test("app-server rejects unsupported tools and continues the turn") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+    channel.enqueue(
+        R"({"id":101,"method":"item/tool/call","params":{"tool":"not_advertised","arguments":{}}})");
+    channel.enqueue(
+        R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel, request, std::chrono::seconds{1});
+
+    ut::expect(result.normal_exit);
+    ut::expect(channel.writes().size() == std::size_t{5});
+    const auto response = parse_json(symphony::codex::JsonLineCodec::parse(
+        channel.writes().back()));
+    ut::expect(response.at("id").get<std::uint64_t>() == std::uint64_t{101});
+    ut::expect(!response.at("result").at("success").get<bool>());
+  };
+
+  ut::test("app-server fails closed on approval and user input requests") = [] {
+    const auto run_request = [](const std::string& request_message) {
+      symphony::codex::FakeProtocolChannel channel;
+      channel.enqueue(R"({"id":0,"result":{}})");
+      channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+      channel.enqueue(
+          R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+      channel.enqueue(request_message);
+      symphony::codex::RunRequest request;
+      request.workspace.path = "/tmp/work";
+      return symphony::codex::AppServerConversation::run(
+          channel, request, std::chrono::seconds{1});
+    };
+
+    const auto approval = run_request(
+        R"({"id":102,"method":"item/commandExecution/requestApproval","params":{}})");
+    ut::expect(approval.error == std::string{"app-server approval required"});
+
+    const auto input = run_request(
+        R"({"id":103,"method":"item/tool/requestUserInput","params":{}})");
+    ut::expect(input.error == std::string{"app-server user input required"});
+  };
+
   ut::test("app-server conversation distinguishes a stalled session") = [] {
     symphony::codex::FakeProtocolChannel channel;
     channel.enqueue(R"({"id":0,"result":{}})");

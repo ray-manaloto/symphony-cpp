@@ -132,7 +132,17 @@ class JsonLineCodec {
   [[nodiscard]] static std::string parse(std::string_view line, std::size_t max_bytes = 1024 * 1024);
 };
 
-enum class ProtocolEvent { response, notification, turn_completed, turn_failed, turn_cancelled, malformed };
+enum class ProtocolEvent {
+  response,
+  notification,
+  turn_completed,
+  turn_failed,
+  turn_cancelled,
+  approval_required,
+  user_input_required,
+  unsupported_tool_call,
+  malformed
+};
 
 struct ProtocolUpdate {
   ProtocolEvent event{ProtocolEvent::notification};
@@ -157,6 +167,7 @@ class AppServerProtocol {
       std::string_view thread_id,
       const std::filesystem::path& cwd,
       std::string_view prompt);
+  [[nodiscard]] static std::string unsupported_tool_response(std::uint64_t id);
   [[nodiscard]] static ProtocolUpdate decode(std::string_view line);
 };
 
