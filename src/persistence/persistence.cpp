@@ -5,7 +5,6 @@
 #include <functional>
 #include <future>
 #include <mutex>
-#include <scope>
 #include <stdexcept>
 #include <system_error>
 #include <tuple>
@@ -219,10 +218,6 @@ SqliteEventRepository::submit_append(std::string key, NewEvent event) {
         execution_key,
         [impl = impl_.get(), key = std::move(key), event = std::move(event)](
             const std::stop_token stop_token) mutable noexcept {
-          auto release_slot =
-              std::scope_exit([impl]() noexcept {
-                impl->pending_appends.fetch_sub(1, std::memory_order_relaxed);
-              });
           auto result = stop_token.stop_requested()
                             ? std::expected<std::int64_t, Error>{std::unexpected(
                                   cancellation_error())}
@@ -230,6 +225,7 @@ SqliteEventRepository::submit_append(std::string key, NewEvent event) {
           const std::scoped_lock lock(impl->completion_mutex);
           impl->append_completions.push_back(
               AppendCompletion{std::move(key), std::move(result)});
+          impl->pending_appends.fetch_sub(1, std::memory_order_relaxed);
         });
   } catch (...) {
     impl_->pending_appends.fetch_sub(1, std::memory_order_relaxed);
