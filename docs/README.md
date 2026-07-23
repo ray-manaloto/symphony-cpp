@@ -6,6 +6,7 @@
 - [Dependency decision ledger](dependency-decisions.md)
 - [Normative and comparative sources](research/sources.md)
 - [C++26 library-stack evaluation](research/cpp-library-evaluation.md)
+- [Agent model, effort, and specialization policy](research/agent-model-policy.md)
 - [Elixir reference versus Rust OpenSymphony runtime comparison](research/elixir-vs-rust-runtime-comparison.md)
 - [Section 18.1 conformance matrix](conformance.md)
 - [Pinned upstream inputs](upstream-lock.md)

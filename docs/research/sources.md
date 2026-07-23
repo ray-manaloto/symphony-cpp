@@ -2,6 +2,11 @@
 
 Primary sources define behavior; comparisons only identify possible gaps. Accessed 2026-07-22.
 
+The agent model and effort recommendation additionally uses the current
+[OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model),
+[model catalog](https://developers.openai.com/api/docs/models), and
+[Codex configuration schema](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json).
+
 - [x] [OpenAI Symphony repository and Draft v1 specification](https://github.com/openai/symphony), pinned at `1f3219b`
 - [x] [GCC 16.1 release sources](https://ftp.gnu.org/gnu/gcc/gcc-16.1.0/)
 - [x] [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996), pinned at `7220baff`
