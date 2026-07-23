@@ -207,7 +207,7 @@ public:
     static_cast<void>(context_.poll());
   }
 
-  void request_exit() noexcept {
+  void request_stop() noexcept override {
     boost::system::error_code ignored;
     if (child_.running(ignored)) {
       ignored.clear();
@@ -345,14 +345,23 @@ private:
 } // namespace
 
 void FakeAgentRuntime::enqueue(RunResult result) {
+  const std::scoped_lock lock(mutex_);
   results_.push_back(std::move(result));
 }
 
-RunResult FakeAgentRuntime::run(const RunRequest &request) {
+RunResult FakeAgentRuntime::run(
+    const RunRequest &request,
+    const std::stop_token stop_token) {
+  const std::scoped_lock lock(mutex_);
   ++run_count_;
   last_model_ = request.model;
   last_reasoning_effort_ = request.reasoning_effort;
   last_context_rollover_percent_ = request.context_rollover_percent;
+  if (stop_token.stop_requested()) {
+    RunResult result;
+    result.cancelled = true;
+    return result;
+  }
   if (results_.empty()) {
     RunResult result;
     result.error = "no fixture result queued";
@@ -363,17 +372,22 @@ RunResult FakeAgentRuntime::run(const RunRequest &request) {
   return result;
 }
 
-void FakeAgentRuntime::cancel(std::string_view) {}
-std::size_t FakeAgentRuntime::run_count() const noexcept { return run_count_; }
-const std::optional<std::string>& FakeAgentRuntime::last_model() const noexcept {
+std::size_t FakeAgentRuntime::run_count() const {
+  const std::scoped_lock lock(mutex_);
+  return run_count_;
+}
+std::optional<std::string> FakeAgentRuntime::last_model() const {
+  const std::scoped_lock lock(mutex_);
   return last_model_;
 }
-const std::optional<std::string>&
-FakeAgentRuntime::last_reasoning_effort() const noexcept {
+std::optional<std::string>
+FakeAgentRuntime::last_reasoning_effort() const {
+  const std::scoped_lock lock(mutex_);
   return last_reasoning_effort_;
 }
-const std::optional<std::uint32_t>&
-FakeAgentRuntime::last_context_rollover_percent() const noexcept {
+std::optional<std::uint32_t>
+FakeAgentRuntime::last_context_rollover_percent() const {
+  const std::scoped_lock lock(mutex_);
   return last_context_rollover_percent_;
 }
 
@@ -395,7 +409,14 @@ CodexAppServerRuntime::CodexAppServerRuntime(
   }
 }
 
-RunResult CodexAppServerRuntime::run(const RunRequest &request) {
+RunResult CodexAppServerRuntime::run(
+    const RunRequest &request,
+    const std::stop_token stop_token) {
+  if (stop_token.stop_requested()) {
+    RunResult result;
+    result.cancelled = true;
+    return result;
+  }
   if (request.workspace.path.empty() ||
       !std::filesystem::is_directory(request.workspace.path) ||
       !request.workspace.path.is_absolute()) {
@@ -408,7 +429,7 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
   std::chrono::milliseconds turn_timeout;
   AppServerPolicy policy;
   {
-    const std::scoped_lock lock(active_process_mutex_);
+    const std::scoped_lock lock(config_mutex_);
     command = command_;
     read_timeout = read_timeout_;
     stall_timeout = stall_timeout_;
@@ -420,38 +441,17 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
     policy.reasoning_effort = request.reasoning_effort;
   }
   BoostProcessProtocolChannel channel(command, request.workspace.path);
-  {
-    const std::scoped_lock lock(active_process_mutex_);
-    if (cancel_active_process_) {
-      throw std::runtime_error("Codex runtime already has an active process");
-    }
-    cancel_active_process_ = [&channel] { channel.request_exit(); };
-  }
-  const auto clear_active_process = [&] {
-    const std::scoped_lock lock(active_process_mutex_);
-    cancel_active_process_ = {};
-  };
-  try {
-    auto result = AppServerConversation::run(
-        channel,
-        request,
-        read_timeout,
-        10000,
-        stall_timeout,
-        turn_timeout,
-        policy);
-    result.process_diagnostic = channel.diagnostic();
-    clear_active_process();
-    return result;
-  } catch (...) {
-    clear_active_process();
-    throw;
-  }
-}
-
-void CodexAppServerRuntime::cancel(std::string_view) {
-  const std::scoped_lock lock(active_process_mutex_);
-  if (cancel_active_process_) cancel_active_process_();
+  auto result = AppServerConversation::run(
+      channel,
+      request,
+      read_timeout,
+      10000,
+      stall_timeout,
+      turn_timeout,
+      policy,
+      stop_token);
+  result.process_diagnostic = channel.diagnostic();
+  return result;
 }
 
 void CodexAppServerRuntime::reconfigure(
@@ -461,9 +461,7 @@ void CodexAppServerRuntime::reconfigure(
     const std::chrono::milliseconds turn_timeout,
     AppServerPolicy policy) {
   auto validated_policy = normalized_policy(std::move(policy));
-  const std::scoped_lock lock(active_process_mutex_);
-  if (cancel_active_process_)
-    throw std::runtime_error("cannot reconfigure active Codex process");
+  const std::scoped_lock lock(config_mutex_);
   if (command.empty() || read_timeout <= std::chrono::milliseconds::zero()) {
     throw std::invalid_argument("invalid Codex runtime configuration");
   }
@@ -668,6 +666,7 @@ FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
 const std::vector<std::string> &FakeProtocolChannel::writes() const noexcept {
   return writes_;
 }
+void FakeProtocolChannel::request_stop() noexcept { closed_ = true; }
 
 RunResult
 AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
@@ -675,7 +674,8 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
                            const std::size_t max_messages,
                            const std::chrono::milliseconds stall_timeout,
                            const std::chrono::milliseconds turn_timeout,
-                           const AppServerPolicy& policy) {
+                           const AppServerPolicy& policy,
+                           const std::stop_token stop_token) {
   RunResult result;
   channel.write(AppServerProtocol::initialize_request(0));
   std::string thread_id;
@@ -697,6 +697,14 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     return result;
   }
   for (std::size_t count = 0; count < max_messages; ++count) {
+    if (stop_token.stop_requested()) {
+      channel.request_stop();
+      result.cancelled = true;
+      result.session_id = thread_id.empty() || turn_id.empty()
+                              ? ""
+                              : thread_id + '-' + turn_id;
+      return result;
+    }
     const auto read = channel.read(read_timeout);
     if (read.status == ProtocolChannel::ReadStatus::end_of_stream) {
       result.error = "app-server stdout closed";

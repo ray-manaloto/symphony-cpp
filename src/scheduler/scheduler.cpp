@@ -22,6 +22,53 @@ std::string normalized(std::string_view value) {
   return result;
 }
 
+bool config_active_state(
+    const SchedulerConfig& config,
+    const std::string_view state) {
+  const auto target = normalized(state);
+  return std::ranges::any_of(config.active_states, [&](const auto& value) {
+    return normalized(value) == target;
+  });
+}
+
+bool config_terminal_state(
+    const SchedulerConfig& config,
+    const std::string_view state) {
+  const auto target = normalized(state);
+  return std::ranges::any_of(config.terminal_states, [&](const auto& value) {
+    return normalized(value) == target;
+  });
+}
+
+bool config_routable(
+    const SchedulerConfig& config,
+    const domain::Issue& issue) {
+  if (!issue.dispatchable) return false;
+  return std::ranges::all_of(
+      config.required_labels,
+      [&](const auto& required) {
+        const auto target = normalized(required);
+        if (target.empty()) return false;
+        return std::ranges::any_of(issue.labels, [&](const auto& label) {
+          return normalized(label) == target;
+        });
+      });
+}
+
+bool config_eligible(
+    const SchedulerConfig& config,
+    const domain::Issue& issue) {
+  if (normalized(issue.id).empty() ||
+      normalized(issue.identifier).empty() ||
+      normalized(issue.title).empty() ||
+      normalized(issue.state).empty()) {
+    return false;
+  }
+  return config_active_state(config, issue.state) &&
+         !config_terminal_state(config, issue.state) &&
+         config_routable(config, issue);
+}
+
 void saturating_add(std::uint64_t& total, const std::uint64_t value) {
   const auto maximum = std::numeric_limits<std::uint64_t>::max();
   total = value > maximum - total ? maximum : total + value;
@@ -91,15 +138,21 @@ Scheduler::Scheduler(
     tracker::IssueTracker& tracker,
     workspace::WorkspaceExecutor& workspaces,
     codex::AgentRuntime& runtime,
+    execution::WorkerExecutor& executor,
     observability::EventStore& events,
     Clock& clock)
     : config_(std::move(config)),
       tracker_(tracker),
       workspaces_(workspaces),
       runtime_(runtime),
+      executor_(executor),
       events_(events),
       clock_(clock) {
   if (config_.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
+  if (config_.max_concurrent > executor_.capacity()) {
+    throw std::invalid_argument(
+        "max_concurrent exceeds worker executor capacity");
+  }
   if (config_.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
   if (config_.context_rollover_percent &&
       (*config_.context_rollover_percent == 0 ||
@@ -109,30 +162,29 @@ Scheduler::Scheduler(
   }
 }
 
+Scheduler::~Scheduler() {
+  for (const auto& [issue_id, run] : runs_) {
+    if (run.running) {
+      static_cast<void>(executor_.request_stop(issue_id));
+    }
+  }
+  executor_.wait();
+  static_cast<void>(executor_.take_ready());
+}
+
 bool Scheduler::active_state(const std::string_view state) const {
-  const auto target = normalized(state);
-  return std::ranges::any_of(config_.active_states, [&](const auto& value) { return normalized(value) == target; });
+  return config_active_state(config_, state);
 }
 bool Scheduler::terminal_state(const std::string_view state) const {
-  const auto target = normalized(state);
-  return std::ranges::any_of(config_.terminal_states, [&](const auto& value) { return normalized(value) == target; });
+  return config_terminal_state(config_, state);
 }
 
 bool Scheduler::routable(const domain::Issue& issue) const {
-  if (!issue.dispatchable) return false;
-  return std::ranges::all_of(config_.required_labels, [&](const auto& required) {
-    const auto target = normalized(required);
-    if (target.empty()) return false;
-    return std::ranges::any_of(issue.labels, [&](const auto& label) { return normalized(label) == target; });
-  });
+  return config_routable(config_, issue);
 }
 
 bool Scheduler::eligible(const domain::Issue& issue) const {
-  if (normalized(issue.id).empty() || normalized(issue.identifier).empty() ||
-      normalized(issue.title).empty() || normalized(issue.state).empty()) {
-    return false;
-  }
-  return active_state(issue.state) && !terminal_state(issue.state) && routable(issue);
+  return config_eligible(config_, issue);
 }
 
 bool Scheduler::state_capacity(const domain::Issue& issue) const {
@@ -151,6 +203,7 @@ std::size_t Scheduler::running_count() const {
 }
 
 void Scheduler::tick(const std::string_view prompt_template) {
+  drain_completions();
   reconcile();
   for (auto& [id, run] : runs_) {
     static_cast<void>(id);
@@ -168,10 +221,15 @@ void Scheduler::tick(const std::string_view prompt_template) {
       }
       run.retry.reset();
       execute(run, prompt_template);
+      drain_completions();
     }
   }
   if (running_count() >= config_.max_concurrent) return;
-  auto candidates = tracker_.list_by_states(config_.active_states);
+  std::vector<domain::Issue> candidates;
+  {
+    const std::scoped_lock lock(tracker_mutex_);
+    candidates = tracker_.list_by_states(config_.active_states);
+  }
   std::ranges::sort(candidates, [](const domain::Issue& left, const domain::Issue& right) {
     const auto priority_key = [](const std::optional<int> priority) {
       return priority && *priority >= 1 && *priority <= 4 ? *priority : 5;
@@ -214,60 +272,150 @@ void Scheduler::dispatch(const domain::Issue& issue, const std::string_view prom
   if (!inserted) return;
   events_.append({"dispatch", issue.id, issue.identifier, {}, "fixture dispatch"});
   execute(position->second, prompt_template);
+  drain_completions();
 }
 
 void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
   const auto prompt = workflow::render_prompt(prompt_template, run.issue, run.attempt);
   run.running = true;
-  codex::RunResult result;
-  try {
-    if (config_.before_run_hook) {
-      workspaces_.run_hook(
-          run.workspace, "before_run", {"bash", "-lc", *config_.before_run_hook}, config_.hook_timeout);
-    }
-    codex::RunRequest request;
-    request.issue = run.issue;
-    request.attempt = run.attempt;
-    request.workspace = run.workspace;
-    request.prompt = prompt;
-    request.max_turns = config_.max_turns;
-    const auto policy = select_policy(config_, run.attempt);
-    request.model = policy.model;
-    request.reasoning_effort = policy.reasoning_effort;
-    request.context_rollover_percent = config_.context_rollover_percent;
-    events_.append({
-        "agent_policy_selected",
-        run.issue.id,
-        run.issue.identifier,
-        {},
-        "model=" + policy.model.value_or("default") +
-            " effort=" + policy.reasoning_effort.value_or("default") +
-            " reason=" + std::string{policy.reason}});
-    request.continuation_prompt_after_turn =
-        [this, &run](const std::uint32_t completed_turns)
-        -> std::optional<std::string> {
-          const auto refreshed = tracker_.refresh_by_id(run.issue.id);
-          if (!refreshed || !eligible(*refreshed)) return std::nullopt;
-          run.issue = *refreshed;
-          if (completed_turns >= config_.max_turns) return std::nullopt;
-          const auto turn_number = completed_turns + 1;
-          return "Continue working on issue " + run.issue.identifier +
-                 ". This is turn " + std::to_string(turn_number) + " of " +
-                 std::to_string(config_.max_turns) +
-                 " in the current worker session. Re-read the current workspace "
-                 "and tracker state, continue toward completion, and run the "
-                 "relevant checks. Do not repeat the original task prompt.";
-        };
-    result = runtime_.run(request);
-  } catch (const std::exception& error) {
-    result.error = error.what();
-  }
-  if (config_.after_run_hook) {
+  if (config_.before_run_hook) {
     try {
       workspaces_.run_hook(
-          run.workspace, "after_run", {"bash", "-lc", *config_.after_run_hook}, config_.hook_timeout);
+          run.workspace,
+          "before_run",
+          {"bash", "-lc", *config_.before_run_hook},
+          config_.hook_timeout);
     } catch (const std::exception& error) {
-      events_.append({"hook_failed", run.issue.id, run.issue.identifier, result.session_id, error.what()});
+      execution::WorkerOutcome outcome;
+      outcome.result.error = error.what();
+      apply_completion(run, std::move(outcome));
+      return;
+    }
+  }
+  const auto policy = select_policy(config_, run.attempt);
+  events_.append({
+      "agent_policy_selected",
+      run.issue.id,
+      run.issue.identifier,
+      {},
+      "model=" + policy.model.value_or("default") +
+          " effort=" + policy.reasoning_effort.value_or("default") +
+          " reason=" + std::string{policy.reason}});
+
+  codex::RunRequest request;
+  request.issue = run.issue;
+  request.attempt = run.attempt;
+  request.workspace = run.workspace;
+  request.prompt = prompt;
+  request.max_turns = config_.max_turns;
+  request.model = policy.model;
+  request.reasoning_effort = policy.reasoning_effort;
+  request.context_rollover_percent = config_.context_rollover_percent;
+  const auto config_snapshot = config_;
+  const auto issue_id = run.issue.id;
+
+  try {
+    executor_.submit(
+        issue_id,
+        [this, request = std::move(request), config_snapshot](
+            const std::stop_token stop_token) mutable {
+          execution::WorkerOutcome outcome;
+          outcome.after_run_hook = config_snapshot.after_run_hook;
+          outcome.hook_timeout = config_snapshot.hook_timeout;
+          auto latest_issue = request.issue;
+          bool issue_refreshed = false;
+          request.continuation_prompt_after_turn =
+              [this, &latest_issue, &issue_refreshed, config_snapshot](
+                  const std::uint32_t completed_turns)
+              -> std::optional<std::string> {
+                std::optional<domain::Issue> refreshed;
+                {
+                  const std::scoped_lock lock(tracker_mutex_);
+                  refreshed = tracker_.refresh_by_id(latest_issue.id);
+                }
+                if (!refreshed) return std::nullopt;
+                latest_issue = *refreshed;
+                issue_refreshed = true;
+                if (!config_eligible(config_snapshot, latest_issue)) {
+                  return std::nullopt;
+                }
+                if (completed_turns >= config_snapshot.max_turns) {
+                  return std::nullopt;
+                }
+                const auto turn_number = completed_turns + 1;
+                return "Continue working on issue " +
+                       latest_issue.identifier + ". This is turn " +
+                       std::to_string(turn_number) + " of " +
+                       std::to_string(config_snapshot.max_turns) +
+                       " in the current worker session. Re-read the current "
+                       "workspace and tracker state, continue toward "
+                       "completion, and run the relevant checks. Do not repeat "
+                       "the original task prompt.";
+              };
+          if (stop_token.stop_requested()) {
+            outcome.result.cancelled = true;
+            return outcome;
+          }
+          try {
+            outcome.result = runtime_.run(request, stop_token);
+          } catch (const std::exception& error) {
+            outcome.result.error = error.what();
+          }
+          if (issue_refreshed) {
+            outcome.refreshed_issue = std::move(latest_issue);
+          }
+          return outcome;
+        });
+  } catch (const std::exception& error) {
+    execution::WorkerOutcome outcome;
+    outcome.result.error = error.what();
+    apply_completion(run, std::move(outcome));
+  }
+}
+
+void Scheduler::drain_completions() {
+  for (auto& completion : executor_.take_ready()) {
+    const auto found = runs_.find(completion.key);
+    if (found == runs_.end()) {
+      events_.append({
+          "worker_completion_discarded",
+          completion.key,
+          {},
+          completion.outcome.result.session_id,
+          "completion arrived after run removal"});
+      continue;
+    }
+    apply_completion(found->second, std::move(completion.outcome));
+    if (found->second.discard_after_stop) {
+      if (found->second.remove_workspace_after_stop) {
+        remove_workspace(found->second);
+      }
+      runs_.erase(found);
+    }
+  }
+}
+
+void Scheduler::apply_completion(
+    RunState& run,
+    execution::WorkerOutcome outcome) {
+  auto& result = outcome.result;
+  if (outcome.refreshed_issue) {
+    run.issue = std::move(*outcome.refreshed_issue);
+  }
+  if (outcome.after_run_hook) {
+    try {
+      workspaces_.run_hook(
+          run.workspace,
+          "after_run",
+          {"bash", "-lc", *outcome.after_run_hook},
+          outcome.hook_timeout);
+    } catch (const std::exception& error) {
+      events_.append({
+          "hook_failed",
+          run.issue.id,
+          run.issue.identifier,
+          result.session_id,
+          error.what()});
     }
   }
   run.session_id = result.session_id;
@@ -397,29 +545,52 @@ void Scheduler::queue_retry(
       std::move(error)};
 }
 
+void Scheduler::remove_workspace(RunState& run) {
+  if (config_.before_remove_hook) {
+    try {
+      workspaces_.run_hook(
+          run.workspace,
+          "before_remove",
+          {"bash", "-lc", *config_.before_remove_hook},
+          config_.hook_timeout);
+    } catch (const std::exception& error) {
+      events_.append({
+          "hook_failed",
+          run.issue.id,
+          run.issue.identifier,
+          {},
+          error.what()});
+    }
+  }
+  workspaces_.remove(run.workspace);
+  events_.append({
+      "terminal_cleanup",
+      run.issue.id,
+      run.issue.identifier,
+      {},
+      "workspace removed"});
+}
+
 void Scheduler::reconcile() {
   for (auto iterator = runs_.begin(); iterator != runs_.end();) {
-    const auto refreshed = tracker_.refresh_by_id(iterator->first);
+    std::optional<domain::Issue> refreshed;
+    {
+      const std::scoped_lock lock(tracker_mutex_);
+      refreshed = tracker_.refresh_by_id(iterator->first);
+    }
     if (!refreshed || terminal_state(refreshed->state) ||
         !active_state(refreshed->state) || !routable(*refreshed)) {
-      if (iterator->second.running && !iterator->second.session_id.empty()) {
-        runtime_.cancel(iterator->second.session_id);
+      const auto remove_after_stop =
+          refreshed && terminal_state(refreshed->state);
+      if (refreshed) iterator->second.issue = *refreshed;
+      if (iterator->second.running &&
+          executor_.request_stop(iterator->first)) {
+        iterator->second.discard_after_stop = true;
+        iterator->second.remove_workspace_after_stop = remove_after_stop;
+        ++iterator;
+        continue;
       }
-      if (refreshed && terminal_state(refreshed->state)) {
-        if (config_.before_remove_hook) {
-          try {
-            workspaces_.run_hook(
-                iterator->second.workspace,
-                "before_remove",
-                {"bash", "-lc", *config_.before_remove_hook},
-                config_.hook_timeout);
-          } catch (const std::exception& error) {
-            events_.append({"hook_failed", refreshed->id, refreshed->identifier, {}, error.what()});
-          }
-        }
-        workspaces_.remove(iterator->second.workspace);
-        events_.append({"terminal_cleanup", refreshed->id, refreshed->identifier, {}, "workspace removed"});
-      }
+      if (remove_after_stop) remove_workspace(iterator->second);
       iterator = runs_.erase(iterator);
       continue;
     }
@@ -429,7 +600,12 @@ void Scheduler::reconcile() {
 }
 
 void Scheduler::startup_cleanup() {
-  for (const auto& issue : tracker_.list_by_states(config_.terminal_states)) {
+  std::vector<domain::Issue> terminal_issues;
+  {
+    const std::scoped_lock lock(tracker_mutex_);
+    terminal_issues = tracker_.list_by_states(config_.terminal_states);
+  }
+  for (const auto& issue : terminal_issues) {
     const auto workspace = workspaces_.find(issue);
     if (!workspace) continue;
     if (config_.before_remove_hook) {
@@ -464,6 +640,10 @@ const std::optional<codex::RateLimits>& Scheduler::latest_rate_limits() const no
 
 void Scheduler::reconfigure(SchedulerConfig config) {
   if (config.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
+  if (config.max_concurrent > executor_.capacity()) {
+    throw std::invalid_argument(
+        "max_concurrent exceeds worker executor capacity; restart required");
+  }
   if (config.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
   if (config.context_rollover_percent &&
       (*config.context_rollover_percent == 0 ||

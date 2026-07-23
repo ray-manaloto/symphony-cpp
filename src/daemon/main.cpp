@@ -83,7 +83,10 @@ int main(int argc, char** argv) {
     symphony::observability::SpdlogEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces, runtime, events, clock);
+    symphony::execution::StdexecWorkerExecutor executor(
+        config.max_concurrent);
+    symphony::scheduler::Scheduler scheduler(
+        config, tracker, workspaces, runtime, executor, events, clock);
     scheduler.startup_cleanup();
     symphony::workflow::WorkflowWatcher watcher;
     if (const auto initial = watcher.reload_if_changed(path, environment)) watcher.accept(*initial);
@@ -93,6 +96,12 @@ int main(int argc, char** argv) {
       try {
         if (auto changed = watcher.reload_if_changed(path, environment)) {
           symphony::workflow::validate_for_dispatch(changed->config, {"fake", "github", "linear"});
+          const auto next_scheduler_config =
+              scheduler_config(changed->config);
+          if (next_scheduler_config.max_concurrent > executor.capacity()) {
+            throw std::runtime_error(
+                "max_concurrent increase requires daemon restart");
+          }
           if (changed->config.workspace.root != workflow.config.workspace.root) {
             if (!scheduler.runs().empty()) {
               throw std::runtime_error("workspace.root reload deferred while issue runs exist");
@@ -105,7 +114,7 @@ int main(int argc, char** argv) {
               changed->config.codex.stall_timeout,
               changed->config.codex.turn_timeout,
               codex_policy(changed->config));
-          scheduler.reconfigure(scheduler_config(changed->config));
+          scheduler.reconfigure(next_scheduler_config);
           watcher.accept(*changed);
           workflow = std::move(*changed);
           std::cerr << "symphonyd: workflow reloaded\n";

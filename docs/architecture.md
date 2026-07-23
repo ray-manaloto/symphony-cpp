@@ -92,3 +92,13 @@ continuation-only prompt on the same thread until the current workflow snapshot'
 `agent.max_turns` cap is reached. The repository workflow uses four turns per worker session to
 bound copied context and failure scope. The worker then exits normally and retains the normative
 short continuation retry so a still-active issue can begin a new bounded session.
+
+The daemon constructs a pinned NVIDIA stdexec static thread pool at the configured startup
+concurrency. Dispatch submits immutable worker snapshots under issue IDs and returns immediately.
+Worker jobs may run the Codex invocation and read tracker state for between-turn decisions, but they
+never mutate scheduler runs, retry state, totals, events, or workspaces. The scheduler drains keyed
+completion values at tick boundaries and applies every state transition on its own thread.
+Per-job stop sources let reconciliation cancel one invocation without sharing an active-process
+slot; terminal workspace cleanup waits for that completion. Lifecycle hooks remain on the scheduler
+thread. Pool capacity cannot grow safely in place, so a configuration reload may reduce concurrency
+but an increase above startup capacity requires a daemon restart.

@@ -3,12 +3,14 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "symphony/codex/codex.hpp"
 #include "symphony/domain/domain.hpp"
+#include "symphony/execution/execution.hpp"
 #include "symphony/observability/observability.hpp"
 #include "symphony/tracker/tracker.hpp"
 #include "symphony/workspace/workspace.hpp"
@@ -75,6 +77,8 @@ struct RunState {
   std::optional<RetryEntry> retry;
   std::string session_id;
   bool running{false};
+  bool discard_after_stop{false};
+  bool remove_workspace_after_stop{false};
 };
 
 class Scheduler {
@@ -84,8 +88,10 @@ class Scheduler {
       tracker::IssueTracker& tracker,
       workspace::WorkspaceExecutor& workspaces,
       codex::AgentRuntime& runtime,
+      execution::WorkerExecutor& executor,
       observability::EventStore& events,
       Clock& clock);
+  ~Scheduler();
 
   void tick(std::string_view prompt_template);
   void reconcile();
@@ -99,6 +105,11 @@ class Scheduler {
  private:
   void dispatch(const domain::Issue& issue, std::string_view prompt_template);
   void execute(RunState& run, std::string_view prompt_template);
+  void drain_completions();
+  void apply_completion(
+      RunState& run,
+      execution::WorkerOutcome outcome);
+  void remove_workspace(RunState& run);
   void queue_retry(
       RunState& run,
       std::uint32_t attempt,
@@ -115,6 +126,7 @@ class Scheduler {
   tracker::IssueTracker& tracker_;
   workspace::WorkspaceExecutor& workspaces_;
   codex::AgentRuntime& runtime_;
+  execution::WorkerExecutor& executor_;
   observability::EventStore& events_;
   Clock& clock_;
   std::map<std::string, RunState> runs_;
@@ -122,6 +134,7 @@ class Scheduler {
   std::uint64_t codex_compactions_{0};
   std::optional<codex::RateLimits> latest_rate_limits_;
   std::uint64_t next_timer_handle_{1};
+  mutable std::mutex tracker_mutex_;
 };
 
 }  // namespace symphony::scheduler

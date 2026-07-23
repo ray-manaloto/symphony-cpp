@@ -1,20 +1,186 @@
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <optional>
+#include <stop_token>
+#include <thread>
+#include <utility>
 
 #include <ut/ut.hpp>
 
+#include "symphony/execution/execution.hpp"
 #include "symphony/scheduler/scheduler.hpp"
 
 using symphony::codex::RunResult;
 using symphony::domain::ProgressSnapshot;
 
+namespace {
+bool wait_until(const std::atomic<std::size_t>& value,
+                const std::size_t expected,
+                const std::chrono::steady_clock::duration timeout) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (value.load() < expected &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  return value.load() >= expected;
+}
+
+class FixtureExecutorOwner {
+ protected:
+  symphony::execution::InlineWorkerExecutor executor;
+};
+
+class FixtureScheduler final : private FixtureExecutorOwner,
+                               public symphony::scheduler::Scheduler {
+ public:
+  FixtureScheduler(
+      symphony::scheduler::SchedulerConfig config,
+      symphony::tracker::IssueTracker& tracker,
+      symphony::workspace::WorkspaceExecutor& workspaces,
+      symphony::codex::AgentRuntime& runtime,
+      symphony::observability::EventStore& events,
+      symphony::scheduler::Clock& clock)
+      : FixtureExecutorOwner(),
+        symphony::scheduler::Scheduler(
+            std::move(config),
+            tracker,
+            workspaces,
+            runtime,
+            executor,
+            events,
+            clock) {}
+};
+}  // namespace
+
 static ut::suite scheduler_tests = [] {
+  ut::test("scheduler overlaps workers and drains completion on its own thread") =
+      [] {
+        class OverlapRuntime final : public symphony::codex::AgentRuntime {
+         public:
+          symphony::codex::RunResult run(
+              const symphony::codex::RunRequest&,
+              std::stop_token) override {
+            const auto active_now = active.fetch_add(1) + 1;
+            auto observed = maximum_active.load();
+            while (observed < active_now &&
+                   !maximum_active.compare_exchange_weak(
+                       observed, active_now)) {
+            }
+            entered.fetch_add(1);
+            while (!release.load()) {
+              release.wait(false);
+            }
+            active.fetch_sub(1);
+            completed.fetch_add(1);
+            return {true, false, std::nullopt, "completed", {}};
+          }
+
+          std::atomic<std::size_t> active{0};
+          std::atomic<std::size_t> maximum_active{0};
+          std::atomic<std::size_t> entered{0};
+          std::atomic<std::size_t> completed{0};
+          std::atomic<bool> release{false};
+        };
+
+        symphony::tracker::FakeTracker tracker;
+        tracker.upsert({"1", "SYM-1", "First", "Todo", {}});
+        tracker.upsert({"2", "SYM-2", "Second", "Todo", {}});
+        const auto root = std::filesystem::temp_directory_path() /
+                          "symphony-concurrent-workers-test";
+        std::filesystem::remove_all(root);
+        symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+        OverlapRuntime runtime;
+        symphony::execution::StdexecWorkerExecutor executor(2);
+        symphony::observability::MemoryEventStore events;
+        symphony::scheduler::FakeClock clock;
+        symphony::scheduler::SchedulerConfig config;
+        config.max_concurrent = 2;
+        symphony::scheduler::Scheduler scheduler(
+            config, tracker, workspaces, runtime, executor, events, clock);
+
+        scheduler.tick("{{ issue.identifier }}");
+        const auto entered =
+            wait_until(runtime.entered, 2, std::chrono::seconds{2});
+        runtime.release.store(true);
+        runtime.release.notify_all();
+        const auto completed =
+            wait_until(runtime.completed, 2, std::chrono::seconds{2});
+
+        ut::expect(entered);
+        ut::expect(completed);
+        ut::expect(runtime.maximum_active.load() == std::size_t{2});
+        ut::expect(scheduler.runs().at("1").running);
+        ut::expect(scheduler.runs().at("2").running);
+
+        scheduler.tick("{{ issue.identifier }}");
+
+        ut::expect(!scheduler.runs().at("1").running);
+        ut::expect(!scheduler.runs().at("2").running);
+        ut::expect(scheduler.runs().at("1").retry.has_value());
+        ut::expect(scheduler.runs().at("2").retry.has_value());
+        std::filesystem::remove_all(root);
+      };
+
+  ut::test("terminal reconciliation stops worker before removing workspace") =
+      [] {
+        class StoppableRuntime final : public symphony::codex::AgentRuntime {
+         public:
+          symphony::codex::RunResult run(
+              const symphony::codex::RunRequest&,
+              const std::stop_token stop_token) override {
+            entered.fetch_add(1);
+            while (!stop_token.stop_requested()) {
+              std::this_thread::sleep_for(std::chrono::milliseconds{1});
+            }
+            stopped.fetch_add(1);
+            return {false, true, std::nullopt, "cancelled", {}};
+          }
+
+          std::atomic<std::size_t> entered{0};
+          std::atomic<std::size_t> stopped{0};
+        };
+
+        symphony::tracker::FakeTracker tracker;
+        tracker.upsert({"1", "SYM-1", "Stop", "Todo", {}});
+        const auto root = std::filesystem::temp_directory_path() /
+                          "symphony-concurrent-cancellation-test";
+        std::filesystem::remove_all(root);
+        symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+        StoppableRuntime runtime;
+        symphony::execution::StdexecWorkerExecutor executor(1);
+        symphony::observability::MemoryEventStore events;
+        symphony::scheduler::FakeClock clock;
+        symphony::scheduler::Scheduler scheduler(
+            {}, tracker, workspaces, runtime, executor, events, clock);
+
+        scheduler.tick("{{ issue.identifier }}");
+        const auto entered =
+            wait_until(runtime.entered, 1, std::chrono::seconds{2});
+        const auto path = scheduler.runs().at("1").workspace.path;
+        tracker.upsert({"1", "SYM-1", "Stop", "Done", {}});
+        scheduler.reconcile();
+
+        ut::expect(entered);
+        ut::expect(std::filesystem::exists(path));
+        ut::expect(scheduler.runs().contains("1"));
+        const auto stopped =
+            wait_until(runtime.stopped, 1, std::chrono::seconds{2});
+        scheduler.tick("{{ issue.identifier }}");
+
+        ut::expect(stopped);
+        ut::expect(!scheduler.runs().contains("1"));
+        ut::expect(!std::filesystem::exists(path));
+        std::filesystem::remove_all(root);
+      };
+
   ut::test("scheduler refreshes active issue between bounded live turns") = [] {
     class MultiTurnRuntime final : public symphony::codex::AgentRuntime {
      public:
       symphony::codex::RunResult run(
-          const symphony::codex::RunRequest& request) override {
+          const symphony::codex::RunRequest& request,
+          std::stop_token) override {
         max_turns = request.max_turns;
         prompts.push_back(request.prompt);
         for (std::uint32_t completed = 1;
@@ -30,8 +196,6 @@ static ut::suite scheduler_tests = [] {
         result.turns_completed = static_cast<std::uint32_t>(prompts.size());
         return result;
       }
-      void cancel(std::string_view) override {}
-
       std::uint32_t max_turns{0};
       std::vector<std::string> prompts;
     };
@@ -47,7 +211,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
     config.max_turns = 2;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
 
     scheduler.tick("Full prompt for {{ issue.identifier }}");
@@ -70,7 +234,8 @@ static ut::suite scheduler_tests = [] {
           : tracker_(tracker) {}
 
       symphony::codex::RunResult run(
-          const symphony::codex::RunRequest& request) override {
+          const symphony::codex::RunRequest& request,
+          std::stop_token) override {
         tracker_.upsert({"1", "SYM-1", "Finished", "Done", {}});
         continued = request.continuation_prompt_after_turn(1).has_value();
         symphony::codex::RunResult result{
@@ -78,8 +243,6 @@ static ut::suite scheduler_tests = [] {
         result.turns_completed = 1;
         return result;
       }
-      void cancel(std::string_view) override {}
-
       bool continued{false};
 
      private:
@@ -97,7 +260,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
     config.max_turns = 3;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -131,7 +294,7 @@ static ut::suite scheduler_tests = [] {
         config.model = "gpt-5.6-sol";
         config.reasoning_effort = "high";
         config.escalation_reasoning_effort = "xhigh";
-        symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+        FixtureScheduler scheduler(config, tracker, workspaces,
                                                  runtime, events, clock);
 
         scheduler.tick("Work on {{ issue.identifier }} attempt {{ attempt }}");
@@ -161,7 +324,7 @@ static ut::suite scheduler_tests = [] {
     runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
     scheduler.tick("{{ issue.identifier }}");
     const auto path = scheduler.runs().at("1").workspace.path;
@@ -188,7 +351,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::SchedulerConfig config;
     config.max_concurrent = 2;
     config.required_labels = {"ready"};
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
     scheduler.tick("{{ issue.identifier }}");
     ut::expect(scheduler.runs().contains("1"));
@@ -210,7 +373,7 @@ static ut::suite scheduler_tests = [] {
     symphony::codex::FakeAgentRuntime runtime;
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -246,7 +409,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
     config.max_concurrent = 2;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces, runtime,
+    FixtureScheduler scheduler(config, tracker, workspaces, runtime,
                                              events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -268,7 +431,7 @@ static ut::suite scheduler_tests = [] {
     runtime.enqueue(RunResult{false, false, std::nullopt, "running", {}});
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
     scheduler.tick("{{ issue.identifier }}");
     auto unroutable = *tracker.refresh_by_id("1");
@@ -297,7 +460,7 @@ static ut::suite scheduler_tests = [] {
     config.before_run_hook = "true";
     config.after_run_hook = "true";
     config.before_remove_hook = "true";
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
     scheduler.tick("{{ issue.identifier }}");
     tracker.upsert({"1", "SYM-1", "Hooks", "Done", {}});
@@ -321,7 +484,7 @@ static ut::suite scheduler_tests = [] {
     symphony::codex::FakeAgentRuntime runtime;
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
     scheduler.startup_cleanup();
     ut::expect(!std::filesystem::exists(existing.path));
@@ -341,7 +504,7 @@ static ut::suite scheduler_tests = [] {
         RunResult{false, false, std::nullopt, "failed-again", "exit"});
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
     scheduler.tick("{{ issue.identifier }}");
     clock.advance(std::chrono::seconds{9});
@@ -373,7 +536,7 @@ static ut::suite scheduler_tests = [] {
     config.escalation_model = "gpt-5.6-sol";
     config.escalation_reasoning_effort = "xhigh";
     config.repeated_failure_reasoning_effort = "max";
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -412,7 +575,7 @@ static ut::suite scheduler_tests = [] {
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -441,7 +604,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
     config.context_rollover_percent = 70;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -466,7 +629,7 @@ static ut::suite scheduler_tests = [] {
     runtime.enqueue(RunResult{false, false, std::nullopt, "failed", "exit"});
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -497,7 +660,7 @@ static ut::suite scheduler_tests = [] {
     symphony::scheduler::FakeClock clock;
     symphony::scheduler::SchedulerConfig config;
     config.max_concurrent = 2;
-    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+    FixtureScheduler scheduler(config, tracker, workspaces,
                                              runtime, events, clock);
     scheduler.tick("{{ issue.identifier }}");
     config.max_concurrent = 1;
@@ -529,7 +692,7 @@ static ut::suite scheduler_tests = [] {
     runtime.enqueue(std::move(stalled));
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
 
     scheduler.tick("{{ issue.identifier }}");
@@ -569,7 +732,7 @@ static ut::suite scheduler_tests = [] {
     runtime.enqueue(std::move(second));
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::FakeClock clock;
-    symphony::scheduler::Scheduler scheduler({}, tracker, workspaces, runtime,
+    FixtureScheduler scheduler({}, tracker, workspaces, runtime,
                                              events, clock);
 
     scheduler.tick("{{ issue.identifier }}");

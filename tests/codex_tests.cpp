@@ -35,14 +35,37 @@ static ut::suite codex_tests = [] {
     }));
   };
 
-  ut::test("fake runtime is deterministic and records cancellation") = [] {
+  ut::test("fake runtime is deterministic and honors per-run cancellation") = [] {
     symphony::codex::FakeAgentRuntime runtime;
     runtime.enqueue(
         symphony::codex::RunResult{true, false, std::nullopt, "session-1", {}});
     const auto result = runtime.run({});
     ut::expect(result.normal_exit);
     ut::expect(runtime.run_count() == std::size_t{1});
-    runtime.cancel("session-1");
+    std::stop_source stop;
+    static_cast<void>(stop.request_stop());
+    const auto cancelled = runtime.run({}, stop.get_token());
+    ut::expect(cancelled.cancelled);
+  };
+
+  ut::test("app-server conversation honors invocation stop token") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    std::stop_source stop;
+    static_cast<void>(stop.request_stop());
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel,
+        request,
+        std::chrono::milliseconds{1},
+        10,
+        std::chrono::milliseconds::zero(),
+        std::chrono::milliseconds::zero(),
+        {},
+        stop.get_token());
+
+    ut::expect(result.cancelled);
   };
 
   ut::test(

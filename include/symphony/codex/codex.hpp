@@ -6,6 +6,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -111,22 +112,25 @@ struct AppServerPolicy {
 class AgentRuntime {
  public:
   virtual ~AgentRuntime() = default;
-  [[nodiscard]] virtual RunResult run(const RunRequest& request) = 0;
-  virtual void cancel(std::string_view session_id) = 0;
+  [[nodiscard]] virtual RunResult run(
+      const RunRequest& request,
+      std::stop_token stop_token = {}) = 0;
 };
 
 class FakeAgentRuntime final : public AgentRuntime {
  public:
   void enqueue(RunResult result);
-  [[nodiscard]] RunResult run(const RunRequest& request) override;
-  void cancel(std::string_view session_id) override;
-  [[nodiscard]] std::size_t run_count() const noexcept;
-  [[nodiscard]] const std::optional<std::string>& last_model() const noexcept;
-  [[nodiscard]] const std::optional<std::string>& last_reasoning_effort() const noexcept;
-  [[nodiscard]] const std::optional<std::uint32_t>&
-  last_context_rollover_percent() const noexcept;
+  [[nodiscard]] RunResult run(
+      const RunRequest& request,
+      std::stop_token stop_token = {}) override;
+  [[nodiscard]] std::size_t run_count() const;
+  [[nodiscard]] std::optional<std::string> last_model() const;
+  [[nodiscard]] std::optional<std::string> last_reasoning_effort() const;
+  [[nodiscard]] std::optional<std::uint32_t>
+  last_context_rollover_percent() const;
 
  private:
+  mutable std::mutex mutex_;
   std::deque<RunResult> results_;
   std::size_t run_count_{0};
   std::optional<std::string> last_model_;
@@ -142,8 +146,9 @@ class CodexAppServerRuntime final : public AgentRuntime {
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds{300000},
       std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000},
       AppServerPolicy policy = {});
-  [[nodiscard]] RunResult run(const RunRequest& request) override;
-  void cancel(std::string_view session_id) override;
+  [[nodiscard]] RunResult run(
+      const RunRequest& request,
+      std::stop_token stop_token = {}) override;
   void reconfigure(
       std::string command,
       std::chrono::milliseconds read_timeout,
@@ -157,8 +162,7 @@ class CodexAppServerRuntime final : public AgentRuntime {
   std::chrono::milliseconds stall_timeout_;
   std::chrono::milliseconds turn_timeout_;
   AppServerPolicy policy_;
-  std::mutex active_process_mutex_;
-  std::function<void()> cancel_active_process_;
+  std::mutex config_mutex_;
 };
 
 class JsonLineCodec {
@@ -220,6 +224,7 @@ class ProtocolChannel {
   virtual ~ProtocolChannel() = default;
   virtual void write(std::string_view frame) = 0;
   [[nodiscard]] virtual ReadResult read(std::chrono::milliseconds timeout) = 0;
+  virtual void request_stop() noexcept = 0;
 };
 
 class FakeProtocolChannel final : public ProtocolChannel {
@@ -228,6 +233,7 @@ class FakeProtocolChannel final : public ProtocolChannel {
   void close();
   void write(std::string_view frame) override;
   [[nodiscard]] ReadResult read(std::chrono::milliseconds timeout) override;
+  void request_stop() noexcept override;
   [[nodiscard]] const std::vector<std::string>& writes() const noexcept;
 
  private:
@@ -245,7 +251,8 @@ class AppServerConversation {
       std::size_t max_messages = 10000,
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds::zero(),
       std::chrono::milliseconds turn_timeout = std::chrono::milliseconds::zero(),
-      const AppServerPolicy& policy = {});
+      const AppServerPolicy& policy = {},
+      std::stop_token stop_token = {});
 };
 
 }  // namespace symphony::codex
