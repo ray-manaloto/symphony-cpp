@@ -301,5 +301,33 @@ static ut::suite persistence_tests = [] {
     if (!rejected)
       ut::expect(rejected.error().message.find("schema version") !=
                  std::string::npos);
+
+    FixtureDatabase legacy_fixture{"legacy-schema"};
+    {
+      boost::sqlite::connection legacy{legacy_fixture.path().string()};
+      legacy.execute(
+          "CREATE TABLE symphony_events("
+          "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
+          "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
+          "  type TEXT NOT NULL,"
+          "  issue_id TEXT NOT NULL,"
+          "  payload TEXT NOT NULL"
+          ");"
+          "INSERT INTO symphony_events("
+          "  schema_version, type, issue_id, payload"
+          ") VALUES (1, 'legacy', 'fixture-legacy', '{}')");
+    }
+    auto migrated = symphony::persistence::SqliteEventRepository::open(
+        legacy_fixture.path());
+    ut::expect(migrated.has_value());
+    if (migrated) {
+      auto events = (*migrated)->load_after(0);
+      ut::expect(events.has_value());
+      if (events) {
+        ut::expect(events->size() == std::size_t{1});
+        if (events->size() == 1)
+          ut::expect(events->front().issue_id == "fixture-legacy");
+      }
+    }
   };
 };
