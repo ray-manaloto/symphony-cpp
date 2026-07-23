@@ -26,7 +26,7 @@ bootstrap mechanism to remove only through a bounded, always-green migration.
 
 | Capability | Preferred candidate | Alternatives under discussion | Required property |
 | --- | --- | --- | --- |
-| Async execution | local sender/receiver boundary; evaluate NVIDIA `stdexec` | Glaze's ASIO substrate behind an adapter | one scheduler authority, cancellation, fake time |
+| Async execution | pinned NVIDIA stdexec behind a local sender/receiver boundary | Glaze's ASIO substrate behind an adapter | one scheduler authority, cancellation, fake time |
 | HTTP client/server | bounded Glaze HTTP prototype | another ASIO adapter if the prototype gate fails | cancellation, TLS, bounded bodies, graceful shutdown |
 | JSON | Glaze behind `symphony_meta` and the Codex protocol adapter | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
 | YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |

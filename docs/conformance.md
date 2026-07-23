@@ -10,6 +10,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
 | Positional workflow CLI and process exits | CLI11 parser fixtures plus Boost.Process-backed executable tests | Implemented for cwd default, one positional path, `--workflow` compatibility, strict conflicts/extras, help success, parse failure, and startup-validation failure |
 | Single-authority polling | deterministic scheduler tests | Implemented |
+| Bounded concurrent workers | scheduler and execution-provider fixtures | Gap: scheduler state is single-authority, but `AgentRuntime::run` still blocks the poll authority; pinned stdexec compatibility gate precedes worker migration |
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
 | Tracker normalization, pagination, profiles, and portable errors | tracker contract fixtures | Implemented for the provider-neutral fixture boundary; live Glaze HTTP adapters remain gated and disabled |
 | Candidate completeness, routability, and dispatch ordering | scheduler fixture tests | Implemented for normalized core fields, adapter `dispatchable`, priority, creation time, and identifier tie-breaks |
