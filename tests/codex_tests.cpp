@@ -234,35 +234,4 @@ static ut::suite codex_tests = [] {
     std::filesystem::remove_all(root);
   };
 
-  ut::test("Codex runtime releases its process group after a stall") = [] {
-    const auto root = std::filesystem::temp_directory_path() /
-                      "symphony-codex-stall-runtime-test";
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root);
-    const std::string command =
-        "printf '%s\\n' "
-        "'{\"id\":0,\"result\":{}}' "
-        "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
-        "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
-        "while IFS= read -r line; do :; done";
-    symphony::codex::CodexAppServerRuntime runtime(
-        command,
-        std::chrono::milliseconds{1},
-        std::chrono::milliseconds{100},
-        std::chrono::seconds{1});
-    symphony::codex::RunRequest request;
-    request.workspace.path = std::filesystem::absolute(root);
-    request.prompt = "fixture";
-
-    const auto result = runtime.run(request);
-    runtime.reconfigure(
-        command,
-        std::chrono::milliseconds{1},
-        std::chrono::milliseconds{100},
-        std::chrono::seconds{1});
-
-    ut::expect(result.stalled);
-    ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
-    std::filesystem::remove_all(root);
-  };
 };

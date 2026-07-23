@@ -16,7 +16,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
 | Codex default command | config default test | Implemented |
 | Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for cumulative token usage, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
-| Codex turn and stall deadlines | protocol, runtime, scheduler, and workflow tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, distinct outcomes/events, and process-group teardown |
+| Codex turn and stall deadlines | protocol, scheduler, and workflow tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, and distinct outcomes/events; deterministic child-lifecycle coverage remains with the Boost.Process v2 migration |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
