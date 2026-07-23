@@ -12,10 +12,6 @@
 #include <vector>
 
 #include <glaze/yaml.hpp>
-#include <nexus/callback.hpp>
-#include <nexus/config.hpp>
-#include <nexus/nexus.hpp>
-
 namespace symphony::workflow::detail {
 struct RawPolling {
   std::optional<std::uint64_t> interval_ms;
@@ -149,82 +145,6 @@ std::string trim(std::string value) {
   while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())) != 0) value.pop_back();
   return value;
 }
-
-struct DispatchValidation
-    : callback::service<const WorkflowConfig&,
-                        const std::vector<std::string>&> {};
-
-struct DispatchValidationCore {
-  static constexpr auto config =
-      cib::config(cib::exports<DispatchValidation>);
-};
-
-struct TrackerDispatchValidation {
-  static constexpr auto config = cib::config(cib::extend<DispatchValidation>(
-      [](const WorkflowConfig& config,
-         const std::vector<std::string>& supported_tracker_kinds) {
-        if (trim(config.tracker.kind).empty()) {
-          throw std::runtime_error(
-              "tracker.kind is required for dispatch");
-        }
-        if (std::ranges::find(
-                supported_tracker_kinds,
-                config.tracker.kind) == supported_tracker_kinds.end()) {
-          throw std::runtime_error(
-              "unsupported tracker.kind: " + config.tracker.kind);
-        }
-        if (config.tracker.active_states.empty() ||
-            config.tracker.terminal_states.empty()) {
-          throw std::runtime_error(
-              "tracker active_states and terminal_states are required");
-        }
-      }));
-};
-
-struct CodexDispatchValidation {
-  static constexpr auto config = cib::config(cib::extend<DispatchValidation>(
-      [](const WorkflowConfig& config,
-         const std::vector<std::string>&) {
-        if (trim(config.codex.command).empty()) {
-          throw std::runtime_error("codex.command must not be empty");
-        }
-        if (config.codex.model && trim(*config.codex.model).empty()) {
-          throw std::runtime_error("codex.model must not be empty");
-        }
-        if (config.codex.reasoning_effort &&
-            trim(*config.codex.reasoning_effort).empty()) {
-          throw std::runtime_error(
-              "codex.reasoning_effort must not be empty");
-        }
-        if (config.codex.escalation_model &&
-            trim(*config.codex.escalation_model).empty()) {
-          throw std::runtime_error(
-              "codex.escalation_model must not be empty");
-        }
-        if (config.codex.escalation_reasoning_effort &&
-            trim(*config.codex.escalation_reasoning_effort).empty()) {
-          throw std::runtime_error(
-              "codex.escalation_reasoning_effort must not be empty");
-        }
-        if (config.codex.repeated_failure_reasoning_effort &&
-            trim(*config.codex.repeated_failure_reasoning_effort).empty()) {
-          throw std::runtime_error(
-              "codex.repeated_failure_reasoning_effort must not be empty");
-        }
-      }));
-};
-
-struct DispatchValidationProject {
-  static constexpr auto config =
-      cib::components<DispatchValidationCore,
-                      TrackerDispatchValidation,
-                      CodexDispatchValidation>;
-};
-
-using DispatchValidationNexus = cib::nexus<DispatchValidationProject>;
-static_assert(requires {
-  DispatchValidationNexus::service_v<DispatchValidation>;
-});
 
 std::string expand(std::string value, const Environment& env) {
   if (value.empty() || value.front() != '$') return value;
@@ -488,7 +408,42 @@ std::string render_prompt(
 void validate_for_dispatch(
     const WorkflowConfig& config,
     const std::vector<std::string>& supported_tracker_kinds) {
-  DispatchValidationNexus::service_v<DispatchValidation>(
-      config, supported_tracker_kinds);
+  if (trim(config.tracker.kind).empty()) {
+    throw std::runtime_error("tracker.kind is required for dispatch");
+  }
+  if (std::ranges::find(supported_tracker_kinds, config.tracker.kind) ==
+      supported_tracker_kinds.end()) {
+    throw std::runtime_error("unsupported tracker.kind: " +
+                             config.tracker.kind);
+  }
+  if (config.tracker.active_states.empty() ||
+      config.tracker.terminal_states.empty()) {
+    throw std::runtime_error(
+        "tracker active_states and terminal_states are required");
+  }
+  if (trim(config.codex.command).empty()) {
+    throw std::runtime_error("codex.command must not be empty");
+  }
+  if (config.codex.model && trim(*config.codex.model).empty()) {
+    throw std::runtime_error("codex.model must not be empty");
+  }
+  if (config.codex.reasoning_effort &&
+      trim(*config.codex.reasoning_effort).empty()) {
+    throw std::runtime_error("codex.reasoning_effort must not be empty");
+  }
+  if (config.codex.escalation_model &&
+      trim(*config.codex.escalation_model).empty()) {
+    throw std::runtime_error("codex.escalation_model must not be empty");
+  }
+  if (config.codex.escalation_reasoning_effort &&
+      trim(*config.codex.escalation_reasoning_effort).empty()) {
+    throw std::runtime_error(
+        "codex.escalation_reasoning_effort must not be empty");
+  }
+  if (config.codex.repeated_failure_reasoning_effort &&
+      trim(*config.codex.repeated_failure_reasoning_effort).empty()) {
+    throw std::runtime_error(
+        "codex.repeated_failure_reasoning_effort must not be empty");
+  }
 }
 }  // namespace symphony::workflow

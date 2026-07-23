@@ -32,7 +32,7 @@ target_link_libraries(symphony_intel_provider_tests PRIVATE
   ut::ut
   Intel::baremetal_async
   Intel::baremetal_concurrency
-  cib::nexus
+  cib::lookup
   stdx::stdx)
 add_test(
   NAME symphony_intel_provider_tests

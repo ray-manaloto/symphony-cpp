@@ -5,8 +5,52 @@
 #include <cctype>
 #include <set>
 
+#include <lookup/entry.hpp>
+#include <lookup/input.hpp>
+#include <lookup/lookup.hpp>
+#include <stdx/utility.hpp>
+
 namespace symphony::tracker {
 namespace {
+struct HttpErrorProfile {
+  TrackerErrorCode code;
+  bool retryable;
+  std::string_view message;
+};
+
+constexpr auto http_error_profiles = lookup::make(CX_VALUE(
+    lookup::input<int, HttpErrorProfile, 4>{
+        {TrackerErrorCode::malformed_response,
+         false,
+         "unexpected tracker response"},
+        std::array{
+            lookup::entry{
+                401,
+                HttpErrorProfile{TrackerErrorCode::authentication,
+                                 false,
+                                 "tracker authentication failed"}},
+            lookup::entry{
+                403,
+                HttpErrorProfile{TrackerErrorCode::permission,
+                                 false,
+                                 "tracker permission denied"}},
+            lookup::entry{
+                404,
+                HttpErrorProfile{TrackerErrorCode::not_found,
+                                 false,
+                                 "tracker resource was not found"}},
+            lookup::entry{
+                429,
+                HttpErrorProfile{TrackerErrorCode::rate_limited,
+                                 true,
+                                 "tracker rate limit exceeded"}}}}));
+
+static_assert(http_error_profiles[401].code ==
+              TrackerErrorCode::authentication);
+static_assert(http_error_profiles[429].retryable);
+static_assert(http_error_profiles[418].code ==
+              TrackerErrorCode::malformed_response);
+
 std::string normalized(const std::string_view value) {
   const auto first = value.find_first_not_of(" \t\r\n");
   const auto last = value.find_last_not_of(" \t\r\n");
@@ -139,22 +183,11 @@ std::vector<std::string> all_tracker_secret_environment_names() {
 }
 
 TrackerError map_http_error(const int status_code) {
-  if (status_code == 401) {
-    return {TrackerErrorCode::authentication, false, "tracker authentication failed"};
-  }
-  if (status_code == 403) {
-    return {TrackerErrorCode::permission, false, "tracker permission denied"};
-  }
-  if (status_code == 404) {
-    return {TrackerErrorCode::not_found, false, "tracker resource was not found"};
-  }
-  if (status_code == 429) {
-    return {TrackerErrorCode::rate_limited, true, "tracker rate limit exceeded"};
-  }
   if (status_code >= 500 && status_code <= 599) {
     return {TrackerErrorCode::unavailable, true, "tracker service is unavailable"};
   }
-  return {TrackerErrorCode::malformed_response, false, "unexpected tracker response"};
+  const auto profile = http_error_profiles[status_code];
+  return {profile.code, profile.retryable, std::string{profile.message}};
 }
 
 void FakeTracker::upsert(domain::Issue issue) { issues_.insert_or_assign(issue.id, std::move(issue)); }

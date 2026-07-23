@@ -8,8 +8,8 @@ exists, pin the latest upstream Git commit immutably and keep it current through
 
 | Capability | Chosen provider | Use in Symphony |
 | --- | --- | --- |
-| Compile-time component composition | [Intel compile-time-init-build](https://github.com/intel/compile-time-init-build) | Compose the tracker and Codex dispatch validators as compile-time-registered components behind the existing `validate_for_dispatch` API |
-| Compile-time strings, tuples, and type algorithms | [Intel cpp-std-extensions](https://github.com/intel/cpp-std-extensions) | Supplies CIB's compile-time nexus machinery; available only through the compile-time provider seam |
+| Compile-time lookup composition | [Intel compile-time-init-build](https://github.com/intel/compile-time-init-build) | Replace handwritten exact HTTP-status branching with a consteval `cib::lookup` table |
+| Compile-time values and type algorithms | [Intel cpp-std-extensions](https://github.com/intel/cpp-std-extensions) | Supplies CIB lookup's compile-time value/type machinery and isolated provider fixtures |
 | Intel dependency-closure compatibility | [Intel bare-metal concurrency](https://github.com/intel/cpp-baremetal-concurrency) and [Intel bare-metal senders/receivers](https://github.com/intel/cpp-baremetal-senders-and-receivers) | Pinned overlay dependencies with an isolated GCC 16.1 provider gate; they do not replace hosted execution |
 | Hosted sender/receiver execution | [NVIDIA `stdexec`](https://github.com/NVIDIA/stdexec) | Remains the sole worker execution, cancellation, and completion provider |
 | Structural reflection | C++26 P2996 facilities behind `symphony_meta` | `consteval` fixed-array field descriptors; GCC 16.1 authoritative, clang-p2996 differential |
@@ -17,10 +17,10 @@ exists, pin the latest upstream Git commit immutably and keep it current through
 | Compile-time tests | [`openalgz/ut`](https://github.com/openalgz/ut) plus `static_assert` | Provider feature probes and product invariants |
 | Type-list algorithms | [Boost.MP11](https://www.boost.org/libs/mp11) | Curated dependency used by the Intel compile-time stack |
 
-The Intel adoption is intentionally split at the hosted-runtime boundary. CIB and `stdx` own
-compile-time composition. NVIDIA `stdexec` continues to own hosted Linux scheduling; the Intel
-bare-metal sender/receiver implementation is compiled as provider-closure evidence but is not a
-second application executor.
+The Intel adoption is intentionally split at the hosted-runtime boundary. CIB and `stdx` own a
+tuple-free compile-time lookup seam. NVIDIA `stdexec` continues to own hosted Linux scheduling; the
+Intel bare-metal sender/receiver implementation is compiled as provider-closure evidence but is not
+a second application executor.
 
 ## Intel pins and decisions
 
@@ -30,8 +30,8 @@ because it unconditionally bootstraps CPM dependencies, which repository policy 
 
 | Library | Immutable latest-main pin reviewed on 2026-07-23 | Chosen boundary |
 | --- | --- | --- |
-| Intel compile-time-init-build | `f9b4cc5e5af9703ac569f3eb988af8c7e29fe032` | `cib::nexus` composes dispatch-validation components at compile time |
-| Intel cpp-std-extensions | `a35c5f2cb6d5180afd459495e9e26c279f1aa77a` | `stdx::stdx` supports CIB and compile-time provider fixtures |
+| Intel compile-time-init-build | `f9b4cc5e5af9703ac569f3eb988af8c7e29fe032` | `cib::lookup` classifies exact HTTP failures at compile time |
+| Intel cpp-std-extensions | `a35c5f2cb6d5180afd459495e9e26c279f1aa77a` | `stdx::stdx` supports CIB lookup and compile-time provider fixtures |
 | Intel bare-metal concurrency | `b8a486a3bd1d166128ebbdb8e88f7a43443a5e83` | Dependency closure and hosted critical-section compatibility fixture only |
 | Intel bare-metal senders/receivers | `3e3c8aaa1b0aa8035453050997ae25ab08d936f1` | Compile-time sender concept fixture only; not linked into Symphony execution |
 
@@ -39,6 +39,13 @@ Upstream documents GCC 12-14 rather than GCC 16.1, and its repositories internal
 versions of one another. Symphony deliberately tests the latest-main closure requested by the
 owner, so the repository's exact GCC 16.1 provider test is required before product integration and
 again after every pin update.
+
+Exact GCC 16.1 Source CI runs `30040027088` and `30040593648` ICEd when the product instantiated
+CIB callback/nexus composition through `stdx::tuple`. A standalone reproduction confirmed the
+failure with modules enabled or disabled and under both C++23 and C++26. The tuple-free
+`cib::lookup` surface compiled and ran on the exact compiler. Re-evaluate nexus only when a future
+immutable Intel pin passes standalone tuple and callback/nexus probes on GCC 16.1; do not carry a
+local patch to broad third-party tuple machinery.
 
 ## Other libraries reviewed
 

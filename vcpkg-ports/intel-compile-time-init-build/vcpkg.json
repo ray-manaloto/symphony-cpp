@@ -1,6 +1,7 @@
 {
   "name": "intel-compile-time-init-build",
   "version-string": "git-f9b4cc5e5af9703ac569f3eb988af8c7e29fe032",
+  "port-version": 1,
   "description": "Intel header-only compile-time component composition",
   "homepage": "https://github.com/intel/compile-time-init-build",
   "license": "BSL-1.0",

@@ -117,11 +117,23 @@ static ut::suite tracker_tests = [] {
                secret_names.end());
 
     const auto authentication = symphony::tracker::map_http_error(401);
+    const auto forbidden = symphony::tracker::map_http_error(403);
+    const auto missing = symphony::tracker::map_http_error(404);
+    const auto unexpected = symphony::tracker::map_http_error(418);
     const auto throttled = symphony::tracker::map_http_error(429);
     const auto unavailable = symphony::tracker::map_http_error(503);
     ut::expect(authentication.code ==
                symphony::tracker::TrackerErrorCode::authentication);
     ut::expect(!authentication.retryable);
+    ut::expect(forbidden.code ==
+               symphony::tracker::TrackerErrorCode::permission);
+    ut::expect(!forbidden.retryable);
+    ut::expect(missing.code ==
+               symphony::tracker::TrackerErrorCode::not_found);
+    ut::expect(!missing.retryable);
+    ut::expect(unexpected.code ==
+               symphony::tracker::TrackerErrorCode::malformed_response);
+    ut::expect(!unexpected.retryable);
     ut::expect(throttled.code ==
                symphony::tracker::TrackerErrorCode::rate_limited);
     ut::expect(throttled.retryable);
