@@ -5,6 +5,7 @@
 #include <functional>
 #include <future>
 #include <mutex>
+#include <scope>
 #include <stdexcept>
 #include <system_error>
 #include <tuple>
@@ -22,9 +23,14 @@ namespace symphony::persistence {
 namespace sqlite = boost::sqlite;
 
 struct SqliteEventRepository::Impl {
+  explicit Impl(const std::size_t max_pending)
+      : max_pending_appends(max_pending) {}
+
   sqlite::connection connection;
   execution::StdexecTaskExecutor tasks{1};
   std::atomic<std::uint64_t> next_operation{1};
+  std::atomic<std::size_t> pending_appends{0};
+  std::size_t max_pending_appends;
   std::mutex completion_mutex;
   std::vector<AppendCompletion> append_completions;
 };
@@ -49,6 +55,25 @@ Error cancellation_error() {
       .message = "persistence operation cancelled",
       .kind = ErrorKind::cancelled,
   };
+}
+
+Error overload_error() {
+  return Error{
+      .code = std::make_error_code(std::errc::resource_unavailable_try_again)
+                  .value(),
+      .message = "persistence append queue is full",
+      .kind = ErrorKind::overloaded,
+  };
+}
+
+template <typename Impl> bool acquire_append_slot(Impl &impl) noexcept {
+  auto pending = impl.pending_appends.load(std::memory_order_relaxed);
+  while (pending < impl.max_pending_appends) {
+    if (impl.pending_appends.compare_exchange_weak(
+            pending, pending + 1, std::memory_order_relaxed))
+      return true;
+  }
+  return false;
 }
 
 template <typename Impl>
@@ -96,9 +121,11 @@ SqliteEventRepository::SqliteEventRepository(std::unique_ptr<Impl> impl)
     : impl_(std::move(impl)) {}
 
 std::expected<std::unique_ptr<SqliteEventRepository>, Error>
-SqliteEventRepository::open(const std::filesystem::path &path) {
+SqliteEventRepository::open(const std::filesystem::path &path,
+                            const RepositoryOptions options) {
   auto repository = std::unique_ptr<SqliteEventRepository>(
-      new SqliteEventRepository(std::make_unique<Impl>()));
+      new SqliteEventRepository(
+          std::make_unique<Impl>(options.max_pending_appends)));
   auto initialized = on_database(
       *repository->impl_,
       [impl = repository->impl_.get(),
@@ -179,22 +206,36 @@ SqliteEventRepository::load_after(const std::int64_t sequence) {
       });
 }
 
-void SqliteEventRepository::submit_append(std::string key, NewEvent event) {
+std::expected<void, Error>
+SqliteEventRepository::submit_append(std::string key, NewEvent event) {
   if (key.empty())
     throw std::invalid_argument("persistence operation key must not be empty");
   const auto execution_key = "persistence-async:" + key;
-  impl_->tasks.submit(
-      execution_key,
-      [impl = impl_.get(), key = std::move(key), event = std::move(event)](
-          const std::stop_token stop_token) mutable noexcept {
-        auto result = stop_token.stop_requested()
-                          ? std::expected<std::int64_t, Error>{std::unexpected(
-                                cancellation_error())}
-                          : append_event(*impl, std::move(event));
-        const std::scoped_lock lock(impl->completion_mutex);
-        impl->append_completions.push_back(
-            AppendCompletion{std::move(key), std::move(result)});
-      });
+  if (!acquire_append_slot(*impl_))
+    return std::unexpected(overload_error());
+
+  try {
+    impl_->tasks.submit(
+        execution_key,
+        [impl = impl_.get(), key = std::move(key), event = std::move(event)](
+            const std::stop_token stop_token) mutable noexcept {
+          auto release_slot =
+              std::scope_exit([impl]() noexcept {
+                impl->pending_appends.fetch_sub(1, std::memory_order_relaxed);
+              });
+          auto result = stop_token.stop_requested()
+                            ? std::expected<std::int64_t, Error>{std::unexpected(
+                                  cancellation_error())}
+                            : append_event(*impl, std::move(event));
+          const std::scoped_lock lock(impl->completion_mutex);
+          impl->append_completions.push_back(
+              AppendCompletion{std::move(key), std::move(result)});
+        });
+  } catch (...) {
+    impl_->pending_appends.fetch_sub(1, std::memory_order_relaxed);
+    return std::unexpected(current_error());
+  }
+  return {};
 }
 
 bool SqliteEventRepository::request_stop(const std::string_view key) {
