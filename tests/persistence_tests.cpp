@@ -153,7 +153,7 @@ static ut::suite persistence_tests = [] {
     boost::sqlite::connection blocker{fixture.path().string()};
     blocker.execute("BEGIN IMMEDIATE");
 
-    (*opened)->submit_append(
+    auto first_submission = (*opened)->submit_append(
         "first",
         {
             .schema_version = 1,
@@ -161,7 +161,7 @@ static ut::suite persistence_tests = [] {
             .issue_id = "fixture-first",
             .payload = "{}",
         });
-    (*opened)->submit_append(
+    auto cancelled_submission = (*opened)->submit_append(
         "cancelled",
         {
             .schema_version = 1,
@@ -169,6 +169,8 @@ static ut::suite persistence_tests = [] {
             .issue_id = "fixture-cancelled",
             .payload = "{}",
         });
+    ut::expect(first_submission.has_value());
+    ut::expect(cancelled_submission.has_value());
     ut::expect((*opened)->request_stop("cancelled"));
     blocker.execute("ROLLBACK");
 
@@ -204,5 +206,67 @@ static ut::suite persistence_tests = [] {
       if (events->size() == 1)
         ut::expect(events->front().issue_id == "fixture-first");
     }
+  };
+
+  ut::test("sqlite event repository rejects work above its queue bound") = [] {
+    FixtureDatabase fixture{"bounded"};
+    auto opened = symphony::persistence::SqliteEventRepository::open(
+        fixture.path(), {.max_pending_appends = 1});
+    ut::expect(opened.has_value());
+    if (!opened)
+      return;
+
+    boost::sqlite::connection blocker{fixture.path().string()};
+    blocker.execute("BEGIN IMMEDIATE");
+
+    auto accepted = (*opened)->submit_append(
+        "accepted",
+        {
+            .schema_version = 1,
+            .type = "fixture",
+            .issue_id = "fixture-accepted",
+            .payload = "{}",
+        });
+    auto overloaded = (*opened)->submit_append(
+        "overloaded",
+        {
+            .schema_version = 1,
+            .type = "fixture",
+            .issue_id = "fixture-overloaded",
+            .payload = "{}",
+        });
+
+    ut::expect(accepted.has_value());
+    ut::expect(!overloaded.has_value());
+    if (!overloaded)
+      ut::expect(overloaded.error().kind ==
+                 symphony::persistence::ErrorKind::overloaded);
+
+    blocker.execute("ROLLBACK");
+    (*opened)->drain();
+    auto completions = (*opened)->take_ready_appends();
+    ut::expect(completions.size() == std::size_t{1});
+    if (completions.size() == 1)
+      ut::expect(completions.front().key == "accepted");
+
+    auto after_drain = (*opened)->submit_append(
+        "after-drain",
+        {
+            .schema_version = 1,
+            .type = "fixture",
+            .issue_id = "fixture-after-drain",
+            .payload = "{}",
+        });
+    ut::expect(after_drain.has_value());
+    (*opened)->drain();
+    completions = (*opened)->take_ready_appends();
+    ut::expect(completions.size() == std::size_t{1});
+    if (completions.size() == 1)
+      ut::expect(completions.front().key == "after-drain");
+
+    auto events = (*opened)->load_after(0);
+    ut::expect(events.has_value());
+    if (events)
+      ut::expect(events->size() == std::size_t{2});
   };
 };
