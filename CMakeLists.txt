@@ -15,11 +15,13 @@ add_library(symphony_options INTERFACE)
 target_compile_options(symphony_options INTERFACE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
   $<$<AND:$<BOOL:${SYMPHONY_WARNINGS_AS_ERRORS}>,$<CXX_COMPILER_ID:GNU,Clang>>:-Werror>)
+
+add_library(symphony_reflection_options INTERFACE)
 if(SYMPHONY_ENABLE_REFLECTION)
-  target_compile_options(symphony_options INTERFACE
+  target_compile_options(symphony_reflection_options INTERFACE
     $<$<CXX_COMPILER_ID:GNU>:-freflection>
     $<$<CXX_COMPILER_ID:Clang>:-freflection-latest>)
-  target_compile_definitions(symphony_options INTERFACE SYMPHONY_ENABLE_REFLECTION=1)
+  target_compile_definitions(symphony_reflection_options INTERFACE SYMPHONY_ENABLE_REFLECTION=1)
 endif()
 
 add_subdirectory(src)

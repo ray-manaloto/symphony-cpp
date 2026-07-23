@@ -42,6 +42,8 @@ Whichever libraries are selected, domain types depend only on the standard libra
 `symphony_meta` reflection adapter. Tracker, workspace, runtime, clock, event-store, and status
 boundaries remain abstract. Generated OpenAI OpenAPI C++ is a disposable REST reference artifact;
 the Codex app-server JSON-RPC protocol remains the Symphony agent transport.
+Experimental P2996 compiler flags are confined to the reflection fixture target; they are not
+inherited by ordinary service, protocol, or execution-provider translation units.
 
 Glaze REPE is not the Codex transport: it is a distinct, currently unstable protocol whose registry
 leaves synchronization to the caller. The Glaze HTTP adapter is accepted only after fixture tests
