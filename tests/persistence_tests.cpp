@@ -9,9 +9,11 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #include <boost/sqlite/connection.hpp>
+#include <boost/sqlite/query.hpp>
 
 #include "symphony/persistence/persistence.hpp"
 
@@ -268,5 +270,36 @@ static ut::suite persistence_tests = [] {
     ut::expect(events.has_value());
     if (events)
       ut::expect(events->size() == std::size_t{2});
+  };
+
+  ut::test("sqlite event repository owns an explicit schema version") = [] {
+    FixtureDatabase fresh_fixture{"schema-version"};
+    {
+      auto opened = symphony::persistence::SqliteEventRepository::open(
+          fresh_fixture.path());
+      ut::expect(opened.has_value());
+    }
+
+    boost::sqlite::connection inspected{fresh_fixture.path().string()};
+    sqlite3_int64 schema_version = 0;
+    for (const auto &[version] :
+         boost::sqlite::query<std::tuple<sqlite3_int64>>(
+             inspected, "PRAGMA user_version")) {
+      schema_version = version;
+    }
+    ut::expect(schema_version == sqlite3_int64{1});
+    inspected.close();
+
+    FixtureDatabase future_fixture{"future-schema"};
+    {
+      boost::sqlite::connection future{future_fixture.path().string()};
+      future.execute("PRAGMA user_version=2");
+    }
+    auto rejected = symphony::persistence::SqliteEventRepository::open(
+        future_fixture.path());
+    ut::expect(!rejected.has_value());
+    if (!rejected)
+      ut::expect(rejected.error().message.find("schema version") !=
+                 std::string::npos);
   };
 };
