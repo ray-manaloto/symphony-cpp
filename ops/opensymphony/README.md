@@ -64,3 +64,5 @@ isolated login without starting a model-backed turn. It advertises
 receives `routing.model: gpt-5.6-sol`; the read-only Codex configuration overlay
 sets `model_reasoning_effort = "high"`. Re-run the read-only catalog and
 effective-config probes whenever the pinned image or Codex CLI changes.
+The post-pin dry run must retain zero running workers and zero token usage before
+the configuration is treated as healthy.
