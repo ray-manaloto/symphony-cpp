@@ -145,7 +145,8 @@ class CodexAppServerRuntime final : public AgentRuntime {
       std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000},
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds{300000},
       std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000},
-      AppServerPolicy policy = {});
+      AppServerPolicy policy = {},
+      std::vector<std::string> excluded_environment_variables = {});
   [[nodiscard]] RunResult run(
       const RunRequest& request,
       std::stop_token stop_token = {}) override;
@@ -162,6 +163,7 @@ class CodexAppServerRuntime final : public AgentRuntime {
   std::chrono::milliseconds stall_timeout_;
   std::chrono::milliseconds turn_timeout_;
   AppServerPolicy policy_;
+  std::vector<std::string> child_environment_;
   std::mutex config_mutex_;
 };
 

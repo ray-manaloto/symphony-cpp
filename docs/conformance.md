@@ -26,7 +26,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Bounded in-worker turn loop | app-server conversation and scheduler fixtures | Implemented with one live app-server process/thread, tracker refresh after each successful turn, continuation-only prompts, dynamic `agent.max_turns`, compaction cutoff, and normal continuation retry |
 | Adaptive worker policy | scheduler, workflow, and Codex fixtures | Implemented for configured baseline, one-failure/no-progress escalation, repeated-identical-failure ceiling, and progress-evidence recovery between bounded sessions; OpenSymphony v2.10.0 remains operator-adjusted |
 | Concurrent worker execution | stdexec provider, scheduler overlap, completion-drain, and cancellation fixtures | Implemented with the pinned NVIDIA stdexec static thread pool, keyed cooperative cancellation, scheduler-thread-only state mutation, and deferred terminal cleanup; exact GCC 16.1 Source CI run `29976334674` passed |
-| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for launch, working directory, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, reap, and concurrent bounded stderr-tail capture; process-tree/group cancellation remains open |
+| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for the Draft v1 launch and stop contract: working directory, tracker-secret-free child environment, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, reap, and concurrent bounded stderr-tail capture. Process-tree/group cancellation remains an owner-gated hardening extension. |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
@@ -34,15 +34,24 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Terminal/non-active reconciliation | scheduler tests | Implemented |
 | Terminal cleanup | scheduler/workspace tests | Implemented for startup sweep and active transition |
 | Structured contextual logs | observability tests plus spdlog adapter | Implemented for redact-before-dispatch JSON, bounded status history, synchronous stderr delivery, and isolated/countable sink failures |
-| Operator-visible observability | `symphonyctl status`, JSON events | Partial: CLI surface exists; live snapshot wiring pending |
+| Operator-visible observability | structured JSON events plus `symphonyctl status` | Implemented for the required structured-log surface. Live snapshot wiring remains an OPTIONAL extension under Draft v1 §§13.3–13.4. |
 
 This matrix is intentionally fail-closed. `Partial` is not conformance. Official fixture parity and
 the pinned compiler matrix must be green before the implementation may claim full conformance.
 
-## Section 17 deterministic-profile gaps
+## Remaining validation and hardening gaps
 
-The following required evidence is not yet complete and prevents a conformance claim:
+The pinned Draft v1 core profile does not require a status snapshot or process-group cancellation:
+§§13.3–13.4 make snapshots and human-readable status optional, while §§10.1, 17.5, and 18.1
+require the app-server launch/stop behavior without prescribing descendant-process groups.
 
-- process-tree/group cancellation;
-- compiler-matrix, sanitizer, restart, reconciliation, and differential reflection evidence
-  required by the implementation plan.
+The following implementation-plan evidence is still required before this repository claims the
+planned validation profile:
+
+- a green exact-SHA compiler matrix covering GCC 16.1, sanitizers, and clang-p2996 differential
+  reflection;
+- explicit restart and reconciliation evidence from the covered deterministic fixtures.
+
+Process-tree/group cancellation remains a separately tracked hardening extension. Boost.Process
+1.91 v2 exposes no maintained process-group abstraction, so the repository will not add an
+unreviewed POSIX-only lifecycle layer or mix in the deprecated v1 group API.

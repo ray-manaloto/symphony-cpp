@@ -73,6 +73,7 @@ struct AdapterProfile {
     const PageFetcher& fetch_page,
     std::size_t max_pages = 1000);
 [[nodiscard]] std::optional<AdapterProfile> adapter_profile(std::string_view kind);
+[[nodiscard]] std::vector<std::string> all_tracker_secret_environment_names();
 [[nodiscard]] TrackerError map_http_error(int status_code);
 
 class IssueTracker {

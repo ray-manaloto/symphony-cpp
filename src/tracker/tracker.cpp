@@ -1,6 +1,7 @@
 #include "symphony/tracker/tracker.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <set>
 
@@ -22,6 +23,23 @@ std::string trimmed(const std::string_view value) {
   const auto last = value.find_last_not_of(" \t\r\n");
   if (first == std::string_view::npos) return {};
   return std::string{value.substr(first, last - first + 1)};
+}
+
+const std::array<AdapterProfile, 2>& adapter_profiles() {
+  static const std::array profiles{
+      AdapterProfile{
+          "linear",
+          {"Todo", "In Progress"},
+          {"Done", "Cancelled"},
+          {"project_slug"},
+          {"LINEAR_API_KEY"}},
+      AdapterProfile{
+          "github",
+          {"open"},
+          {"closed"},
+          {"owner", "repository"},
+          {"GITHUB_TOKEN"}}};
+  return profiles;
 }
 }  // namespace
 
@@ -100,23 +118,24 @@ IssueListResult collect_issue_pages(
 
 std::optional<AdapterProfile> adapter_profile(const std::string_view kind) {
   const auto canonical = normalized(kind);
-  if (canonical == "linear") {
-    return AdapterProfile{
-        "linear",
-        {"Todo", "In Progress"},
-        {"Done", "Cancelled"},
-        {"project_slug"},
-        {"LINEAR_API_KEY"}};
+  const auto found = std::ranges::find(
+      adapter_profiles(), canonical, &AdapterProfile::kind);
+  if (found == adapter_profiles().end()) {
+    return std::nullopt;
   }
-  if (canonical == "github") {
-    return AdapterProfile{
-        "github",
-        {"open"},
-        {"closed"},
-        {"owner", "repository"},
-        {"GITHUB_TOKEN"}};
+  return *found;
+}
+
+std::vector<std::string> all_tracker_secret_environment_names() {
+  std::vector<std::string> names;
+  for (const auto& profile : adapter_profiles()) {
+    for (const auto& name : profile.secret_environment_names) {
+      if (std::ranges::find(names, name) == names.end()) {
+        names.push_back(name);
+      }
+    }
   }
-  return std::nullopt;
+  return names;
 }
 
 TrackerError map_http_error(const int status_code) {

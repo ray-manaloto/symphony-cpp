@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <utility>
@@ -108,6 +109,12 @@ static ut::suite tracker_tests = [] {
     ut::expect(github.has_value());
     ut::expect(github->active_states == std::vector<std::string>({"open"}));
     ut::expect(github->terminal_states == std::vector<std::string>({"closed"}));
+    const auto secret_names =
+        symphony::tracker::all_tracker_secret_environment_names();
+    ut::expect(std::ranges::find(secret_names, "LINEAR_API_KEY") !=
+               secret_names.end());
+    ut::expect(std::ranges::find(secret_names, "GITHUB_TOKEN") !=
+               secret_names.end());
 
     const auto authentication = symphony::tracker::map_http_error(401);
     const auto throttled = symphony::tracker::map_http_error(429);

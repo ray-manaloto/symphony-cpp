@@ -79,7 +79,8 @@ int main(int argc, char** argv) {
         workflow.config.codex.read_timeout,
         workflow.config.codex.stall_timeout,
         workflow.config.codex.turn_timeout,
-        codex_policy(workflow.config));
+        codex_policy(workflow.config),
+        symphony::tracker::all_tracker_secret_environment_names());
     symphony::observability::SpdlogEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);

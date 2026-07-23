@@ -1,5 +1,6 @@
 #include "symphony/codex/codex.hpp"
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <stdexcept>
@@ -7,6 +8,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/filesystem/path.hpp>
+#include <boost/process/v2/environment.hpp>
 #include <boost/process/v2/process.hpp>
 #include <boost/process/v2/start_dir.hpp>
 #include <boost/process/v2/stdio.hpp>
@@ -153,6 +155,24 @@ void merge_rate_limits(RateLimits& current, const RateLimits& update) {
 }
 
 namespace {
+std::vector<std::string> child_process_environment(
+    const std::vector<std::string>& excluded_names) {
+  for (const auto& name : excluded_names) {
+    if (name.empty() || name.find('=') != std::string::npos) {
+      throw std::invalid_argument("invalid excluded environment variable");
+    }
+  }
+
+  std::vector<std::string> result;
+  for (const auto entry : boost::process::v2::environment::current()) {
+    const auto key = entry.key().string();
+    if (std::ranges::find(excluded_names, key) == excluded_names.end()) {
+      result.push_back(entry.string());
+    }
+  }
+  return result;
+}
+
 AppServerPolicy normalized_policy(AppServerPolicy policy) {
   if (policy.turn_sandbox_policy_json) {
     policy.turn_sandbox_policy_json = JsonLineCodec::parse(
@@ -177,7 +197,8 @@ class BoostProcessProtocolChannel final : public ProtocolChannel {
 public:
   BoostProcessProtocolChannel(
       const std::string& command,
-      const std::filesystem::path& cwd)
+      const std::filesystem::path& cwd,
+      const std::vector<std::string>& environment)
       : input_(context_),
         output_(context_),
         error_(context_),
@@ -187,7 +208,8 @@ public:
             {"-lc", command},
             boost::process::v2::process_start_dir(
                 boost::filesystem::path(cwd.string())),
-            boost::process::v2::process_stdio{input_, output_, error_}) {
+            boost::process::v2::process_stdio{input_, output_, error_},
+            boost::process::v2::process_environment{environment}) {
     read_standard_error();
   }
 
@@ -396,12 +418,15 @@ CodexAppServerRuntime::CodexAppServerRuntime(
     const std::chrono::milliseconds read_timeout,
     const std::chrono::milliseconds stall_timeout,
     const std::chrono::milliseconds turn_timeout,
-    AppServerPolicy policy)
+    AppServerPolicy policy,
+    std::vector<std::string> excluded_environment_variables)
     : command_(std::move(command)),
       read_timeout_(read_timeout),
       stall_timeout_(stall_timeout),
       turn_timeout_(turn_timeout),
-      policy_(normalized_policy(std::move(policy))) {
+      policy_(normalized_policy(std::move(policy))),
+      child_environment_(
+          child_process_environment(excluded_environment_variables)) {
   if (command_.empty())
     throw std::invalid_argument("Codex command must not be empty");
   if (read_timeout_ <= std::chrono::milliseconds::zero()) {
@@ -428,6 +453,7 @@ RunResult CodexAppServerRuntime::run(
   std::chrono::milliseconds stall_timeout;
   std::chrono::milliseconds turn_timeout;
   AppServerPolicy policy;
+  std::vector<std::string> environment;
   {
     const std::scoped_lock lock(config_mutex_);
     command = command_;
@@ -435,12 +461,14 @@ RunResult CodexAppServerRuntime::run(
     stall_timeout = stall_timeout_;
     turn_timeout = turn_timeout_;
     policy = policy_;
+    environment = child_environment_;
   }
   if (request.model) policy.model = request.model;
   if (request.reasoning_effort) {
     policy.reasoning_effort = request.reasoning_effort;
   }
-  BoostProcessProtocolChannel channel(command, request.workspace.path);
+  BoostProcessProtocolChannel channel(
+      command, request.workspace.path, environment);
   auto result = AppServerConversation::run(
       channel,
       request,

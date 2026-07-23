@@ -58,8 +58,12 @@ stdin/stdout/stderr transport, EOF, exit requests, termination, wait, and reap. 
 protocol sequencing, deadline policy, and the diagnostic retention limit remain product-specific.
 Stderr is drained concurrently so it cannot block the child; only its final 4 KiB plus total-byte
 and truncation metadata survive the process boundary. The scheduler emits that tail through the
-structured event-store redaction boundary. Process-tree cancellation remains an explicit
-conformance gap rather than a reason to reintroduce direct POSIX lifecycle ownership.
+structured event-store redaction boundary. Process-tree cancellation remains an owner-gated
+hardening extension rather than a reason to reintroduce direct POSIX lifecycle ownership.
+Before concurrent workers start, the runtime snapshots the host environment and removes every
+secret key published by registered tracker adapter profiles. Boost.Process v2 supplies the filtered
+child environment; non-secret Codex runtime variables remain available without copying provider
+secret-name policy into the process adapter.
 
 The current unattended Codex interaction posture is fail-closed: approval requests and user-input
 requests end the run immediately, so neither can wait indefinitely for an absent operator. Because

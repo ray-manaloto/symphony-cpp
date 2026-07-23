@@ -1,5 +1,6 @@
 #include "symphony/codex/codex.hpp"
 
+#include <cstdlib>
 #include <filesystem>
 #include <glaze/json/generic.hpp>
 #include <ut/ut.hpp>
@@ -492,6 +493,45 @@ static ut::suite codex_tests = [] {
     ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
     std::filesystem::remove_all(root);
   };
+
+  ut::test("Codex runtime excludes tracker secrets from the child environment") =
+      [] {
+        const auto root = std::filesystem::temp_directory_path() /
+                          "symphony-codex-environment-test";
+        std::filesystem::create_directories(root);
+        static_cast<void>(
+            ::setenv("SYMPHONY_FIXTURE_AGENT_CONTEXT", "visible", 1));
+        static_cast<void>(
+            ::setenv("SYMPHONY_FIXTURE_TRACKER_SECRET", "private", 1));
+        const std::string command =
+            "test \"${SYMPHONY_FIXTURE_AGENT_CONTEXT-}\" = visible; "
+            "test -z \"${SYMPHONY_FIXTURE_TRACKER_SECRET+x}\"; "
+            "printf '%s\\n' "
+            "'{\"id\":0,\"result\":{}}' "
+            "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
+            "'{\"method\":\"turn/"
+            "started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}' "
+            "'{\"method\":\"turn/"
+            "completed\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
+            "cat >/dev/null";
+        symphony::codex::CodexAppServerRuntime runtime(
+            command,
+            std::chrono::seconds{1},
+            std::chrono::seconds{1},
+            std::chrono::seconds{1},
+            {},
+            {"SYMPHONY_FIXTURE_TRACKER_SECRET"});
+        symphony::codex::RunRequest request;
+        request.workspace.path = std::filesystem::absolute(root);
+        request.prompt = "fixture";
+
+        const auto result = runtime.run(request);
+
+        static_cast<void>(::unsetenv("SYMPHONY_FIXTURE_TRACKER_SECRET"));
+        static_cast<void>(::unsetenv("SYMPHONY_FIXTURE_AGENT_CONTEXT"));
+        ut::expect(result.normal_exit);
+        std::filesystem::remove_all(root);
+      };
 
   ut::test("Codex runtime captures only a bounded stderr tail") = [] {
     const auto root = std::filesystem::temp_directory_path() /
