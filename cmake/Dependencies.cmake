@@ -1,3 +1,4 @@
+find_package(Boost 1.91 CONFIG REQUIRED COMPONENTS process)
 find_package(fmt CONFIG REQUIRED)
 find_package(glaze CONFIG REQUIRED)
 find_package(ut CONFIG REQUIRED)
