@@ -160,6 +160,7 @@ benchmark, or talk.
 | [CMake](https://cmake.org/cmake/help/latest/), [Ninja](https://ninja-build.org/manual.html), and [ccache](https://ccache.dev/manual/latest.html) | Primary | Active | Pinned build frontend, executor, and compiler-result cache |
 | [Dev Container specification](https://containers.dev/implementors/spec/) and [reference CLI](https://github.com/devcontainers/cli) | Primary | Active | Local and CI development-container lifecycle |
 | [Docker Build cache](https://docs.docker.com/build/cache/) | Primary | Active | Diagnose and improve compiler image cache behavior |
+| [GitHub CLI](https://cli.github.com/manual/) and [Actions schedules](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule) | Primary | Active | Guard, publish, and open reviewable dependency-update branches without force-push |
 | [LLVM `clang-format`](https://clang.llvm.org/docs/ClangFormat.html) | Primary | Evaluate | Commit a versioned style and enforce a non-mutating format check |
 | [LLVM `clang-tidy`](https://clang.llvm.org/extra/clang-tidy/) and [Clang Static Analyzer](https://clang-analyzer.llvm.org/) | Primary | Evaluate | Pinned analysis image, compile-database-driven bug, concurrency, portability, and guideline checks |
 | [Include What You Use](https://include-what-you-use.org/) | Primary | Evaluate | Scheduled non-mutating include hygiene with a compiler-compatible build |

@@ -1,0 +1,41 @@
+{
+  "schema-version": 1,
+  "dependencies": [
+    {
+      "port": "boost-sqlite",
+      "repository": "klemens-morgenstern/sqlite",
+      "branch": "master",
+      "lock-name": "klemens-morgenstern/sqlite"
+    },
+    {
+      "port": "ut",
+      "repository": "openalgz/ut",
+      "branch": "main",
+      "lock-name": "openalgz/ut"
+    },
+    {
+      "port": "intel-compile-time-init-build",
+      "repository": "intel/compile-time-init-build",
+      "branch": "main",
+      "lock-name": "Intel compile-time-init-build"
+    },
+    {
+      "port": "intel-cpp-baremetal-concurrency",
+      "repository": "intel/cpp-baremetal-concurrency",
+      "branch": "main",
+      "lock-name": "Intel cpp-baremetal-concurrency"
+    },
+    {
+      "port": "intel-cpp-baremetal-senders-and-receivers",
+      "repository": "intel/cpp-baremetal-senders-and-receivers",
+      "branch": "main",
+      "lock-name": "Intel cpp-baremetal-senders-and-receivers"
+    },
+    {
+      "port": "intel-cpp-std-extensions",
+      "repository": "intel/cpp-std-extensions",
+      "branch": "main",
+      "lock-name": "Intel cpp-std-extensions"
+    }
+  ]
+}

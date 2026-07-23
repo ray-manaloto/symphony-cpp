@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -53,6 +54,16 @@ for (const path of cmakeInputs) {
       failed = true;
     }
   }
+}
+
+try {
+  execFileSync(
+    process.execPath,
+    ["scripts/update-overlay-dependencies.mjs", "--check"],
+    { stdio: "inherit" },
+  );
+} catch {
+  failed = true;
 }
 
 if (failed) process.exit(1);

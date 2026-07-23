@@ -1,6 +1,6 @@
 {
   "name": "boost-sqlite",
-  "version-date": "2025-10-06",
+  "version-string": "git-6cf149d052dc30cd8715586284ffe398df55d2e9",
   "description": "Typed C++ access to SQLite with prepared statements and RAII transactions",
   "homepage": "https://github.com/klemens-morgenstern/sqlite",
   "license": "BSL-1.0",

@@ -1,0 +1,180 @@
+name: Overlay dependency updates
+
+on:
+  schedule:
+    - cron: "37 13 * * 3"
+  workflow_dispatch:
+    inputs:
+      create_pull_request:
+        description: Create a draft pull request after exact validation
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: overlay-dependency-updates
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Resolve, validate, and propose immutable overlay pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.build/cache/ccache
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_UPDATE: ${{ github.event_name == 'schedule' || inputs.create_pull_request }}
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/cache/vcpkg/archives
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Guard one open updater pull request
+        id: guard
+        run: |
+          if [[ "${PUBLISH_UPDATE}" != "true" ]]; then
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          open_count="$(
+            gh pr list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --state open \
+              --limit 100 \
+              --json headRefName \
+              --jq '[.[] | select(.headRefName | startswith("automation/overlay-dependencies-"))] | length'
+          )"
+          if [[ "${open_count}" = "0" ]]; then
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "An overlay dependency update pull request is already open."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Bootstrap pinned vcpkg registry
+        if: steps.guard.outputs.skip != 'true'
+        run: ./scripts/bootstrap-vcpkg.sh
+
+      - name: Resolve latest immutable overlay pins
+        if: steps.guard.outputs.skip != 'true'
+        run: node scripts/update-overlay-dependencies.mjs --update
+
+      - name: Detect changed pins
+        if: steps.guard.outputs.skip != 'true'
+        id: changes
+        run: |
+          if git diff --quiet -- docs/upstream-lock.md vcpkg-ports; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            patch_sha="$(
+              git diff --binary -- docs/upstream-lock.md vcpkg-ports |
+                sha256sum |
+                awk '{print $1}'
+            )"
+            echo "patch_sha=${patch_sha}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Restore pinned vcpkg binary cache
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: overlay-vcpkg-gcc16-v1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**', 'scripts/bootstrap-vcpkg.sh') }}
+          restore-keys: overlay-vcpkg-gcc16-v1-
+
+      - name: Restore GCC compiler cache
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: overlay-ccache-gcc16-v1-${{ hashFiles('vcpkg-ports/**') }}
+          restore-keys: overlay-ccache-gcc16-v1-
+
+      - name: Validate generated patch on exact GCC 16.1
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
+          docker run --rm \
+            --env CCACHE_DIR=/workspace/.build/cache/ccache \
+            --env VCPKG_DEFAULT_BINARY_CACHE=/workspace/.build/cache/vcpkg/archives \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --volume "${GITHUB_WORKSPACE}/.git:/workspace/.git:ro" \
+            --workdir /workspace \
+            gcc:16.1@sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb \
+            bash -lc '
+              apt-get update
+              apt-get install --yes --no-install-recommends ca-certificates ccache curl git ninja-build nodejs tar unzip zip zstd
+              rm -rf /var/lib/apt/lists/*
+              ./scripts/install-cmake.sh
+              mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
+              ccache --max-size=750M
+              ccache --zero-stats
+              node scripts/check-dependency-policy.mjs
+              ./scripts/bootstrap-vcpkg.sh
+              cmake --workflow --preset gcc-debug
+              cmake --workflow --preset gcc-sanitizers
+              cmake --workflow --preset gcc-tsan
+              ccache --show-stats
+            '
+
+      - name: Verify validation preserved the generated patch
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          EXPECTED_PATCH_SHA: ${{ steps.changes.outputs.patch_sha }}
+        run: |
+          actual_patch_sha="$(
+            git diff --binary -- docs/upstream-lock.md vcpkg-ports |
+              sha256sum |
+              awk '{print $1}'
+          )"
+          test "${actual_patch_sha}" = "${EXPECTED_PATCH_SHA}"
+          unexpected_paths="$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } |
+              sort --unique |
+              awk '$0 != "docs/upstream-lock.md" && $0 !~ /^vcpkg-ports\//'
+          )"
+          if [[ -n "${unexpected_paths}" ]]; then
+            echo "Validation changed files outside the generated dependency patch:" >&2
+            echo "${unexpected_paths}" >&2
+            exit 1
+          fi
+
+      - name: Create fast-forward update commit
+        if: steps.changes.outputs.changed == 'true' && env.PUBLISH_UPDATE == 'true'
+        id: commit
+        run: |
+          branch="automation/overlay-dependencies-${GITHUB_RUN_ID}"
+          git switch --create "${branch}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/upstream-lock.md vcpkg-ports
+          git commit -m "Update immutable overlay dependency pins"
+          reviewed_head="$(git rev-parse HEAD)"
+          reviewed_base="$(git rev-parse HEAD^)"
+          node scripts/check-adaptive-orchestration.mjs \
+            --publication-scan "${reviewed_base}" "${reviewed_head}"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: Open reviewable draft pull request
+        if: steps.commit.outputs.branch
+        run: |
+          gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "${{ steps.commit.outputs.branch }}" \
+            --draft \
+            --title "Update immutable overlay dependency pins" \
+            --body "Automated latest-commit overlay update. Exact GCC 16.1 Debug, ASan/UBSan, and TSan validation passed before this ordinary non-force push. Review upstream changes and run the clang-p2996 differential matrix before merging."

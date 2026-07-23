@@ -43,6 +43,18 @@ validates both devcontainer images; publication to GHCR is an explicit workflow 
 preseeds the vcpkg binary archive, while lifecycle setup bootstraps the same repository-local pinned
 vcpkg checkout in the mounted workspace. See [docs/upstream-lock.md](docs/upstream-lock.md).
 
+Verify that every overlay port uses an immutable commit, SHA-512, synchronized manifest version,
+and matching upstream lock row:
+
+```sh
+node scripts/update-overlay-dependencies.mjs --check
+```
+
+The weekly/manual overlay updater resolves only the repositories and branches allowlisted in
+`config/overlay-dependencies.json`. It stops when a port appears in the pinned curated registry,
+validates a changed graph through the full GCC 16.1 Source CI workflows, and may create one draft
+pull request using an ordinary non-force push. Manual workflow runs default to validation-only.
+
 Generate an inspectable C++ model/client surface from the pinned official OpenAI OpenAPI 3.1 schema
 with `./scripts/generate-openai-api.sh`. Output is disposable under
 `.build/generated/openai-api`; GitHub Actions also publishes it as a short-lived build artifact.

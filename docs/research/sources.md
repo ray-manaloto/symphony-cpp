@@ -24,6 +24,8 @@ The agent model and effort recommendation additionally uses the current
 - [x] [PicoSHA2](https://github.com/okdshin/PicoSHA2) `v1.0.1` for the Draft v1 stable workspace-key hash suffix
 - [x] [`openalgz/ut`](https://github.com/openalgz/ut), selected unit and compile-time test library
 - [x] [vcpkg manifest mode and versioning](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode), selected dependency manager
+- [x] [vcpkg `vcpkg_from_github`](https://learn.microsoft.com/en-us/vcpkg/maintainers/functions/vcpkg_from_github), immutable overlay `REF` and SHA-512 authority
+- [x] [GitHub Actions workflows](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows), [`GITHUB_TOKEN`](https://docs.github.com/en/actions/concepts/security/github_token), and the [GitHub CLI](https://cli.github.com/manual/), scheduled reviewed overlay-update mechanism
 - [x] [`reflect-cpp`](https://github.com/getml/reflect-cpp) and [`sqlgen`](https://github.com/getml/sqlgen), persistence/reflection comparisons
 - [x] [`klemens-morgenstern/sqlite`](https://github.com/klemens-morgenstern/sqlite), selected synchronous SQLite adapter behind the persistence executor
 - [x] [`fmt`](https://github.com/fmtlib/fmt), [`scnlib`](https://github.com/eliaskosunen/scnlib), and [Boost.Decimal](https://github.com/boostorg/decimal)

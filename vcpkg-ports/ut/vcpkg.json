@@ -1,6 +1,6 @@
 {
   "name": "ut",
-  "version-semver": "1.2.0",
+  "version-string": "git-fc3f5a9c36dfc56bd2cb0eab07733005e5af7b74",
   "description": "Runtime and compile-time C++ unit testing",
   "homepage": "https://github.com/openalgz/ut",
   "license": "MIT",
