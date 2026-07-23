@@ -49,7 +49,10 @@ jobs:
           cache-from: type=gha,scope=symphony-gcc16
           cache-to: type=gha,mode=max,scope=symphony-gcc16
       - name: Tag local GCC devcontainer image
-        run: docker tag symphony-dev:ci ghcr.io/ray-manaloto/symphony-dev:edge
+        run: |
+          test "$(docker image inspect symphony-dev:ci --format '{{len .Config.Entrypoint}}')" = "0"
+          docker run --rm symphony-dev:ci bash -lc 'test "$(g++ -dumpfullversion)" = "16.1.0"'
+          docker tag symphony-dev:ci ghcr.io/ray-manaloto/symphony-dev:edge
       - name: GCC reflection suite
         uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
         with:
@@ -101,7 +104,10 @@ jobs:
           cache-from: type=gha,scope=symphony-clang-p2996
           cache-to: type=gha,mode=max,scope=symphony-clang-p2996
       - name: Tag local Clang devcontainer image
-        run: docker tag symphony-ci-clang:ci ghcr.io/ray-manaloto/symphony-ci-clang:edge
+        run: |
+          test "$(docker image inspect symphony-ci-clang:ci --format '{{len .Config.Entrypoint}}')" = "0"
+          docker run --rm symphony-ci-clang:ci bash -lc 'test -x /opt/clang-p2996/bin/clang++'
+          docker tag symphony-ci-clang:ci ghcr.io/ray-manaloto/symphony-ci-clang:edge
       - name: Clang differential reflection suite
         uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
         with:

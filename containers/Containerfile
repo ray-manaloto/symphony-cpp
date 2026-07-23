@@ -66,6 +66,7 @@ COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
  && .build/vcpkg/vcpkg install --clean-after-build
 WORKDIR /workspaces/symphony-cpp
+ENTRYPOINT []
 CMD ["sleep", "infinity"]
 
 FROM compiler-build-base AS symphony-ci-clang
@@ -80,4 +81,5 @@ RUN ./scripts/bootstrap-vcpkg.sh \
  && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
       --overlay-triplets vcpkg-triplets --clean-after-build
 WORKDIR /workspaces/symphony-cpp
+ENTRYPOINT []
 CMD ["sleep", "infinity"]
