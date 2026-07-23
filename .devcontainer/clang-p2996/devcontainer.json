@@ -1,0 +1,28 @@
+{
+  "name": "Symphony C++26 — clang-p2996 differential",
+  "image": "ghcr.io/ray-manaloto/symphony-ci-clang:edge",
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/symphony-cpp",
+  "runArgs": [
+    "--platform=linux/amd64"
+  ],
+  "containerEnv": {
+    "CC": "/opt/clang-p2996/bin/clang",
+    "CXX": "/opt/clang-p2996/bin/clang++",
+    "CCACHE_DIR": "/root/.cache/ccache"
+  },
+  "mounts": [
+    "source=symphony-cpp-clang-p2996-ccache,target=/root/.cache/ccache,type=volume",
+    "source=symphony-cpp-vcpkg-archives,target=/root/.cache/vcpkg/archives,type=volume"
+  ],
+  "postCreateCommand": "./scripts/devcontainer-setup.sh clang-p2996",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools"
+      ]
+    }
+  }
+}

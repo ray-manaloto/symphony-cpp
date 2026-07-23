@@ -28,6 +28,7 @@ The agent model and effort recommendation additionally uses the current
 - [x] [Intel bare-metal concurrency](https://github.com/intel/cpp-baremetal-concurrency), [senders/receivers](https://github.com/intel/cpp-baremetal-senders-and-receivers), [compile-time init/build](https://github.com/intel/compile-time-init-build), and [standard extensions](https://github.com/intel/cpp-std-extensions)
 - [x] [`mirror_bridge`](https://github.com/FranciscoThiesen/mirror_bridge), [`imrefl`](https://github.com/fullptr/imrefl), and [`splice`](https://github.com/FloofyPlasma/splice), reflection references only
 - [x] [NVIDIA `stdexec`](https://github.com/NVIDIA/stdexec), current reference implementation for C++26 `std::execution`
+- [x] [Development Containers specification](https://github.com/devcontainers/spec), [reference CLI](https://github.com/devcontainers/cli), and [CI action](https://github.com/devcontainers/ci)
 - [x] [LLVM clang-tidy](https://clang.llvm.org/extra/clang-tidy/) and [Include-What-You-Use](https://include-what-you-use.org/)
 - [x] [r/cpp](https://www.reddit.com/r/cpp/), practitioner discovery only; consequential claims require primary-source verification
 - [ ] [Cpplang Slack](https://cpplang.slack.com/), monitoring deferred until the owner explicitly authorizes plugin installation and workspace access

@@ -15,6 +15,7 @@ Accessed 2026-07-22.
 | Boost.Process | `1.91.0` from pinned vcpkg baseline; source archive SHA-512 `5e7199970509baa84199899f5f47d2114a9f44a4ecd9dc91ed55590fc4ec79ee7ef56b70e79e1a2b44da7e2e47d6a4fb55dcd2e3776f4fd2b279b91b8413ad02` | Process v2 compatibility gate and planned child-process lifecycle owner |
 | CLI11 | `2.6.2` from pinned vcpkg baseline; source archive SHA-512 `3b17c02e120d6c14246157fcfef1e55c34462d8ee3adb55e49f4b180fc2e0d52ec4371505c009839c623ccc5bf4ac16c8c94707d10b1f1cb0e916c3402d2e7a6` | Command-line argument parsing, help, diagnostics, and parse exit codes |
 | NVIDIA stdexec | vcpkg version `2026-05-25`, upstream commit `fee4d651494014610a277540f209cae56011e47f`, source SHA-512 `8b7cbd5e8254e54e374cb06cb031935cdbc9a2a466d4cb612cf2981ea0fc4d4228a8736cdbe95835e027b8d6eb071efc2aff4b09e791ed08d14e5af227105b7c` | GCC 16.1 sender/receiver compatibility gate and candidate worker execution provider |
+| devcontainers/ci | release `v0.3.1900000449`, commit `b63b30de439b47a52267f241112c5b453b673db5` | Official Dev Container lifecycle validation and in-container test execution |
 | openai/openai-openapi | `f9400172ebe08522ab228b771d885e3bd5456e42`; `openapi.yaml` SHA-256 `0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7` | OpenAI REST API reference schema |
 | OpenAPI Generator | `v7.24.0`; image digest `sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88` | Disposable C++ Boost.Beast reference generation |
 

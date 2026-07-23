@@ -1,0 +1,28 @@
+{
+  "name": "Symphony C++26 — GCC 16.1",
+  "image": "ghcr.io/ray-manaloto/symphony-dev:edge",
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/symphony-cpp",
+  "runArgs": [
+    "--platform=linux/amd64"
+  ],
+  "containerEnv": {
+    "CC": "/opt/gcc-16.1/bin/gcc",
+    "CXX": "/opt/gcc-16.1/bin/g++",
+    "CCACHE_DIR": "/root/.cache/ccache"
+  },
+  "mounts": [
+    "source=symphony-cpp-gcc16-ccache,target=/root/.cache/ccache,type=volume",
+    "source=symphony-cpp-vcpkg-archives,target=/root/.cache/vcpkg/archives,type=volume"
+  ],
+  "postCreateCommand": "./scripts/devcontainer-setup.sh gcc",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools"
+      ]
+    }
+  }
+}

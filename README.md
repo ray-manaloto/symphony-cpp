@@ -14,18 +14,28 @@ instead of building commodity capability from scratch. Read the
 
 ## Build
 
+Day-to-day development runs inside the pinned GCC 16.1 devcontainer:
+
 ```sh
-docker buildx build --platform linux/amd64 --target symphony-dev -f containers/Containerfile .
-./scripts/bootstrap-vcpkg.sh
-cmake --preset gcc-debug
-cmake --build --preset gcc-debug
-ctest --preset gcc-debug
+./scripts/devcontainer-build.sh gcc
 ```
 
+Run the differential reflection suite in the separate Bloomberg clang-p2996 devcontainer:
+
+```sh
+./scripts/devcontainer-build.sh clang-p2996
+```
+
+The official Dev Container CLI starts or reuses the container, applies its lifecycle setup, and
+runs configure, build, and CTest inside it. The bind-mounted repository retains `build/` and
+`.build/vcpkg`; named Docker volumes retain compiler-specific ccache data and shared vcpkg binary
+archives. Do not configure or compile this project directly on the macOS host.
+
 The compiler images are deliberately expensive source builds. Their source hashes, signatures, base
-image digest, fork commit, and vcpkg registry baseline are pinned in source. The container already
-contains the manifest dependencies; source builds bootstrap the same repository-local vcpkg checkout.
-See [docs/upstream-lock.md](docs/upstream-lock.md).
+image digest, fork commit, and vcpkg registry baseline are pinned in source. GitHub builds and
+validates both devcontainer images; publication to GHCR is an explicit workflow input. Each image
+preseeds the vcpkg binary archive, while lifecycle setup bootstraps the same repository-local pinned
+vcpkg checkout in the mounted workspace. See [docs/upstream-lock.md](docs/upstream-lock.md).
 
 Generate an inspectable C++ model/client surface from the pinned official OpenAI OpenAPI 3.1 schema
 with `./scripts/generate-openai-api.sh`. Output is disposable under
@@ -44,9 +54,9 @@ symphonyd ./WORKFLOW.md --once
 `--workflow ./WORKFLOW.md` spelling remains a compatibility alias; supplying both forms is an
 error.
 
-CI publishes only tested compiler images to this repository's GHCR namespace. It does not publish a
-service deployment, install privileged VM components, mutate a live tracker, or use production
-credentials.
+When explicitly requested, CI publishes only tested devcontainer images to this repository's GHCR
+namespace. It does not publish a service deployment, install privileged VM components, mutate a live
+tracker, or use production credentials.
 
 The pinned external OpenSymphony development orchestrator is documented under
 [`ops/opensymphony`](ops/opensymphony/README.md). It runs behind a container boundary and remains

@@ -48,8 +48,18 @@ jobs:
           tags: symphony-dev:ci
           cache-from: type=gha,scope=symphony-gcc16
           cache-to: type=gha,mode=max,scope=symphony-gcc16
+      - name: Tag local GCC devcontainer image
+        run: docker tag symphony-dev:ci ghcr.io/ray-manaloto/symphony-dev:edge
       - name: GCC reflection suite
-        run: docker run --rm symphony-dev:ci bash -c 'cmake --preset gcc-debug && cmake --build --preset gcc-debug && ctest --preset gcc-debug'
+        uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
+        with:
+          configFile: .devcontainer/devcontainer.json
+          push: never
+          runCmd: >-
+            test "$(g++ -dumpfullversion)" = "16.1.0"
+            && cmake --preset gcc-debug
+            && cmake --build --preset gcc-debug
+            && ctest --preset gcc-debug
       - name: Publish tested GCC development image
         if: ${{ inputs.publish_images }}
         run: |
@@ -90,8 +100,18 @@ jobs:
           tags: symphony-ci-clang:ci
           cache-from: type=gha,scope=symphony-clang-p2996
           cache-to: type=gha,mode=max,scope=symphony-clang-p2996
+      - name: Tag local Clang devcontainer image
+        run: docker tag symphony-ci-clang:ci ghcr.io/ray-manaloto/symphony-ci-clang:edge
       - name: Clang differential reflection suite
-        run: docker run --rm symphony-ci-clang:ci bash -c 'cmake --preset clang-reflection && cmake --build --preset clang-reflection && ctest --preset clang-reflection'
+        uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
+        with:
+          configFile: .devcontainer/clang-p2996/devcontainer.json
+          push: never
+          runCmd: >-
+            test -x /opt/clang-p2996/bin/clang++
+            && cmake --preset clang-reflection
+            && cmake --build --preset clang-reflection
+            && ctest --preset clang-reflection
       - name: Publish tested Clang differential image
         if: ${{ inputs.publish_images }}
         run: |

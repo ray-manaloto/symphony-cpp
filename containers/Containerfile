@@ -60,20 +60,24 @@ COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
 ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/gcc-16.1/bin/gcc \
     CXX=/opt/gcc-16.1/bin/g++
-WORKDIR /workspace/symphony-cpp
+LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
+WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
  && .build/vcpkg/vcpkg install --clean-after-build
-CMD ["bash"]
+WORKDIR /workspaces/symphony-cpp
+CMD ["sleep", "infinity"]
 
 FROM compiler-build-base AS symphony-ci-clang
 COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996
 ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CC=/opt/clang-p2996/bin/clang \
     CXX=/opt/clang-p2996/bin/clang++
-WORKDIR /workspace/symphony-cpp
+LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
+WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
  && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
       --overlay-triplets vcpkg-triplets --clean-after-build
-CMD ["bash"]
+WORKDIR /workspaces/symphony-cpp
+CMD ["sleep", "infinity"]
