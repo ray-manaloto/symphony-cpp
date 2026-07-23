@@ -111,9 +111,9 @@ static ut::suite tracker_tests = [] {
     ut::expect(github->terminal_states == std::vector<std::string>({"closed"}));
     const auto secret_names =
         symphony::tracker::all_tracker_secret_environment_names();
-    ut::expect(std::ranges::find(secret_names, "LINEAR_API_KEY") !=
+    ut::expect(std::ranges::find(secret_names, std::string{"LINEAR_API_KEY"}) !=
                secret_names.end());
-    ut::expect(std::ranges::find(secret_names, "GITHUB_TOKEN") !=
+    ut::expect(std::ranges::find(secret_names, std::string{"GITHUB_TOKEN"}) !=
                secret_names.end());
 
     const auto authentication = symphony::tracker::map_http_error(401);
