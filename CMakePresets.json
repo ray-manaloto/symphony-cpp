@@ -56,7 +56,11 @@
     { "name": "gcc-release", "configurePreset": "gcc-release" },
     { "name": "gcc-sanitizers", "configurePreset": "gcc-sanitizers" },
     { "name": "gcc-tsan", "configurePreset": "gcc-tsan" },
-    { "name": "clang-reflection", "configurePreset": "clang-reflection" }
+    {
+      "name": "clang-reflection",
+      "configurePreset": "clang-reflection",
+      "targets": ["symphony_p2996_tests"]
+    }
   ],
   "testPresets": [
     { "name": "gcc-debug", "configurePreset": "gcc-debug", "output": { "outputOnFailure": true } },
@@ -77,6 +81,11 @@
       },
       "output": { "outputOnFailure": true }
     },
-    { "name": "clang-reflection", "configurePreset": "clang-reflection", "output": { "outputOnFailure": true } }
+    {
+      "name": "clang-reflection",
+      "configurePreset": "clang-reflection",
+      "filter": { "include": { "name": "symphony_p2996_tests" } },
+      "output": { "outputOnFailure": true }
+    }
   ]
 }

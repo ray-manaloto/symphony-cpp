@@ -48,3 +48,8 @@ add_executable(symphony_reflection_tests test_main.cpp reflection_tests.cpp)
 target_link_libraries(symphony_reflection_tests PRIVATE
   symphony_options symphony_reflection_options symphony_meta ut::ut)
 add_test(NAME symphony_reflection_tests COMMAND symphony_reflection_tests)
+
+add_executable(symphony_p2996_tests test_main.cpp p2996_tests.cpp)
+target_link_libraries(symphony_p2996_tests PRIVATE
+  symphony_options symphony_reflection_options ut::ut)
+add_test(NAME symphony_p2996_tests COMMAND symphony_p2996_tests)

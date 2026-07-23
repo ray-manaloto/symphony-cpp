@@ -14,9 +14,10 @@ The single scheduler object owns mutable run and retry state. Adapters return va
 do not mutate scheduler state. All clocks are injected. Workspace paths are derived beneath one
 canonical root and revalidated before hooks or cleanup.
 
-Reflection is isolated in `symphony_meta`. GCC 16.1 supplies the release semantics. The
-clang-p2996 job compiles the same reflected fixtures and records differences; it never creates a
-release artifact. Conventional headers avoid the fork's documented serialization limitations.
+Reflection is isolated in `symphony_meta`. GCC 16.1 supplies the release semantics and compiles the
+full Glaze codec/schema fixtures. The clang-p2996 job compiles the same raw P2996 field-enumeration
+shape through the dependency-free reflection adapter and records differences; it never creates a
+release artifact or treats the fork's unrelated Glaze fallback support as release semantics.
 
 ## Library decisions
 
