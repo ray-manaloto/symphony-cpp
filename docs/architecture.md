@@ -3,11 +3,17 @@
 Dependencies point inward: executables depend on services, services depend on abstract boundaries,
 and the domain has no I/O dependency.
 
-```text
-symphonyd / symphonyctl
-  -> scheduler + workflow + observability
-  -> tracker | workspace | codex runtime interfaces
-  -> domain + meta
+```mermaid
+flowchart TD
+  E["symphonyd / symphonyctl"] --> S["scheduler + workflow + observability"]
+  S --> T["tracker boundary"]
+  S --> W["workspace boundary"]
+  S --> C["Codex runtime boundary"]
+  S --> P["persistence boundary"]
+  T --> D["domain + symphony_meta"]
+  W --> D
+  C --> D
+  P --> D
 ```
 
 The single scheduler object owns mutable run and retry state. Adapters return values and events; they

@@ -39,6 +39,11 @@ Research preflight: both lanes were refreshed on 2026-07-22. The primary-source 
 `.build/research/last30days`; it was noisy and thin, so it did not override primary documentation.
 Consequential implementation claims were rechecked against owning repositories.
 
+The broader, maintainable discovery and engineering-tool inbox is
+[`cpp-ecosystem-catalog.md`](cpp-ecosystem-catalog.md). Entries there are not adopted dependencies;
+they carry authority and status labels so catalogs, blogs, talks, and social feeds cannot silently
+override primary evidence.
+
 The runtime comparison is in
 [`elixir-vs-rust-runtime-comparison.md`](elixir-vs-rust-runtime-comparison.md). Run the official
 Elixir implementation first as the pinned Draft v1 and Codex app-server behavioral oracle. Use

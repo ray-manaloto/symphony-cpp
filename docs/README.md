@@ -1,10 +1,12 @@
 # Documentation map
 
 - [Architecture](architecture.md)
+- [Engineering system: learning, parallel work, context, quality, and docs](engineering-system.md)
 - [Cross-project coordination](cross-project-coordination.md)
 - [Dependency-first convention](conventions/dependency-first.md)
 - [Dependency decision ledger](dependency-decisions.md)
 - [Normative and comparative sources](research/sources.md)
+- [C++ ecosystem and engineering source catalog](research/cpp-ecosystem-catalog.md)
 - [C++26 library-stack evaluation](research/cpp-library-evaluation.md)
 - [Agent model, effort, and specialization policy](research/agent-model-policy.md)
 - [Elixir reference versus Rust OpenSymphony runtime comparison](research/elixir-vs-rust-runtime-comparison.md)

@@ -69,6 +69,13 @@ then expand only after measured throughput and defect-recall evidence.
 - Record model, effort, context window, input/output/cached tokens, compactions, and terminal reason
   without logging prompts, issue content, credentials, or hidden reasoning.
 
+Use the repository-wide checkpoint and recurrence policy in
+[`../engineering-system.md`](../engineering-system.md). In particular, checkpoint at 50% reported
+context use, prepare a fresh-session handoff at 60%, and make the configured 70% rollover
+mandatory. A second occurrence of one normalized failure family must promote a deterministic guard;
+a third stops automatic retries and requires Human Review. Forking and compaction never reset those
+counters.
+
 ## Primary evidence
 
 - [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) recommends

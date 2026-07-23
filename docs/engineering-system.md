@@ -1,0 +1,247 @@
+# Engineering system
+
+This page defines how Symphony turns implementation failures into durable guards, partitions agent
+work, manages context, and evolves coding/documentation gates. It is operational guidance, not part
+of OpenAI Symphony Draft v1.
+
+## Current posture
+
+- GCC 16.1 defines executable semantics; Bloomberg clang-p2996 is reflection-differential only.
+- `WORKFLOW.md` deliberately keeps OpenSymphony at one concurrent worker until parallel write lanes
+  are fixture-proven.
+- Native collaboration may use parallel read-only research, triage, or review lanes. The root
+  integration agent is the only writer unless isolated worktrees and file claims are explicit.
+- One exact GitHub Actions run has one watcher. Quiet or stale partial logs never justify a
+  duplicate run.
+- Four turns bound one worker session. Reported context utilization triggers earlier checkpoints
+  and rollover; compaction never resets no-progress evidence.
+
+## Closed learning loop
+
+```mermaid
+flowchart LR
+  O["Observe abnormal result"] --> C["Classify failure family"]
+  C --> F["Smallest fixture or exact preflight"]
+  F --> X["Correct one contract"]
+  X --> V["Verify narrow gate, then matrix"]
+  V --> P{"Recurrence?"}
+  P -->|"first"| L["Record evidence and guard"]
+  P -->|"second in 30 days"| G["Promote deterministic guard"]
+  P -->|"third"| H["Stop retries; Human Review"]
+  L --> O
+  G --> O
+```
+
+A result is learned only when the implementation log links to an executable guard, fixture,
+preflight, or an explicit reason that human review is the only enforceable mechanism.
+
+Record:
+
+- normalized failure signature and family;
+- exact repository commit, command/workflow/job/target, toolchain, and environment;
+- progress fingerprint and recurrence count;
+- bounded redacted diagnostic;
+- deterministic, intermittent, external, or authority-blocked classification;
+- correction, focused evidence, full-matrix evidence, and guard link;
+- model, effort, turn, reported token/window telemetry, compaction count, and terminal reason;
+- owner and deletion/re-evaluation trigger for any promoted guard.
+
+Failure families are dependency/provider selection, build graph/include propagation,
+compiler/toolchain compatibility, devcontainer lifecycle, cache/cold start, asynchronous ordering,
+duplicate job/resource ownership, agent context/no-progress, authority/governance, and product
+behavior.
+
+Promotion policy:
+
+1. First occurrence: preserve the failed evidence, correct the smallest contract, and record the
+   regression guard.
+2. Second occurrence in the same family within 30 days: strengthen a deterministic check, script,
+   fixture, skill, or mandatory checklist and name its owner.
+3. Third occurrence: disable automatic retry for that family, route to Human Review, and require a
+   policy or architecture correction before resuming.
+
+Every promoted guard needs a deletion trigger so stale ceremony does not accumulate.
+
+## Small-task contract
+
+A normal lane owns one externally observable behavior or infrastructure invariant, one failing
+fixture/reproduction, one provider or seam, and one focused validation command. It should reach a
+coherent checkpoint within the four-turn session.
+
+Split work when it:
+
+- crosses more than one subsystem boundary;
+- mixes unresolved dependency selection with production integration;
+- mixes compiler-image work with product behavior;
+- requires several writers to the same shared file;
+- needs more than one expensive compiler matrix;
+- cannot express success as one changed progress fingerprint.
+
+Preferred sequence:
+
+```text
+provider gate -> thin adapter -> product wiring -> adversarial fixture -> integrated matrix
+```
+
+## Parallel-agent contract
+
+```mermaid
+flowchart TD
+  C["Deterministic controller / integration owner"]
+  C --> I["Implementer: isolated worktree + file claim"]
+  C --> R["Research: read-only sourced evidence"]
+  C --> T["Triage: reproduction and diagnostics"]
+  C --> V["Reviewer: read-only findings"]
+  C --> M["CI monitor: one exact run"]
+  I --> H["Checkpoint commit + tests + released claims"]
+  R --> H
+  T --> H
+  V --> H
+  M --> H
+  H --> C
+```
+
+| Lane | Authority | Writable scope | Required handoff |
+| --- | --- | --- | --- |
+| Controller/integration | dispatch, leases, tracker state, job deduplication, merge order | integration branch and orchestration records | final integrated SHA and evidence |
+| Implementer | one issue contract | one isolated worktree/branch and declared file allowlist | commit, tests, risks, next action |
+| Research/architecture | evidence and recommendation | read-only unless separately assigned a decision record | sources, alternatives, uncertainties |
+| Test/triage | reproduction and causality | preferably fixture-only | minimal reproduction and failure signature |
+| Reviewer | independent findings | read-only | prioritized file/line/evidence findings |
+| CI monitor | observe one exact run | none | run ID, SHA, step, bounded tail, terminal result |
+
+Interference rules:
+
+- one branch and worktree per writable lane;
+- one writer per file;
+- root CMake/vcpkg files, workflows, lockfiles, public shared headers, generated-fixture inputs,
+  architecture ledgers, and integration branches are serialized through the integration owner;
+- build directories, container names, and non-atomic local caches have one owner;
+- overlapping claims pause or repartition a lane;
+- no lane mutates another worktree, resolves another lane's conflicts, cancels another lane's job,
+  or expands its issue;
+- the independent reviewer reports findings and does not silently co-author;
+- lane-local green evidence does not replace final integrated checks.
+
+Start with one implementer plus one independent read-only specialist. Increase concurrency only
+after file claims, cancellation, completion drain, merge serialization, and shared-resource
+ownership have deterministic fixtures. Until then, keep OpenSymphony's
+`agent.max_concurrent_agents` at `1`.
+
+## Context, compaction, and model effort
+
+| Reported context use | Action |
+| --- | --- |
+| below 50% | normal bounded work |
+| 50% | checkpoint after the next coherent change; add no scope |
+| 60% | prepare durable handoff and finish only the active atomic slice |
+| 70% or configured rollover | start no continuation; resume from the checkpoint in a fresh process/thread |
+| any observed compaction | finish the active turn, checkpoint, and use a fresh process/thread |
+| telemetry absent | never estimate; checkpoint every turn and enforce the four-turn cap |
+
+Fork only to create a genuinely independent lane with a small input/output contract. Do not fork a
+bloated or compacted session as recovery; use a fresh session from durable state. Neither compaction,
+forking, nor process exit resets retry/no-progress counters.
+
+The default implementer remains Sol/high. Use Sol/xhigh for cross-subsystem architecture, bounded
+primary-source research, or the fresh session after one abnormal/no-progress result. Use one
+Sol/max recovery session only after the same signature repeats, then require Human Review if it
+repeats again. Terra/medium is appropriate for contained reproduction/CI triage and can move to
+high when causality remains ambiguous. The deterministic controller uses no model.
+
+Monitor model/effort effectiveness through progress fingerprints, recurrence signatures, terminal
+reasons, context/compaction telemetry, correction latency, and defects caught in independent
+review—not by process exit or subjective fluency. Re-probe supported model/effort pairs whenever
+the pinned Codex CLI or image changes.
+
+### Durable checkpoint fields
+
+Persist these fields at each coherent checkpoint:
+
+```text
+schema_version, checkpoint_id, issue_id, repository_url,
+base_sha, head_sha, branch, worktree, role, model, effort, turn_number,
+context_window, cumulative_input_tokens, cumulative_output_tokens,
+cumulative_cached_tokens, context_utilization_percent, compaction_count,
+scope_and_acceptance, progress_fingerprint,
+failure_signature, failure_family, consecutive_failure_count,
+files_claimed, files_touched, decisions_and_sources, tests_and_results,
+active_jobs { provider, id, sha, owner, state },
+authority_constraints, redacted_diagnostics, unresolved_risks,
+next_atomic_action, next_owner, review_state, created_at
+```
+
+The event store is the future machine-readable authority. A code-bearing checkpoint also needs an
+exact commit. Before workspace cleanup, the controller must verify that the handoff was persisted.
+
+## Coding, analysis, and documentation roadmap
+
+The repository currently enforces C++26/no extensions, GCC warnings as errors, compile-database
+export, debug tests, ASan+UBSan, and separate TSan. It has no committed formatter, tidy policy,
+public-API extractor, documentation site, or rendered-diagram gate.
+
+Dependency-first decisions for these build utilities must be recorded before integration. Stock
+Clang analysis is a third toolchain: it does not define release behavior and must not reuse the
+experimental clang-p2996 fork.
+
+### Phase 1: reproducible source quality
+
+- Pin one stock LLVM analysis image and version.
+- Commit `.clang-format`; run exact `clang-format --dry-run --Werror` over tracked C/C++ sources.
+- Commit a narrow `.clang-tidy`; verify its configuration, use a reflection-disabled compile
+  database, exclude third-party headers, and start with analyzer, bug-prone, performance,
+  portability, selected concurrency/CERT, and include-cleaner checks.
+- Run IWYU report-only with a compatible pinned LLVM build; promote only stable project-header
+  findings and never auto-rewrite includes in CI.
+- Add self-contained compilation fixtures for every public header and compile-time/static-assert
+  contract fixtures.
+- Build and test the existing `gcc-release` preset because optimized diagnostics differ.
+
+Pilot additional GCC 16.1 warnings individually against project code:
+
+```text
+-Wconversion -Wsign-conversion -Wshadow=compatible-local -Wformat=2
+-Wnull-dereference -Wduplicated-cond -Wduplicated-branches
+-Wlogical-op -Wuseless-cast
+```
+
+Promote a flag to fatal only after its project-owned baseline is zero. Keep system/dependency
+headers isolated. Separately evaluate `-fhardened -Whardened` for Linux release executables, verify
+the resulting ELF protections, and benchmark it; do not apply it to sanitizer or differential jobs.
+
+### Phase 2: documentation and diagrams
+
+- Keep narrative Markdown as the source of truth.
+- Use Mermaid source for curated runtime, workflow, sequence, and state diagrams that cannot be
+  derived reliably from code.
+- Use pinned Graphviz for deterministic CMake target/dependency graphs and API relationships; label
+  build topology as such rather than presenting it as runtime truth.
+- Pilot MrDocs against a reflection-disabled compilation database and public headers. Require a
+  pinned released binary/container and reject any setup that bootstraps floating LLVM/source trees.
+  If its Clang parser cannot consume the project boundary, compare a pinned Doxygen public-header
+  extraction instead.
+- Start missing-documentation checks with a counted baseline that may only decrease; make malformed
+  references fatal immediately and make undocumented public symbols fatal only after the existing
+  debt is removed.
+- Build existing Markdown plus generated API output with pinned MkDocs/Material and
+  `mkdocs build --strict`. Generated output is disposable and never hand-edited.
+- Keep external-link checking scheduled/nonblocking for pull requests so network instability cannot
+  mask source correctness.
+
+GitHub Pages is the preferred eventual host because it stays with the repository, but site/image
+publication requires a separate owner-approved workflow. Read the Docs remains a versioned-preview
+alternative if its external service and webhook ownership become worthwhile.
+
+## Near-term C++26 deletion tests
+
+1. Replace the handwritten observability JSON encoder with the already-selected Glaze DTO codec.
+2. Make `symphony_meta` field descriptors compile-time rather than allocating
+   `std::vector<std::string>` at runtime.
+3. Add compile-time structure/name checks for Codex protocol and workflow DTOs.
+4. Generate exhaustive enum-name tables through the selected reflection seam rather than adding a
+   second enum-reflection library.
+5. Evaluate `stdexec` structured completion only as a deletion test for existing detached-work and
+   stop bookkeeping; preserve keyed cancellation and exact GCC 16.1 evidence.
+
+Reflection must never become the sole redaction boundary. Secret classification is semantic, and
+experimental annotation behavior differs between the pinned compilers.
