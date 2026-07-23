@@ -44,6 +44,9 @@ class StdexecTaskExecutor final {
   void submit(std::string key, ExecutionTask task);
   [[nodiscard]] bool request_stop(std::string_view key);
   [[nodiscard]] std::size_t capacity() const noexcept;
+  // Wait for submitted tasks without requesting cancellation.
+  void drain();
+  // Request cancellation for every active task, then wait for completion.
   void wait();
 
  private:

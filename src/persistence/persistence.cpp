@@ -4,6 +4,9 @@
 #include <exception>
 #include <functional>
 #include <future>
+#include <mutex>
+#include <stdexcept>
+#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -22,6 +25,8 @@ struct SqliteEventRepository::Impl {
   sqlite::connection connection;
   execution::StdexecTaskExecutor tasks{1};
   std::atomic<std::uint64_t> next_operation{1};
+  std::mutex completion_mutex;
+  std::vector<AppendCompletion> append_completions;
 };
 
 namespace {
@@ -38,6 +43,33 @@ Error current_error() {
   }
 }
 
+Error cancellation_error() {
+  return Error{
+      .code = std::make_error_code(std::errc::operation_canceled).value(),
+      .message = "persistence operation cancelled",
+      .kind = ErrorKind::cancelled,
+  };
+}
+
+template <typename Impl>
+std::expected<std::int64_t, Error> append_event(Impl &impl, NewEvent event) {
+  try {
+    sqlite::transaction transaction{impl.connection};
+    impl.connection
+        .prepare("INSERT INTO symphony_events("
+                 "schema_version, type, issue_id, payload"
+                 ") VALUES (?1, ?2, ?3, ?4)")
+        .execute(
+            {event.schema_version, event.type, event.issue_id, event.payload});
+    const auto sequence = static_cast<std::int64_t>(
+        sqlite3_last_insert_rowid(impl.connection.handle()));
+    transaction.commit();
+    return sequence;
+  } catch (...) {
+    return std::unexpected(current_error());
+  }
+}
+
 template <typename Impl, typename Function>
 auto on_database(Impl &impl, Function &&function)
     -> std::invoke_result_t<Function> {
@@ -45,18 +77,16 @@ auto on_database(Impl &impl, Function &&function)
   std::promise<Result> promise;
   auto future = promise.get_future();
   const auto operation =
-      "persistence-sync-" +
-      std::to_string(impl.next_operation.fetch_add(1));
-  impl.tasks.submit(
-      operation,
-      [function = std::forward<Function>(function),
-       promise = std::move(promise)](std::stop_token) mutable noexcept {
-        try {
-          promise.set_value(function());
-        } catch (...) {
-          promise.set_exception(std::current_exception());
-        }
-      });
+      "persistence-sync-" + std::to_string(impl.next_operation.fetch_add(1));
+  impl.tasks.submit(operation, [function = std::forward<Function>(function),
+                                promise = std::move(promise)](
+                                   std::stop_token) mutable noexcept {
+    try {
+      promise.set_value(function());
+    } catch (...) {
+      promise.set_exception(std::current_exception());
+    }
+  });
   return future.get();
 }
 
@@ -78,6 +108,7 @@ SqliteEventRepository::open(const std::filesystem::path &path) {
           impl->connection.execute(
               "PRAGMA journal_mode=WAL;"
               "PRAGMA foreign_keys=ON;"
+              "PRAGMA busy_timeout=5000;"
               "CREATE TABLE IF NOT EXISTS symphony_events("
               "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
               "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
@@ -109,26 +140,11 @@ SqliteEventRepository::~SqliteEventRepository() {
 
 std::expected<std::int64_t, Error>
 SqliteEventRepository::append(NewEvent event) {
-  return on_database(
-      *impl_,
-      [impl = impl_.get(),
-       event = std::move(event)]() -> std::expected<std::int64_t, Error> {
-        try {
-          sqlite::transaction transaction{impl->connection};
-          impl->connection
-              .prepare("INSERT INTO symphony_events("
-                       "schema_version, type, issue_id, payload"
-                       ") VALUES (?1, ?2, ?3, ?4)")
-              .execute({event.schema_version, event.type, event.issue_id,
-                        event.payload});
-          const auto sequence = static_cast<std::int64_t>(
-              sqlite3_last_insert_rowid(impl->connection.handle()));
-          transaction.commit();
-          return sequence;
-        } catch (...) {
-          return std::unexpected(current_error());
-        }
-      });
+  return on_database(*impl_,
+                     [impl = impl_.get(), event = std::move(event)]()
+                         -> std::expected<std::int64_t, Error> {
+                       return append_event(*impl, std::move(event));
+                     });
 }
 
 std::expected<std::vector<Event>, Error>
@@ -162,5 +178,35 @@ SqliteEventRepository::load_after(const std::int64_t sequence) {
         }
       });
 }
+
+void SqliteEventRepository::submit_append(std::string key, NewEvent event) {
+  if (key.empty())
+    throw std::invalid_argument("persistence operation key must not be empty");
+  const auto execution_key = "persistence-async:" + key;
+  impl_->tasks.submit(
+      execution_key,
+      [impl = impl_.get(), key = std::move(key), event = std::move(event)](
+          const std::stop_token stop_token) mutable noexcept {
+        auto result = stop_token.stop_requested()
+                          ? std::expected<std::int64_t, Error>{std::unexpected(
+                                cancellation_error())}
+                          : append_event(*impl, std::move(event));
+        const std::scoped_lock lock(impl->completion_mutex);
+        impl->append_completions.push_back(
+            AppendCompletion{std::move(key), std::move(result)});
+      });
+}
+
+bool SqliteEventRepository::request_stop(const std::string_view key) {
+  return impl_->tasks.request_stop("persistence-async:" + std::string{key});
+}
+
+std::vector<AppendCompletion> SqliteEventRepository::take_ready_appends() {
+  const std::scoped_lock lock(impl_->completion_mutex);
+  return std::exchange(impl_->append_completions,
+                       std::vector<AppendCompletion>{});
+}
+
+void SqliteEventRepository::drain() { impl_->tasks.drain(); }
 
 } // namespace symphony::persistence

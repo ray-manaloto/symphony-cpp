@@ -40,7 +40,7 @@ static ut::suite execution_tests = [] {
                         });
         ut::expect(executor.request_stop("second"));
         release_first.count_down();
-        executor.wait();
+        executor.drain();
 
         ut::expect(second_saw_stop.load());
         ut::expect(second_after_first.load());

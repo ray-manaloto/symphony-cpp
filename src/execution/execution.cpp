@@ -134,6 +134,11 @@ std::size_t StdexecTaskExecutor::capacity() const noexcept {
   return impl_->worker_count;
 }
 
+void StdexecTaskExecutor::drain() {
+  std::unique_lock lock(impl_->mutex);
+  impl_->idle.wait(lock, [this] { return impl_->stop_sources.empty(); });
+}
+
 void StdexecTaskExecutor::wait() {
   std::unique_lock lock(impl_->mutex);
   for (auto& [key, source] : impl_->stop_sources) {

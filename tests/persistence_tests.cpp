@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include <boost/sqlite/connection.hpp>
+
 #include "symphony/persistence/persistence.hpp"
 
 namespace {
@@ -138,5 +140,69 @@ static ut::suite persistence_tests = [] {
     ut::expect(events.has_value());
     if (events)
       ut::expect(events->size() == append_count);
+  };
+
+  ut::test("sqlite event repository cancels a queued append while busy") = [] {
+    FixtureDatabase fixture{"cancelled"};
+    auto opened =
+        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    ut::expect(opened.has_value());
+    if (!opened)
+      return;
+
+    boost::sqlite::connection blocker{fixture.path().string()};
+    blocker.execute("BEGIN IMMEDIATE");
+
+    (*opened)->submit_append(
+        "first",
+        {
+            .schema_version = 1,
+            .type = "fixture",
+            .issue_id = "fixture-first",
+            .payload = "{}",
+        });
+    (*opened)->submit_append(
+        "cancelled",
+        {
+            .schema_version = 1,
+            .type = "fixture",
+            .issue_id = "fixture-cancelled",
+            .payload = "{}",
+        });
+    ut::expect((*opened)->request_stop("cancelled"));
+    blocker.execute("ROLLBACK");
+
+    (*opened)->drain();
+    auto completions = (*opened)->take_ready_appends();
+    ut::expect(completions.size() == std::size_t{2});
+    const auto first =
+        std::ranges::find_if(completions, [](const auto &completion) {
+          return completion.key == "first";
+        });
+    const auto cancelled =
+        std::ranges::find_if(completions, [](const auto &completion) {
+          return completion.key == "cancelled";
+        });
+    ut::expect(first != completions.end());
+    ut::expect(cancelled != completions.end());
+    if (first != completions.end())
+      ut::expect(first->result.has_value());
+    if (cancelled != completions.end()) {
+      ut::expect(!cancelled->result.has_value());
+      if (!cancelled->result) {
+        ut::expect(cancelled->result.error().kind ==
+                   symphony::persistence::ErrorKind::cancelled);
+        ut::expect(cancelled->result.error().code ==
+                   std::make_error_code(std::errc::operation_canceled).value());
+      }
+    }
+
+    auto events = (*opened)->load_after(0);
+    ut::expect(events.has_value());
+    if (events) {
+      ut::expect(events->size() == std::size_t{1});
+      if (events->size() == 1)
+        ut::expect(events->front().issue_id == "fixture-first");
+    }
   };
 };
