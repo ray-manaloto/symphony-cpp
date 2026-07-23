@@ -1,4 +1,5 @@
 find_package(Boost 1.91 CONFIG REQUIRED COMPONENTS process)
+find_package(boost-sqlite CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glaze CONFIG REQUIRED)

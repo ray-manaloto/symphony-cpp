@@ -1,0 +1,26 @@
+{
+  "name": "boost-sqlite",
+  "version-date": "2025-10-06",
+  "description": "Typed C++ access to SQLite with prepared statements and RAII transactions",
+  "homepage": "https://github.com/klemens-morgenstern/sqlite",
+  "license": "BSL-1.0",
+  "dependencies": [
+    "boost-callable-traits",
+    "boost-config",
+    "boost-core",
+    "boost-describe",
+    "boost-headers",
+    "boost-json",
+    "boost-pfr",
+    "boost-system",
+    "sqlite3",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

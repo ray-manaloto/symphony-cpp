@@ -28,6 +28,16 @@ target_link_libraries(symphony_execution_tests PRIVATE
   symphony_options ut::ut STDEXEC::stdexec)
 add_test(NAME symphony_execution_tests COMMAND symphony_execution_tests)
 
+add_executable(symphony_persistence_provider_tests
+  test_main.cpp
+  persistence_provider_tests.cpp)
+set_property(TARGET symphony_persistence_provider_tests PROPERTY CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(symphony_persistence_provider_tests PRIVATE
+  symphony_options ut::ut Boost::sqlite)
+add_test(
+  NAME symphony_persistence_provider_tests
+  COMMAND symphony_persistence_provider_tests)
+
 add_executable(symphony_reflection_tests test_main.cpp reflection_tests.cpp)
 target_link_libraries(symphony_reflection_tests PRIVATE
   symphony_options symphony_reflection_options symphony_meta ut::ut)
