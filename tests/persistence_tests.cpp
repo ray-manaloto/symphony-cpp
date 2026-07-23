@@ -390,6 +390,7 @@ static ut::suite persistence_tests = [] {
             .type = "dispatch",
             .issue_id = "fixture-1",
             .issue_identifier = "SYM-1",
+            .session_id = "",
             .message = "retained",
         });
         events.drain();
