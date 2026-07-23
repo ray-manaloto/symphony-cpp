@@ -29,6 +29,9 @@ target_link_libraries(symphony_persistence PRIVATE
   Boost::sqlite symphony_execution)
 symphony_library(symphony_observability observability/observability.cpp)
 target_link_libraries(symphony_observability PUBLIC symphony_meta spdlog::spdlog)
+symphony_library(symphony_persistence_events persistence/event_store.cpp)
+target_link_libraries(symphony_persistence_events PUBLIC
+  symphony_observability symphony_persistence)
 symphony_library(symphony_cli cli/cli.cpp)
 target_link_libraries(symphony_cli PUBLIC CLI11::CLI11)
 symphony_library(symphony_scheduler scheduler/scheduler.cpp)
