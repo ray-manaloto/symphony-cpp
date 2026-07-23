@@ -62,6 +62,33 @@ static ut::suite codex_tests = [] {
     ut::expect(turn.at("params").at("threadId").get<std::string>() == "thr_1");
     ut::expect(turn.at("params").at("input")[0].at("text").get<std::string>() ==
                "Do work");
+
+    const symphony::codex::AppServerPolicy policy{
+        "never",
+        "workspace-write",
+        R"({"type":"workspaceWrite","networkAccess":false,"writableRoots":[]})"};
+    const auto configured_thread = parse_json(
+        symphony::codex::JsonLineCodec::parse(
+            symphony::codex::AppServerProtocol::thread_start_request(
+                1, "/tmp/work", policy)));
+    ut::expect(configured_thread.at("params")
+                   .at("approvalPolicy")
+                   .get<std::string>() == "never");
+    ut::expect(configured_thread.at("params")
+                   .at("sandbox")
+                   .get<std::string>() == "workspace-write");
+
+    const auto configured_turn = parse_json(
+        symphony::codex::JsonLineCodec::parse(
+            symphony::codex::AppServerProtocol::turn_start_request(
+                2, "thr_1", "/tmp/work", "Do work", policy)));
+    ut::expect(configured_turn.at("params")
+                   .at("approvalPolicy")
+                   .get<std::string>() == "never");
+    ut::expect(configured_turn.at("params")
+                   .at("sandboxPolicy")
+                   .at("type")
+                   .get<std::string>() == "workspaceWrite");
   };
 
   ut::test(
@@ -297,6 +324,18 @@ static ut::suite codex_tests = [] {
     ut::expect(result.normal_exit);
     ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
     std::filesystem::remove_all(root);
+  };
+
+  ut::test("Codex runtime rejects non-object turn sandbox policy") = [] {
+    ut::expect(ut::throws([] {
+      static_cast<void>(symphony::codex::CodexAppServerRuntime{
+          "true",
+          std::chrono::seconds{1},
+          std::chrono::seconds{1},
+          std::chrono::seconds{1},
+          symphony::codex::AppServerPolicy{
+              std::nullopt, std::nullopt, "[]"}});
+    }));
   };
 
 };

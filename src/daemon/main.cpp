@@ -34,6 +34,14 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
   config.before_remove_hook = workflow.hooks.before_remove;
   return config;
 }
+
+symphony::codex::AppServerPolicy codex_policy(
+    const symphony::workflow::WorkflowConfig& workflow) {
+  return {
+      workflow.codex.approval_policy,
+      workflow.codex.thread_sandbox,
+      workflow.codex.turn_sandbox_policy};
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -56,7 +64,8 @@ int main(int argc, char** argv) {
         workflow.config.codex.command,
         workflow.config.codex.read_timeout,
         workflow.config.codex.stall_timeout,
-        workflow.config.codex.turn_timeout);
+        workflow.config.codex.turn_timeout,
+        codex_policy(workflow.config));
     symphony::observability::MemoryEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);
@@ -80,7 +89,8 @@ int main(int argc, char** argv) {
               changed->config.codex.command,
               changed->config.codex.read_timeout,
               changed->config.codex.stall_timeout,
-              changed->config.codex.turn_timeout);
+              changed->config.codex.turn_timeout,
+              codex_policy(changed->config));
           scheduler.reconfigure(scheduler_config(changed->config));
           watcher.accept(*changed);
           workflow = std::move(*changed);

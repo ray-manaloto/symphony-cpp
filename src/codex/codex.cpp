@@ -28,6 +28,8 @@ struct EmptyParams {};
 
 struct ThreadStartParams {
   std::string cwd;
+  std::optional<std::string> approvalPolicy;
+  std::optional<std::string> sandbox;
 };
 
 struct TurnInput {
@@ -39,6 +41,8 @@ struct TurnStartParams {
   std::string threadId;
   std::string cwd;
   std::vector<TurnInput> input;
+  std::optional<std::string> approvalPolicy;
+  std::optional<glz::raw_json> sandboxPolicy;
 };
 
 template <typename Params> struct Request {
@@ -141,6 +145,14 @@ void merge_rate_limits(RateLimits& current, const RateLimits& update) {
 }
 
 namespace {
+AppServerPolicy normalized_policy(AppServerPolicy policy) {
+  if (policy.turn_sandbox_policy_json) {
+    policy.turn_sandbox_policy_json = JsonLineCodec::parse(
+        *policy.turn_sandbox_policy_json, 1024U * 1024U);
+  }
+  return policy;
+}
+
 class BoostProcessProtocolChannel final : public ProtocolChannel {
 public:
   BoostProcessProtocolChannel(
@@ -280,11 +292,13 @@ CodexAppServerRuntime::CodexAppServerRuntime(
     std::string command,
     const std::chrono::milliseconds read_timeout,
     const std::chrono::milliseconds stall_timeout,
-    const std::chrono::milliseconds turn_timeout)
+    const std::chrono::milliseconds turn_timeout,
+    AppServerPolicy policy)
     : command_(std::move(command)),
       read_timeout_(read_timeout),
       stall_timeout_(stall_timeout),
-      turn_timeout_(turn_timeout) {
+      turn_timeout_(turn_timeout),
+      policy_(normalized_policy(std::move(policy))) {
   if (command_.empty())
     throw std::invalid_argument("Codex command must not be empty");
   if (read_timeout_ <= std::chrono::milliseconds::zero()) {
@@ -303,12 +317,14 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
   std::chrono::milliseconds read_timeout;
   std::chrono::milliseconds stall_timeout;
   std::chrono::milliseconds turn_timeout;
+  AppServerPolicy policy;
   {
     const std::scoped_lock lock(active_process_mutex_);
     command = command_;
     read_timeout = read_timeout_;
     stall_timeout = stall_timeout_;
     turn_timeout = turn_timeout_;
+    policy = policy_;
   }
   BoostProcessProtocolChannel channel(command, request.workspace.path);
   {
@@ -324,7 +340,13 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
   };
   try {
     auto result = AppServerConversation::run(
-        channel, request, read_timeout, 10000, stall_timeout, turn_timeout);
+        channel,
+        request,
+        read_timeout,
+        10000,
+        stall_timeout,
+        turn_timeout,
+        policy);
     clear_active_process();
     return result;
   } catch (...) {
@@ -342,7 +364,9 @@ void CodexAppServerRuntime::reconfigure(
     std::string command,
     const std::chrono::milliseconds read_timeout,
     const std::chrono::milliseconds stall_timeout,
-    const std::chrono::milliseconds turn_timeout) {
+    const std::chrono::milliseconds turn_timeout,
+    AppServerPolicy policy) {
+  auto validated_policy = normalized_policy(std::move(policy));
   const std::scoped_lock lock(active_process_mutex_);
   if (cancel_active_process_)
     throw std::runtime_error("cannot reconfigure active Codex process");
@@ -353,6 +377,7 @@ void CodexAppServerRuntime::reconfigure(
   read_timeout_ = read_timeout;
   stall_timeout_ = stall_timeout;
   turn_timeout_ = turn_timeout;
+  policy_ = std::move(validated_policy);
 }
 
 std::string JsonLineCodec::frame(const std::string_view json) {
@@ -398,19 +423,31 @@ std::string AppServerProtocol::initialized_notification() {
 
 std::string
 AppServerProtocol::thread_start_request(const std::uint64_t id,
-                                        const std::filesystem::path &cwd) {
+                                        const std::filesystem::path &cwd,
+                                        const AppServerPolicy& policy) {
   return protocol_detail::encode_frame(protocol_detail::Request{
-      "thread/start", id, protocol_detail::ThreadStartParams{cwd.native()}});
+      "thread/start",
+      id,
+      protocol_detail::ThreadStartParams{
+          cwd.native(), policy.approval_policy, policy.thread_sandbox}});
 }
 
 std::string AppServerProtocol::turn_start_request(
     const std::uint64_t id, const std::string_view thread_id,
-    const std::filesystem::path &cwd, const std::string_view prompt) {
+    const std::filesystem::path &cwd,
+    const std::string_view prompt,
+    const AppServerPolicy& policy) {
+  const auto sandbox_policy = policy.turn_sandbox_policy_json
+                                  ? std::optional<glz::raw_json>{
+                                        *policy.turn_sandbox_policy_json}
+                                  : std::nullopt;
   return protocol_detail::encode_frame(protocol_detail::Request{
       "turn/start", id,
       protocol_detail::TurnStartParams{std::string{thread_id},
                                        cwd.native(),
-                                       {{"text", std::string{prompt}}}}});
+                                       {{"text", std::string{prompt}}},
+                                       policy.approval_policy,
+                                       sandbox_policy}});
 }
 
 std::string AppServerProtocol::unsupported_tool_response(
@@ -534,7 +571,8 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
                            const std::chrono::milliseconds read_timeout,
                            const std::size_t max_messages,
                            const std::chrono::milliseconds stall_timeout,
-                           const std::chrono::milliseconds turn_timeout) {
+                           const std::chrono::milliseconds turn_timeout,
+                           const AppServerPolicy& policy) {
   RunResult result;
   channel.write(AppServerProtocol::initialize_request(0));
   std::string thread_id;
@@ -628,7 +666,8 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     if (update.response_id == 0 && !initialized) {
       channel.write(AppServerProtocol::initialized_notification());
       channel.write(
-          AppServerProtocol::thread_start_request(1, request.workspace.path));
+          AppServerProtocol::thread_start_request(
+              1, request.workspace.path, policy));
       initialized = true;
       thread_requested = true;
       continue;
@@ -639,7 +678,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         return result;
       }
       channel.write(AppServerProtocol::turn_start_request(
-          2, thread_id, request.workspace.path, request.prompt));
+          2, thread_id, request.workspace.path, request.prompt, policy));
       turn_started = true;
       continue;
     }

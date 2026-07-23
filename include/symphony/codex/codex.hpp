@@ -83,6 +83,12 @@ struct RunResult {
   std::optional<RateLimits> rate_limits;
 };
 
+struct AppServerPolicy {
+  std::optional<std::string> approval_policy;
+  std::optional<std::string> thread_sandbox;
+  std::optional<std::string> turn_sandbox_policy_json;
+};
+
 class AgentRuntime {
  public:
   virtual ~AgentRuntime() = default;
@@ -108,20 +114,23 @@ class CodexAppServerRuntime final : public AgentRuntime {
       std::string command = "codex app-server",
       std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000},
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds{300000},
-      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000});
+      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000},
+      AppServerPolicy policy = {});
   [[nodiscard]] RunResult run(const RunRequest& request) override;
   void cancel(std::string_view session_id) override;
   void reconfigure(
       std::string command,
       std::chrono::milliseconds read_timeout,
       std::chrono::milliseconds stall_timeout,
-      std::chrono::milliseconds turn_timeout);
+      std::chrono::milliseconds turn_timeout,
+      AppServerPolicy policy);
 
  private:
   std::string command_;
   std::chrono::milliseconds read_timeout_;
   std::chrono::milliseconds stall_timeout_;
   std::chrono::milliseconds turn_timeout_;
+  AppServerPolicy policy_;
   std::mutex active_process_mutex_;
   std::function<void()> cancel_active_process_;
 };
@@ -161,12 +170,14 @@ class AppServerProtocol {
   [[nodiscard]] static std::string initialized_notification();
   [[nodiscard]] static std::string thread_start_request(
       std::uint64_t id,
-      const std::filesystem::path& cwd);
+      const std::filesystem::path& cwd,
+      const AppServerPolicy& policy = {});
   [[nodiscard]] static std::string turn_start_request(
       std::uint64_t id,
       std::string_view thread_id,
       const std::filesystem::path& cwd,
-      std::string_view prompt);
+      std::string_view prompt,
+      const AppServerPolicy& policy = {});
   [[nodiscard]] static std::string unsupported_tool_response(std::uint64_t id);
   [[nodiscard]] static ProtocolUpdate decode(std::string_view line);
 };
@@ -206,7 +217,8 @@ class AppServerConversation {
       std::chrono::milliseconds read_timeout,
       std::size_t max_messages = 10000,
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds::zero(),
-      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds::zero());
+      std::chrono::milliseconds turn_timeout = std::chrono::milliseconds::zero(),
+      const AppServerPolicy& policy = {});
 };
 
 }  // namespace symphony::codex
