@@ -32,6 +32,13 @@ Run the differential reflection suite in the separate Bloomberg clang-p2996 devc
 ./scripts/devcontainer-build.sh clang-p2996
 ```
 
+Run the exact LLVM 22.1.8 formatting gate and the initial reflection-disabled static-analysis
+report in the dedicated analysis devcontainer:
+
+```sh
+./scripts/devcontainer-build.sh analysis
+```
+
 The official Dev Container CLI starts or reuses the container, applies its lifecycle setup, and
 runs configure, build, and CTest inside it. The bind-mounted repository retains `build/` and
 `.build/vcpkg`; named Docker volumes retain compiler-specific ccache data and shared vcpkg binary
@@ -39,7 +46,7 @@ archives. Do not configure or compile this project directly on the macOS host.
 
 The compiler images are deliberately expensive source builds. Their source hashes, signatures, base
 image digest, fork commit, and vcpkg registry baseline are pinned in source. GitHub builds and
-validates both devcontainer images; publication to GHCR is an explicit workflow input. Each image
+validates all three devcontainer images; publication to GHCR is an explicit workflow input. Each image
 preseeds the vcpkg binary archive, while lifecycle setup bootstraps the same repository-local pinned
 vcpkg checkout in the mounted workspace. See [docs/upstream-lock.md](docs/upstream-lock.md).
 

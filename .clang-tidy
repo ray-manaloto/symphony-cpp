@@ -1,0 +1,30 @@
+---
+Checks:
+  - '-*'
+  - 'clang-analyzer-*'
+  - 'bugprone-branch-clone'
+  - 'bugprone-dangling-handle'
+  - 'bugprone-exception-escape'
+  - 'bugprone-infinite-loop'
+  - 'bugprone-return-const-ref-from-parameter'
+  - 'bugprone-sizeof-expression'
+  - 'bugprone-string-constructor'
+  - 'bugprone-suspicious-memory-comparison'
+  - 'bugprone-swapped-arguments'
+  - 'bugprone-unchecked-optional-access'
+  - 'bugprone-unique-ptr-array-mismatch'
+  - 'bugprone-use-after-move'
+  - 'concurrency-mt-unsafe'
+  - 'performance-for-range-copy'
+  - 'performance-inefficient-algorithm'
+  - 'performance-move-const-arg'
+  - 'performance-unnecessary-copy-initialization'
+  - 'performance-unnecessary-value-param'
+  - 'portability-std-allocator-const'
+  - 'misc-include-cleaner'
+WarningsAsErrors: ''
+HeaderFilterRegex: '(^|.*/)symphony-cpp/(include|src|tests)/'
+ExcludeHeaderFilterRegex: '(^|.*/)(build|\.build|vcpkg_installed|fixtures/generated)/'
+SystemHeaders: false
+FormatStyle: file
+...

@@ -1,0 +1,17 @@
+{
+  "name": "Symphony C++26 CI — LLVM 22.1.8 analysis",
+  "build": {
+    "dockerfile": "../../../containers/Containerfile",
+    "context": "../../..",
+    "target": "symphony-analysis"
+  },
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/symphony-cpp",
+  "containerEnv": {
+    "CC": "/opt/llvm-22.1.8/bin/clang",
+    "CXX": "/opt/llvm-22.1.8/bin/clang++",
+    "CCACHE_DIR": "/root/.cache/ccache"
+  },
+  "postCreateCommand": "./scripts/devcontainer-setup.sh analysis"
+}

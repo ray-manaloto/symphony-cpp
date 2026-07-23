@@ -1,0 +1,39 @@
+name: Source quality
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  llvm-analysis:
+    name: LLVM 22.1.8 formatting and static analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - name: Build analysis devcontainer and run source-quality gates
+        uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
+        with:
+          configFile: .devcontainer/ci/analysis/devcontainer.json
+          imageName: ghcr.io/ray-manaloto/symphony-analysis-check
+          imageTag: ${{ github.sha }}
+          push: never
+          cacheFrom: type=gha,scope=symphony-llvm-analysis-min-v1
+          cacheTo: type=gha,mode=min,scope=symphony-llvm-analysis-min-v1,timeout=30m
+          runCmd: >-
+            test "$(clang++ --version | sed -n 's/^clang version \([^ ]*\).*$/\1/p' | head -n 1)" = "22.1.8"
+            && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
+            && ./scripts/check-format.sh
+            && cmake --preset clang-analysis
+            && ./scripts/check-tidy.sh

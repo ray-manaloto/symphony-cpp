@@ -1,0 +1,22 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+ColumnLimit: 100
+IndentWidth: 2
+ContinuationIndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+NamespaceIndentation: None
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive
+FixNamespaceComments: true
+InsertNewlineAtEOF: true
+ReflowComments: true
+...

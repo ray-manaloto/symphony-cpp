@@ -17,8 +17,18 @@ case "${profile}" in
       --overlay-triplets vcpkg-triplets \
       --clean-after-build
     ;;
+  analysis)
+    test "$(/opt/llvm-22.1.8/bin/clang++ --version |
+      sed -n 's/^clang version \([^ ]*\).*$/\1/p' |
+      head -n 1)" = "22.1.8"
+    ./scripts/bootstrap-vcpkg.sh
+    .build/vcpkg/vcpkg install \
+      --triplet x64-linux-clang-analysis \
+      --overlay-triplets vcpkg-triplets \
+      --clean-after-build
+    ;;
   *)
-    echo "usage: $0 {gcc|clang-p2996}" >&2
+    echo "usage: $0 {gcc|clang-p2996|analysis}" >&2
     exit 2
     ;;
 esac

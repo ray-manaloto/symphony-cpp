@@ -103,3 +103,56 @@ jobs:
           test "$(docker image inspect "${image}" --format '{{.Architecture}}')" = "amd64"
           test "$(docker image inspect "${image}" --format '{{len .Config.Entrypoint}}')" = "0"
           docker run --rm "${image}" bash -lc 'test -x /opt/clang-p2996/bin/clang++'
+
+  llvm-analysis:
+    name: LLVM 22.1.8 source-quality devcontainer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - name: Sign in to GHCR
+        if: ${{ inputs.publish_images }}
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and verify analysis development container
+        uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
+        with:
+          configFile: .devcontainer/ci/analysis/devcontainer.json
+          imageName: ghcr.io/ray-manaloto/symphony-analysis
+          imageTag: ${{ github.sha }},edge
+          push: ${{ inputs.publish_images && 'always' || 'never' }}
+          cacheFrom: type=gha,scope=symphony-llvm-analysis-min-v1
+          cacheTo: type=gha,mode=min,scope=symphony-llvm-analysis-min-v1,timeout=30m
+          runCmd: >-
+            test "$(clang++ --version | sed -n 's/^clang version \([^ ]*\).*$/\1/p' | head -n 1)" = "22.1.8"
+            && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
+            && clang-tidy --verify-config
+            && cmake --preset clang-analysis
+      - name: Verify direct analysis image contract
+        run: |
+          image="ghcr.io/ray-manaloto/symphony-analysis:${GITHUB_SHA}"
+          test "$(docker image inspect "${image}" --format '{{.Architecture}}')" = "amd64"
+          test "$(docker image inspect "${image}" --format '{{len .Config.Entrypoint}}')" = "0"
+          docker run --rm "${image}" bash -lc '
+            test "$(clang-format --version)" = "clang-format version 22.1.8"
+            test "$(clang-tidy --version |
+              sed -n "s/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p")" = "22.1.8"
+            test -x /opt/llvm-22.1.8/bin/run-clang-tidy
+            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
+            test "$(g++ -dumpfullversion)" = "16.1.0"
+            printf "%s\n" "#include <iostream>" \
+              "int main() { std::cout << 22; }" |
+              clang++ --gcc-toolchain=/opt/gcc-16.1 -std=c++26 -fuse-ld=lld \
+                -x c++ - -o /tmp/clang-runtime-check
+            ldd /tmp/clang-runtime-check |
+              grep -F "libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6"
+            test "$(/tmp/clang-runtime-check)" = "22"
+          '

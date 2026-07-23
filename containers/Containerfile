@@ -3,6 +3,7 @@ ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:1641c7bc30b00e0c5d4858b3e4d
 
 FROM ${CODEX_BASE} AS compiler-build-base
 USER root
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     autoconf automake bison build-essential ca-certificates ccache cmake curl flex git gnupg \
     libgmp-dev libisl-dev libmpc-dev libmpfr-dev libzstd-dev ninja-build python3 texinfo xz-utils \
@@ -58,7 +59,31 @@ RUN cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
 FROM compiler-build-base AS symphony-clang-p2996
 COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
 
-FROM compiler-build-base AS symphony-dev
+FROM compiler-build-base AS llvm-analysis-tools
+ARG LLVM_VERSION=22.1.8
+ARG LLVM_SHA256=df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384
+ARG LLVM_SIGNER=FFB3368980F3E6BB5737145A316C56D064CACBA5
+ARG LLVM_RELEASE_KEYS_SHA256=f38bd19b7f2d22cafa755841e6ce9375b9a2e6d41f7b974e4953d6b084839001
+WORKDIR /tmp/llvm
+RUN curl --fail --location --proto '=https' --tlsv1.2 \
+      -o llvm.tar.xz \
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz" \
+ && curl --fail --location --proto '=https' --tlsv1.2 \
+      -o llvm.tar.xz.sig \
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz.sig" \
+ && echo "${LLVM_SHA256}  llvm.tar.xz" | sha256sum --check - \
+ && curl --fail --location --proto '=https' --tlsv1.2 \
+      -o signer.asc "https://releases.llvm.org/release-keys.asc" \
+ && echo "${LLVM_RELEASE_KEYS_SHA256}  signer.asc" | sha256sum --check - \
+ && gpg --batch --import signer.asc \
+ && test "$(gpg --batch --with-colons --fingerprint "${LLVM_SIGNER}" | awk -F: '$1=="fpr" {print $10; exit}')" = "${LLVM_SIGNER}" \
+ && gpg --batch --verify llvm.tar.xz.sig llvm.tar.xz \
+ && mkdir -p "/opt/llvm-${LLVM_VERSION}" \
+ && tar -xJf llvm.tar.xz --strip-components=1 -C "/opt/llvm-${LLVM_VERSION}" \
+ && test "$("/opt/llvm-${LLVM_VERSION}/bin/clang-format" --version)" = "clang-format version ${LLVM_VERSION}" \
+ && rm -rf /tmp/llvm
+
+FROM compiler-build-base AS symphony-gcc-runtime
 COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
 RUN printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
  && ldconfig \
@@ -67,6 +92,10 @@ ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/gcc-16.1/bin/gcc \
     CXX=/opt/gcc-16.1/bin/g++
 LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
+ENTRYPOINT []
+CMD ["sleep", "infinity"]
+
+FROM symphony-gcc-runtime AS symphony-dev
 WORKDIR /opt/symphony-cpp-seed
 COPY vcpkg.json vcpkg-configuration.json ./
 COPY vcpkg-ports/ ./vcpkg-ports/
@@ -75,10 +104,29 @@ COPY cmake/toolchains/clang-p2996.cmake ./cmake/toolchains/clang-p2996.cmake
 COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
 RUN ./scripts/bootstrap-vcpkg.sh \
  && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
- && .build/vcpkg/vcpkg install --clean-after-build
+ && .build/vcpkg/vcpkg install --clean-after-build \
+ && rm -rf .build vcpkg_installed
 WORKDIR /workspaces/symphony-cpp
-ENTRYPOINT []
-CMD ["sleep", "infinity"]
+
+FROM symphony-gcc-runtime AS symphony-analysis
+COPY --from=llvm-analysis-tools /opt/llvm-22.1.8 /opt/llvm-22.1.8
+ENV PATH=/opt/llvm-22.1.8/bin:/opt/gcc-16.1/bin:${PATH} \
+    CC=/opt/llvm-22.1.8/bin/clang \
+    CXX=/opt/llvm-22.1.8/bin/clang++
+WORKDIR /opt/symphony-cpp-analysis-seed
+COPY vcpkg.json vcpkg-configuration.json ./
+COPY vcpkg-ports/ ./vcpkg-ports/
+COPY vcpkg-triplets/ ./vcpkg-triplets/
+COPY cmake/toolchains/clang-analysis.cmake ./cmake/toolchains/clang-analysis.cmake
+COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
+RUN ./scripts/bootstrap-vcpkg.sh \
+ && test "$(clang++ --version | sed -n 's/^clang version \\([^ ]*\\).*$/\\1/p' | head -n 1)" = "22.1.8" \
+ && .build/vcpkg/vcpkg install \
+      --triplet x64-linux-clang-analysis \
+      --overlay-triplets vcpkg-triplets \
+      --clean-after-build \
+ && rm -rf .build vcpkg_installed
+WORKDIR /workspaces/symphony-cpp
 
 FROM compiler-build-base AS symphony-ci-clang
 COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996

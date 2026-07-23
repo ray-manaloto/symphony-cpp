@@ -64,6 +64,18 @@
         "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-p2996"
       }
+    },
+    {
+      "name": "clang-analysis",
+      "inherits": "gcc-debug",
+      "binaryDir": "${sourceDir}/build/clang-analysis",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF",
+        "CMAKE_CXX_COMPILER": "/opt/llvm-22.1.8/bin/clang++",
+        "SYMPHONY_ENABLE_REFLECTION": "OFF",
+        "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-clang-analysis"
+      }
     }
   ],
   "buildPresets": [
@@ -94,6 +106,11 @@
       "targets": [
         "symphony_p2996_tests"
       ]
+    },
+    {
+      "name": "clang-analysis",
+      "configurePreset": "clang-analysis",
+      "jobs": 4
     }
   ],
   "testPresets": [

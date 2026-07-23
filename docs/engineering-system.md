@@ -176,9 +176,11 @@ exact commit. Before workspace cleanup, the controller must verify that the hand
 
 ## Coding, analysis, and documentation roadmap
 
-The repository currently enforces C++26/no extensions, GCC warnings as errors, compile-database
-export, debug tests, ASan+UBSan, and separate TSan. It has no committed formatter, tidy policy,
-public-API extractor, documentation site, or rendered-diagram gate.
+The repository enforces C++26/no extensions, GCC warnings as errors, compile-database export, debug
+tests, ASan+UBSan, and separate TSan. Phase 1 now pins a separate stock LLVM 22.1.8 analysis
+devcontainer, an exact formatter gate, and a narrow report-only tidy baseline. Public-header
+self-containment, the zero-noise tidy promotion, a public-API extractor, a documentation site, and
+a rendered-diagram gate remain open.
 
 Dependency-first decisions for these build utilities must be recorded before integration. Stock
 Clang analysis is a third toolchain: it does not define release behavior and must not reuse the
@@ -186,9 +188,9 @@ experimental clang-p2996 fork.
 
 ### Phase 1: reproducible source quality
 
-- Pin one stock LLVM analysis image and version.
-- Commit `.clang-format`; run exact `clang-format --dry-run --Werror` over tracked C/C++ sources.
-- Commit a narrow `.clang-tidy`; verify its configuration, use a reflection-disabled compile
+- [x] Pin one stock LLVM analysis image and version.
+- [x] Commit `.clang-format`; run exact `clang-format --dry-run --Werror` over tracked C/C++ sources.
+- [x] Commit a narrow `.clang-tidy`; verify its configuration, use a reflection-disabled compile
   database, exclude third-party headers, and start with analyzer, bug-prone, performance,
   portability, selected concurrency/CERT, and include-cleaner checks.
 - Run IWYU report-only with a compatible pinned LLVM build; promote only stable project-header

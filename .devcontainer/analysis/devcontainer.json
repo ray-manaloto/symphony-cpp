@@ -1,0 +1,28 @@
+{
+  "name": "Symphony C++26 — LLVM 22.1.8 analysis",
+  "image": "ghcr.io/ray-manaloto/symphony-analysis:edge",
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/symphony-cpp",
+  "runArgs": [
+    "--platform=linux/amd64"
+  ],
+  "containerEnv": {
+    "CC": "/opt/llvm-22.1.8/bin/clang",
+    "CXX": "/opt/llvm-22.1.8/bin/clang++",
+    "CCACHE_DIR": "/root/.cache/ccache"
+  },
+  "mounts": [
+    "source=symphony-cpp-clang-analysis-ccache,target=/root/.cache/ccache,type=volume",
+    "source=symphony-cpp-vcpkg-archives,target=/root/.cache/vcpkg/archives,type=volume"
+  ],
+  "postCreateCommand": "./scripts/devcontainer-setup.sh analysis",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools"
+      ]
+    }
+  }
+}
