@@ -1,7 +1,8 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <array>
+#include <cstddef>
+#include <string_view>
 
 #if defined(SYMPHONY_ENABLE_REFLECTION)
 #include <meta>
@@ -10,26 +11,28 @@
 namespace symphony::meta {
 
 struct FieldDescriptor {
-  std::string name;
-  std::string type;
+  std::string_view name;
+  std::string_view type;
 };
 
-template <typename T> [[nodiscard]] std::vector<FieldDescriptor> fields() {
+template <typename T> [[nodiscard]] consteval auto fields() {
 #if defined(SYMPHONY_ENABLE_REFLECTION)
-  std::vector<FieldDescriptor> result;
   static constexpr auto members =
       std::define_static_array(std::meta::nonstatic_data_members_of(
           ^^T, std::meta::access_context::current()));
+  std::array<FieldDescriptor, members.size()> result{};
+  std::size_t index = 0;
   template for (constexpr auto member : members) {
-    result.push_back({std::string{std::meta::identifier_of(member)},
-                      std::string{std::meta::display_string_of(
-                          std::meta::type_of(member))}});
+    result[index++] = {
+        std::meta::identifier_of(member),
+        std::meta::display_string_of(std::meta::type_of(member)),
+    };
   }
   return result;
 #else
   static_assert(sizeof(T) == 0,
                 "symphony_meta reflection requires SYMPHONY_ENABLE_REFLECTION");
-  return {};
+  return std::array<FieldDescriptor, 0>{};
 #endif
 }
 

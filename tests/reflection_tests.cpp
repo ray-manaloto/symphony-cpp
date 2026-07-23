@@ -64,10 +64,10 @@ ut::suite reflection_tests = [] {
         static_assert(fields[1].type == "bool");
 
         ut::expect(fields.size() == std::size_t{2});
-        ut::expect(fields[0].name == std::string{"poll_interval_ms"});
-        ut::expect(fields[0].type == std::string{"int"});
-        ut::expect(fields[1].name == std::string{"enabled"});
-        ut::expect(fields[1].type == std::string{"bool"});
+        ut::expect(fields[0].name == "poll_interval_ms");
+        ut::expect(fields[0].type == "int");
+        ut::expect(fields[1].name == "enabled");
+        ut::expect(fields[1].type == "bool");
 
         const ReflectedConfig value{250, true};
         const auto json = parse_json(symphony::meta::reflected_json(value));

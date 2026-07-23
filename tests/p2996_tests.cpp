@@ -1,7 +1,6 @@
 #include <ut/ut.hpp>
 
 #include <cstddef>
-#include <string>
 
 #include "symphony/meta/reflection.hpp"
 
@@ -23,10 +22,10 @@ ut::suite p2996_tests = [] {
     static_assert(fields[1].type == "bool");
 
     ut::expect(fields.size() == std::size_t{2});
-    ut::expect(fields[0].name == std::string{"poll_interval_ms"});
-    ut::expect(fields[0].type == std::string{"int"});
-    ut::expect(fields[1].name == std::string{"enabled"});
-    ut::expect(fields[1].type == std::string{"bool"});
+    ut::expect(fields[0].name == "poll_interval_ms");
+    ut::expect(fields[0].type == "int");
+    ut::expect(fields[1].name == "enabled");
+    ut::expect(fields[1].type == "bool");
   };
 };
 } // namespace symphony::test
