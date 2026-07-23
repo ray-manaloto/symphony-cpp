@@ -15,6 +15,8 @@
 #include <boost/sqlite/connection.hpp>
 #include <boost/sqlite/query.hpp>
 
+#include "symphony/observability/observability.hpp"
+#include "symphony/persistence/event_store.hpp"
 #include "symphony/persistence/persistence.hpp"
 
 namespace {
@@ -330,4 +332,73 @@ static ut::suite persistence_tests = [] {
       }
     }
   };
+
+  ut::test("durable event store persists only the redacted event") = [] {
+    FixtureDatabase fixture{"durable-events"};
+    auto opened =
+        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    ut::expect(opened.has_value());
+    if (!opened)
+      return;
+
+    symphony::observability::MemoryEventStore memory;
+    symphony::persistence::DurableEventStore events{memory, **opened};
+    const auto sensitive_value =
+        std::string{"fixture-"} + "sensitive-value";
+    events.append({
+        .type = "worker_process_diagnostic",
+        .issue_id = "fixture-1",
+        .issue_identifier = "SYM-1",
+        .session_id = "session-1",
+        .message = "token=" + sensitive_value,
+    });
+    events.drain();
+
+    const auto recent = events.recent(1);
+    ut::expect(recent.size() == std::size_t{1});
+    if (recent.size() == 1)
+      ut::expect(recent.front().message == "[REDACTED]");
+    ut::expect(events.persistence_failures() == std::uint64_t{0});
+
+    auto durable = (*opened)->load_after(0);
+    ut::expect(durable.has_value());
+    if (durable) {
+      ut::expect(durable->size() == std::size_t{1});
+      if (durable->size() == 1) {
+        ut::expect(durable->front().type == "worker_process_diagnostic");
+        ut::expect(durable->front().issue_id == "fixture-1");
+        ut::expect(durable->front().payload.find("[REDACTED]") !=
+                   std::string::npos);
+        ut::expect(durable->front().payload.find(sensitive_value) ==
+                   std::string::npos);
+      }
+    }
+  };
+
+  ut::test("durable event store retains events when persistence overloads") =
+      [] {
+        FixtureDatabase fixture{"durable-overload"};
+        auto opened = symphony::persistence::SqliteEventRepository::open(
+            fixture.path(), {.max_pending_appends = 0});
+        ut::expect(opened.has_value());
+        if (!opened)
+          return;
+
+        symphony::observability::MemoryEventStore memory;
+        symphony::persistence::DurableEventStore events{memory, **opened};
+        events.append({
+            .type = "dispatch",
+            .issue_id = "fixture-1",
+            .issue_identifier = "SYM-1",
+            .message = "retained",
+        });
+        events.drain();
+
+        ut::expect(events.recent(1).size() == std::size_t{1});
+        ut::expect(events.persistence_failures() == std::uint64_t{1});
+        auto durable = (*opened)->load_after(0);
+        ut::expect(durable.has_value());
+        if (durable)
+          ut::expect(durable->empty());
+      };
 };
