@@ -8,6 +8,7 @@
 #include "symphony/cli/cli.hpp"
 #include "symphony/codex/codex.hpp"
 #include "symphony/observability/observability.hpp"
+#include "symphony/observability/spdlog_event_store.hpp"
 #include "symphony/scheduler/scheduler.hpp"
 #include "symphony/tracker/tracker.hpp"
 #include "symphony/workflow/workflow.hpp"
@@ -79,7 +80,7 @@ int main(int argc, char** argv) {
         workflow.config.codex.stall_timeout,
         workflow.config.codex.turn_timeout,
         codex_policy(workflow.config));
-    symphony::observability::MemoryEventStore events;
+    symphony::observability::SpdlogEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);
     symphony::scheduler::Scheduler scheduler(config, tracker, workspaces, runtime, events, clock);

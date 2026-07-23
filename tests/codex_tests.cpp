@@ -230,7 +230,11 @@ static ut::suite codex_tests = [] {
     channel.enqueue(
         R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":4,"cachedInputTokens":1,"outputTokens":2,"reasoningOutputTokens":1,"totalTokens":6},"total":{"inputTokens":4,"cachedInputTokens":1,"outputTokens":2,"reasoningOutputTokens":1,"totalTokens":6}}}})");
     channel.enqueue(
-        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":{"usedPercent":9}}}})");
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":9}}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":3,"cachedInputTokens":1,"outputTokens":2,"reasoningOutputTokens":1,"totalTokens":5},"total":{"inputTokens":7,"cachedInputTokens":2,"outputTokens":4,"reasoningOutputTokens":2,"totalTokens":11}}}})");
+    channel.enqueue(
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"secondary":{"usedPercent":12}}}})");
     channel.enqueue(
         R"({"method":"item/completed","params":{"completedAtMs":1,"threadId":"thr_1","turnId":"turn_2","item":{"id":"item_3","type":"contextCompaction"}}})");
     channel.enqueue(
@@ -244,9 +248,12 @@ static ut::suite codex_tests = [] {
 
     ut::expect(result.normal_exit);
     ut::expect(result.token_usage.has_value());
-    ut::expect(result.token_usage->total_tokens == std::uint64_t{6});
+    ut::expect(result.token_usage->total_tokens == std::uint64_t{11});
     ut::expect(result.rate_limits.has_value());
+    ut::expect(result.rate_limits->limit_id ==
+               std::optional<std::string>{"codex"});
     ut::expect(result.rate_limits->primary->used_percent == 9);
+    ut::expect(result.rate_limits->secondary->used_percent == 12);
     ut::expect(result.compaction_count == std::uint32_t{1});
   };
 

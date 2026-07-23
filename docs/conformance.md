@@ -17,7 +17,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Lifecycle hooks and 60s default | workflow, scheduler, and workspace tests | Implemented in fixture and contained POSIX executors |
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
 | Codex default command | config default test | Implemented |
-| Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for cumulative token usage, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
+| Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for replacement of repeated cumulative updates within a conversation, saturating aggregation across completed runs, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
 | Codex interactive-request policy | protocol and conversation fixtures | Implemented fail-closed handling for approval and user-input requests plus structured rejection-and-continue behavior for unadvertised dynamic tools; GCC 16.1 Source CI run `29970037383` passed |
 | Codex startup policy payloads | protocol, runtime, workflow reload, and schema fixtures | Implemented pass-through model, reasoning effort, approval, and thread-sandbox strings plus validated raw-JSON turn sandbox policy against the Codex CLI 0.145.0 v2 shapes; no local enum or model catalog duplicates Codex |
 | Codex turn and stall deadlines | protocol, scheduler, workflow, and Boost.Process-backed runtime tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, distinct outcomes/events, and explicit EOF handling |
@@ -31,7 +31,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Retry queue metadata and slot-exhaustion requeue | scheduler tests | Implemented with one-based attempts, monotonic due times, timer handles, retained claims, and the normative capacity error |
 | Terminal/non-active reconciliation | scheduler tests | Implemented |
 | Terminal cleanup | scheduler/workspace tests | Implemented for startup sweep and active transition |
-| Structured contextual logs | observability tests | Implemented |
+| Structured contextual logs | observability tests plus spdlog adapter | Implemented for redact-before-dispatch JSON, bounded status history, synchronous stderr delivery, and isolated/countable sink failures |
 | Operator-visible observability | `symphonyctl status`, JSON events | Partial: CLI surface exists; live snapshot wiring pending |
 
 This matrix is intentionally fail-closed. `Partial` is not conformance. Official fixture parity and
@@ -42,6 +42,5 @@ the pinned compiler matrix must be green before the implementation may claim ful
 The following required evidence is not yet complete and prevents a conformance claim:
 
 - process-tree/group cancellation;
-- logging-sink failure isolation and repeated telemetry aggregation;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential
   reflection evidence required by the implementation plan.

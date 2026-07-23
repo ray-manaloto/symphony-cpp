@@ -1,11 +1,23 @@
 #include "symphony/observability/observability.hpp"
+#include "symphony/observability/spdlog_event_store.hpp"
 
 #include <algorithm>
 #include <sstream>
+#include <stdexcept>
+
+#include <spdlog/logger.h>
+#include <spdlog/sinks/stdout_sinks.h>
 
 #include "symphony/meta/meta.hpp"
 
 namespace symphony::observability {
+namespace {
+std::shared_ptr<spdlog::logger> make_stderr_logger() {
+  return std::make_shared<spdlog::logger>(
+      "symphony", std::make_shared<spdlog::sinks::stderr_sink_mt>());
+}
+}  // namespace
+
 MemoryEventStore::MemoryEventStore(const std::size_t capacity) : capacity_(std::max<std::size_t>(1, capacity)) {}
 
 void MemoryEventStore::append(Event event) {
@@ -16,6 +28,35 @@ void MemoryEventStore::append(Event event) {
 std::vector<Event> MemoryEventStore::recent(const std::size_t limit) const {
   const auto count = std::min(limit, events_.size());
   return {events_.end() - static_cast<std::ptrdiff_t>(count), events_.end()};
+}
+
+SpdlogEventStore::SpdlogEventStore(const std::size_t capacity)
+    : SpdlogEventStore(make_stderr_logger(), capacity) {}
+
+SpdlogEventStore::SpdlogEventStore(std::shared_ptr<spdlog::logger> logger,
+                                   const std::size_t capacity)
+    : logger_(std::move(logger)),
+      history_(capacity),
+      sink_failures_(std::make_shared<std::atomic<std::uint64_t>>(0)) {
+  if (!logger_) throw std::invalid_argument("structured logger is required");
+  logger_->set_pattern("%v");
+  logger_->set_error_handler([failures = sink_failures_](const std::string&) {
+    failures->fetch_add(1, std::memory_order_relaxed);
+  });
+}
+
+void SpdlogEventStore::append(Event event) {
+  auto safe = redact(std::move(event));
+  history_.append(safe);
+  logger_->info("{}", to_json(safe));
+}
+
+std::vector<Event> SpdlogEventStore::recent(const std::size_t limit) const {
+  return history_.recent(limit);
+}
+
+std::uint64_t SpdlogEventStore::sink_failures() const noexcept {
+  return sink_failures_->load(std::memory_order_relaxed);
 }
 
 Event redact(Event event) {
@@ -42,4 +83,3 @@ std::string to_json(const Event& event) {
   return output.str();
 }
 }  // namespace symphony::observability
-
