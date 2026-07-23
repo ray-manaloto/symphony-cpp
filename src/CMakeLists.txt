@@ -21,7 +21,7 @@ target_link_libraries(symphony_execution PRIVATE STDEXEC::stdexec)
 symphony_library(symphony_persistence persistence/persistence.cpp)
 set_property(TARGET symphony_persistence PROPERTY CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(symphony_persistence PRIVATE
-  Boost::sqlite STDEXEC::stdexec)
+  Boost::sqlite symphony_execution)
 symphony_library(symphony_observability observability/observability.cpp)
 target_link_libraries(symphony_observability PUBLIC symphony_meta spdlog::spdlog)
 symphony_library(symphony_cli cli/cli.cpp)

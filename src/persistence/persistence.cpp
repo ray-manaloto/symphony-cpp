@@ -1,7 +1,9 @@
 #include "symphony/persistence/persistence.hpp"
 
+#include <atomic>
 #include <exception>
 #include <functional>
+#include <future>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -10,15 +12,16 @@
 #include <boost/sqlite/query.hpp>
 #include <boost/sqlite/transaction.hpp>
 #include <boost/system/system_error.hpp>
-#include <exec/static_thread_pool.hpp>
-#include <stdexec/execution.hpp>
+
+#include "symphony/execution/execution.hpp"
 
 namespace symphony::persistence {
 namespace sqlite = boost::sqlite;
 
 struct SqliteEventRepository::Impl {
-  exec::static_thread_pool pool{1};
   sqlite::connection connection;
+  execution::StdexecTaskExecutor tasks{1};
+  std::atomic<std::uint64_t> next_operation{1};
 };
 
 namespace {
@@ -38,10 +41,23 @@ Error current_error() {
 template <typename Impl, typename Function>
 auto on_database(Impl &impl, Function &&function)
     -> std::invoke_result_t<Function> {
-  auto sender = stdexec::schedule(impl.pool.get_scheduler()) |
-                stdexec::then(std::forward<Function>(function));
-  auto result = stdexec::sync_wait(std::move(sender));
-  return std::move(std::get<0>(*result));
+  using Result = std::invoke_result_t<Function>;
+  std::promise<Result> promise;
+  auto future = promise.get_future();
+  const auto operation =
+      "persistence-sync-" +
+      std::to_string(impl.next_operation.fetch_add(1));
+  impl.tasks.submit(
+      operation,
+      [function = std::forward<Function>(function),
+       promise = std::move(promise)](std::stop_token) mutable noexcept {
+        try {
+          promise.set_value(function());
+        } catch (...) {
+          promise.set_exception(std::current_exception());
+        }
+      });
+  return future.get();
 }
 
 } // namespace
