@@ -55,3 +55,9 @@ stdin/stdout transport, EOF, exit requests, termination, wait, and reap. JSONL f
 sequencing, and deadline policy remain product-specific. Stderr has a separate process handle and is
 currently discarded; bounded diagnostic capture and process-tree cancellation remain explicit
 conformance gaps rather than reasons to reintroduce direct POSIX lifecycle ownership.
+
+The current unattended Codex interaction posture is fail-closed: approval requests and user-input
+requests end the run immediately, so neither can wait indefinitely for an absent operator. Because
+the runtime advertises no dynamic tools, every `item/tool/call` request receives a structured
+failure result and the turn continues. Workflow-configured approval and sandbox startup payloads
+remain a separate open gate; their presence in parsed configuration does not yet imply enforcement.
