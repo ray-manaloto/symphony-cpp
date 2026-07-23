@@ -43,8 +43,8 @@ jobs:
           imageName: ghcr.io/ray-manaloto/symphony-dev
           imageTag: ${{ github.sha }},edge
           push: ${{ inputs.publish_images && 'always' || 'never' }}
-          cacheFrom: type=gha,scope=symphony-gcc16
-          cacheTo: type=gha,mode=max,scope=symphony-gcc16
+          cacheFrom: type=gha,scope=symphony-gcc16-min-v1
+          cacheTo: type=gha,mode=min,scope=symphony-gcc16-min-v1,timeout=30m
           runCmd: >-
             test "$(g++ -dumpfullversion)" = "16.1.0"
             && cmake --preset gcc-debug
@@ -96,8 +96,8 @@ jobs:
           imageName: ghcr.io/ray-manaloto/symphony-ci-clang
           imageTag: ${{ github.sha }},edge
           push: ${{ inputs.publish_images && 'always' || 'never' }}
-          cacheFrom: type=gha,scope=symphony-clang-p2996
-          cacheTo: type=gha,mode=max,scope=symphony-clang-p2996
+          cacheFrom: type=gha,scope=symphony-clang-p2996-min-v1
+          cacheTo: type=gha,mode=min,scope=symphony-clang-p2996-min-v1,timeout=30m
           runCmd: >-
             test -x /opt/clang-p2996/bin/clang++
             && cmake --preset clang-reflection
