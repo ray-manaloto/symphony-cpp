@@ -24,6 +24,14 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     },
     {
+      "name": "gcc-sanitizers",
+      "inherits": "gcc-debug",
+      "binaryDir": "${sourceDir}/build/gcc-sanitizers",
+      "cacheVariables": {
+        "SYMPHONY_ENABLE_ASAN_UBSAN": "ON"
+      }
+    },
+    {
       "name": "clang-reflection",
       "inherits": "gcc-debug",
       "binaryDir": "${sourceDir}/build/clang-reflection",
@@ -38,10 +46,20 @@
   "buildPresets": [
     { "name": "gcc-debug", "configurePreset": "gcc-debug" },
     { "name": "gcc-release", "configurePreset": "gcc-release" },
+    { "name": "gcc-sanitizers", "configurePreset": "gcc-sanitizers" },
     { "name": "clang-reflection", "configurePreset": "clang-reflection" }
   ],
   "testPresets": [
     { "name": "gcc-debug", "configurePreset": "gcc-debug", "output": { "outputOnFailure": true } },
+    {
+      "name": "gcc-sanitizers",
+      "configurePreset": "gcc-sanitizers",
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "output": { "outputOnFailure": true }
+    },
     { "name": "clang-reflection", "configurePreset": "clang-reflection", "output": { "outputOnFailure": true } }
   ]
 }

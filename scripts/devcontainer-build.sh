@@ -9,12 +9,16 @@ case "${profile}" in
     readonly config="${repository_root}/.devcontainer/devcontainer.json"
     readonly preset="gcc-debug"
     ;;
+  gcc-sanitizers)
+    readonly config="${repository_root}/.devcontainer/devcontainer.json"
+    readonly preset="gcc-sanitizers"
+    ;;
   clang-p2996)
     readonly config="${repository_root}/.devcontainer/clang-p2996/devcontainer.json"
     readonly preset="clang-reflection"
     ;;
   *)
-    echo "usage: $0 {gcc|clang-p2996}" >&2
+    echo "usage: $0 {gcc|gcc-sanitizers|clang-p2996}" >&2
     exit 2
     ;;
 esac

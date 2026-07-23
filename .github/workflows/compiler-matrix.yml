@@ -63,6 +63,9 @@ jobs:
             && cmake --preset gcc-debug
             && cmake --build --preset gcc-debug
             && ctest --preset gcc-debug
+            && cmake --preset gcc-sanitizers
+            && cmake --build --preset gcc-sanitizers
+            && ctest --preset gcc-sanitizers
       - name: Publish tested GCC development image
         if: ${{ inputs.publish_images }}
         run: |

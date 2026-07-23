@@ -4,6 +4,7 @@ project(symphony_cpp VERSION 0.1.0 LANGUAGES CXX)
 include(CTest)
 include(cmake/Dependencies.cmake)
 option(SYMPHONY_ENABLE_REFLECTION "Compile C++26 reflection facilities" OFF)
+option(SYMPHONY_ENABLE_ASAN_UBSAN "Instrument with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(SYMPHONY_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -15,6 +16,17 @@ add_library(symphony_options INTERFACE)
 target_compile_options(symphony_options INTERFACE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
   $<$<AND:$<BOOL:${SYMPHONY_WARNINGS_AS_ERRORS}>,$<CXX_COMPILER_ID:GNU,Clang>>:-Werror>)
+if(SYMPHONY_ENABLE_ASAN_UBSAN)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(FATAL_ERROR "ASan+UBSan requires GCC or Clang")
+  endif()
+  target_compile_options(symphony_options INTERFACE
+    -fsanitize=address,undefined
+    -fno-omit-frame-pointer)
+  target_link_options(symphony_options INTERFACE
+    -fsanitize=address,undefined
+    -fno-omit-frame-pointer)
+endif()
 
 add_library(symphony_reflection_options INTERFACE)
 if(SYMPHONY_ENABLE_REFLECTION)

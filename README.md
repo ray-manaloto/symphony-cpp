@@ -20,6 +20,12 @@ Day-to-day development runs inside the pinned GCC 16.1 devcontainer:
 ./scripts/devcontainer-build.sh gcc
 ```
 
+Run the GCC 16.1 AddressSanitizer and UndefinedBehaviorSanitizer gate in the same devcontainer:
+
+```sh
+./scripts/devcontainer-build.sh gcc-sanitizers
+```
+
 Run the differential reflection suite in the separate Bloomberg clang-p2996 devcontainer:
 
 ```sh
