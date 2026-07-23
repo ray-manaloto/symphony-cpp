@@ -47,7 +47,7 @@ RUN git clone --filter=blob:none https://github.com/bloomberg/clang-p2996.git ll
  && test "$(git rev-parse HEAD)" = "${CLANG_P2996_COMMIT}"
 RUN cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/clang-p2996 \
-      -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi' \
+      -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind' \
       -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_ASSERTIONS=ON \
  && cmake --build /tmp/llvm-build --target install -j 2 \
  && rm -rf /tmp/llvm-build /tmp/llvm-project
