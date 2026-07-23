@@ -1,6 +1,7 @@
 #include "symphony/codex/codex.hpp"
 
 #include <array>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -61,6 +62,9 @@ struct Identity {
 };
 
 struct ResultBody {
+  struct ThreadItem {
+    std::optional<std::string> type;
+  };
   std::optional<Identity> thread;
   std::optional<Identity> turn;
   struct TokenUsageBreakdown {
@@ -92,6 +96,7 @@ struct ResultBody {
   };
   std::optional<ThreadTokenUsage> tokenUsage;
   std::optional<RateLimitSnapshotBody> rateLimits;
+  std::optional<ThreadItem> item;
 };
 
 struct ErrorBody {
@@ -505,7 +510,8 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
           total.cachedInputTokens,
           total.outputTokens,
           total.reasoningOutputTokens,
-          total.totalTokens};
+          total.totalTokens,
+          message.params->tokenUsage->modelContextWindow};
     }
     if (message.params->rateLimits) {
       const auto map_window = [](const auto& source)
@@ -539,6 +545,11 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
     update.event = ProtocolEvent::user_input_required;
   else if (update.method == "item/tool/call")
     update.event = ProtocolEvent::unsupported_tool_call;
+  else if (update.method == "thread/compacted" ||
+           (update.method == "item/completed" && message.params &&
+            message.params->item &&
+            message.params->item->type == "contextCompaction"))
+    update.event = ProtocolEvent::context_compacted;
   else
     update.event = ProtocolEvent::notification;
   return update;
@@ -661,6 +672,13 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       }
       channel.write(AppServerProtocol::unsupported_tool_response(
           *update.response_id));
+      continue;
+    }
+    if (update.event == ProtocolEvent::context_compacted) {
+      if (result.compaction_count <
+          std::numeric_limits<std::uint32_t>::max()) {
+        ++result.compaction_count;
+      }
       continue;
     }
     if (update.response_id == 0 && !initialized) {

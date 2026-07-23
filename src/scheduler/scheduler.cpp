@@ -184,6 +184,19 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
         codex_totals_.reasoning_output_tokens,
         result.token_usage->reasoning_output_tokens);
     saturating_add(codex_totals_.total_tokens, result.token_usage->total_tokens);
+    if (result.token_usage->model_context_window) {
+      codex_totals_.model_context_window =
+          result.token_usage->model_context_window;
+    }
+  }
+  saturating_add(codex_compactions_, result.compaction_count);
+  if (result.compaction_count > 0) {
+    events_.append({
+        "context_compacted",
+        run.issue.id,
+        run.issue.identifier,
+        result.session_id,
+        "Codex compacted the active context"});
   }
   if (result.rate_limits) {
     if (!latest_rate_limits_) latest_rate_limits_.emplace();
@@ -310,6 +323,10 @@ const std::map<std::string, RunState>& Scheduler::runs() const noexcept { return
 
 const codex::TokenUsage& Scheduler::codex_totals() const noexcept {
   return codex_totals_;
+}
+
+std::uint64_t Scheduler::codex_compactions() const noexcept {
+  return codex_compactions_;
 }
 
 const std::optional<codex::RateLimits>& Scheduler::latest_rate_limits() const noexcept {

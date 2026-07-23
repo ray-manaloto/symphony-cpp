@@ -59,5 +59,12 @@ conformance gaps rather than reasons to reintroduce direct POSIX lifecycle owner
 The current unattended Codex interaction posture is fail-closed: approval requests and user-input
 requests end the run immediately, so neither can wait indefinitely for an absent operator. Because
 the runtime advertises no dynamic tools, every `item/tool/call` request receives a structured
-failure result and the turn continues. Workflow-configured approval and sandbox startup payloads
-remain a separate open gate; their presence in parsed configuration does not yet imply enforcement.
+failure result and the turn continues. Workflow-configured approval and thread-sandbox values pass
+through as strings; turn sandbox policy passes through as a Glaze-validated raw JSON object so this
+repository does not duplicate Codex's evolving enums.
+
+Codex remains responsible for the compaction mechanism. Symphony preserves the reported model
+context-window size, recognizes both the legacy `thread/compacted` notification and the current
+`contextCompaction` completed item, counts them, and emits an operator event. The repository does
+not yet pin model/effort, enforce `agent.max_turns`, or request proactive compaction at a local
+threshold; those remain explicit context-policy gaps.

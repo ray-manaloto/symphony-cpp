@@ -86,6 +86,7 @@ class Scheduler {
   void reconfigure(SchedulerConfig config);
   [[nodiscard]] const std::map<std::string, RunState>& runs() const noexcept;
   [[nodiscard]] const codex::TokenUsage& codex_totals() const noexcept;
+  [[nodiscard]] std::uint64_t codex_compactions() const noexcept;
   [[nodiscard]] const std::optional<codex::RateLimits>& latest_rate_limits() const noexcept;
 
  private:
@@ -111,6 +112,7 @@ class Scheduler {
   Clock& clock_;
   std::map<std::string, RunState> runs_;
   codex::TokenUsage codex_totals_;
+  std::uint64_t codex_compactions_{0};
   std::optional<codex::RateLimits> latest_rate_limits_;
   std::uint64_t next_timer_handle_{1};
 };

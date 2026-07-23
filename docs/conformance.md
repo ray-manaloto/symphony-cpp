@@ -18,7 +18,9 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Codex default command | config default test | Implemented |
 | Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for cumulative token usage, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
 | Codex interactive-request policy | protocol and conversation fixtures | Implemented fail-closed handling for approval and user-input requests plus structured rejection-and-continue behavior for unadvertised dynamic tools; GCC 16.1 Source CI run `29970037383` passed |
+| Codex startup policy payloads | protocol, runtime, workflow reload, and schema fixtures | Implemented pass-through approval and thread-sandbox strings plus validated raw-JSON turn sandbox policy against the Codex CLI 0.145.0 v2 shapes; no local enum duplicates Codex |
 | Codex turn and stall deadlines | protocol, scheduler, workflow, and Boost.Process-backed runtime tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, distinct outcomes/events, and explicit EOF handling |
+| Codex context telemetry | protocol, conversation, and scheduler fixtures | Implemented for model context-window preservation and legacy/current compaction-event counting; proactive compaction policy remains open |
 | Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for launch, working directory, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, and reap; GCC 16.1 Source CI run `29969683664` passed |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
@@ -36,8 +38,8 @@ the pinned compiler matrix must be green before the implementation may claim ful
 
 The following required evidence is not yet complete and prevents a conformance claim:
 
-- bounded Codex stderr diagnostics, process-tree/group cancellation, and configured approval/sandbox
-  startup payloads including any explicitly authorized auto-approval mode;
+- bounded Codex stderr diagnostics, process-tree/group cancellation, pinned model/effort policy,
+  proactive compaction thresholds, and `agent.max_turns` enforcement;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - positional workflow CLI behavior and process lifecycle exit tests;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential

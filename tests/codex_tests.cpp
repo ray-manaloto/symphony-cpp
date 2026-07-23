@@ -113,6 +113,8 @@ static ut::suite codex_tests = [] {
     ut::expect(usage.token_usage->cached_input_tokens == std::uint64_t{6});
     ut::expect(usage.token_usage->output_tokens == std::uint64_t{9});
     ut::expect(usage.token_usage->total_tokens == std::uint64_t{26});
+    ut::expect(usage.token_usage->model_context_window ==
+               std::optional<std::int64_t>{200000});
 
     const auto limits = symphony::codex::AppServerProtocol::decode(
         R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1234}}}})");
@@ -120,6 +122,18 @@ static ut::suite codex_tests = [] {
     ut::expect(limits.rate_limits->limit_id == std::optional<std::string>{"codex"});
     ut::expect(limits.rate_limits->primary.has_value());
     ut::expect(limits.rate_limits->primary->used_percent == 42);
+  };
+
+  ut::test("app-server protocol recognizes both compaction event shapes") = [] {
+    const auto legacy = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"thread/compacted","params":{"threadId":"thr_1","turnId":"turn_2"}})");
+    ut::expect(legacy.event ==
+               symphony::codex::ProtocolEvent::context_compacted);
+
+    const auto current = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"item/completed","params":{"completedAtMs":1,"threadId":"thr_1","turnId":"turn_2","item":{"id":"item_3","type":"contextCompaction"}}})");
+    ut::expect(current.event ==
+               symphony::codex::ProtocolEvent::context_compacted);
   };
 
   ut::test("app-server protocol tolerates additive fields but rejects bad "
@@ -164,6 +178,8 @@ static ut::suite codex_tests = [] {
     channel.enqueue(
         R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":{"usedPercent":9}}}})");
     channel.enqueue(
+        R"({"method":"item/completed","params":{"completedAtMs":1,"threadId":"thr_1","turnId":"turn_2","item":{"id":"item_3","type":"contextCompaction"}}})");
+    channel.enqueue(
         R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
     symphony::codex::RunRequest request;
     request.workspace.path = "/tmp/work";
@@ -177,6 +193,7 @@ static ut::suite codex_tests = [] {
     ut::expect(result.token_usage->total_tokens == std::uint64_t{6});
     ut::expect(result.rate_limits.has_value());
     ut::expect(result.rate_limits->primary->used_percent == 9);
+    ut::expect(result.compaction_count == std::uint32_t{1});
   };
 
   ut::test(

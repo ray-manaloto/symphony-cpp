@@ -22,6 +22,7 @@ struct TokenUsage {
   std::uint64_t output_tokens{0};
   std::uint64_t reasoning_output_tokens{0};
   std::uint64_t total_tokens{0};
+  std::optional<std::int64_t> model_context_window;
 };
 
 struct RateLimitWindow {
@@ -81,6 +82,7 @@ struct RunResult {
   std::string error;
   std::optional<TokenUsage> token_usage;
   std::optional<RateLimits> rate_limits;
+  std::uint32_t compaction_count{0};
 };
 
 struct AppServerPolicy {
@@ -150,6 +152,7 @@ enum class ProtocolEvent {
   approval_required,
   user_input_required,
   unsupported_tool_call,
+  context_compacted,
   malformed
 };
 
