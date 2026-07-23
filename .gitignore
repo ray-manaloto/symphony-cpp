@@ -4,5 +4,8 @@
 /.ccache/
 /vcpkg_installed/
 /.env
-/.opensymphony/
+/.opensymphony/*
+!/.opensymphony/memory/
+/.opensymphony/memory/*
+!/.opensymphony/memory/memory.yaml
 compile_commands.json

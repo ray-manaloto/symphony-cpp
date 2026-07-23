@@ -49,6 +49,7 @@ codex:
 routing:
   harness: codex_app_server
   model: gpt-5.6-sol
+  model_profile: codex-chatgpt-local-keychain
 ---
 
 You are implementing Linear issue `{{ issue.identifier }}` in the standalone

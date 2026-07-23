@@ -10,6 +10,10 @@ This repository implements OpenAI Symphony Draft v1 as a standalone C++26 servic
   tool, test utility, generator, or service integration. Use maintained third-party capabilities
   whenever they meet the contract. Codex may not authorize custom replacements; record explicit
   owner exceptions in `docs/dependency-decisions.md` before implementation.
+- For nontrivial OpenSymphony-managed issue work, consult the project-local
+  `opensymphony-memory` skill before planning. Memory is private, non-authoritative context;
+  verify it against current source and tests, and never archive tracker work without explicit
+  authorization.
 - All third-party C++ dependencies use the pinned vcpkg manifest/overlays. FetchContent, CPM,
   ExternalProject source builds, vendored dependency trees, and floating refs are prohibited.
 - Work fixture-first. Real tracker mutation, production credentials, deployment, image publication,

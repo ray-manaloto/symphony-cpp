@@ -27,10 +27,15 @@ GitHub Actions so the compiler-heavy build does not consume the development Mac.
    fnox/Doppler/macOS secrets authority as `LINEAR_API_KEY`. Do not paste it into
    Codex, a shell argument, a project file, or logs.
 3. Run `scripts/opensymphony-container.sh login` and complete Codex device login.
-4. Inject the key for exactly `scripts/opensymphony-container.sh dry-run` through
+4. Run `scripts/opensymphony-container.sh memory-init`, then
+   `scripts/opensymphony-container.sh preflight`. The first command seeds a
+   private, persistent Docker volume from the checked-in memory policy without
+   reading credentials.
+5. Inject the key for exactly `scripts/opensymphony-container.sh doctor` and
+   `scripts/opensymphony-container.sh dry-run` through
    the configured secret manager. Keep every Linear issue in
    Backlog so this first check performs no worker launch.
-5. Inspect `http://127.0.0.1:2468` and the container logs. Activate exactly one
+6. Inspect `http://127.0.0.1:2468` and the container logs. Activate exactly one
    fixture-only canary issue only after the dry run is healthy.
 
 That ceremony completed against immutable image manifest
@@ -51,6 +56,59 @@ The runner is provider-neutral: it neither retrieves nor stores the secret. A
 human-operated fnox or Doppler command may inject `LINEAR_API_KEY` into the exact
 runner process; the runner forwards only that named value into the container and
 never prints it.
+
+## Upstream bootstrap reconciliation
+
+The v2.10.0 `opensymphony init` command was exercised in a disposable repository
+with `--non-interactive`, the `codex/implementation` target branch, this Linear
+project slug, and no PR-review provider. It was not run over this checkout:
+`init` fetches a mutable template payload and would overwrite repository-specific
+policy. The useful generated memory policy and skill were instead adopted
+selectively while retaining the stricter C++26, fixture-first, and
+dependency-first rules.
+
+The checked-in `.opensymphony/memory/memory.yaml` is only the seed policy.
+Runtime capsules, indexes, and learned ontology updates live in the private
+`symphony-opensymphony-state` Docker volume mounted over
+`/target/.opensymphony`; they are not committed. `memory-init` is idempotent and
+does not overwrite an existing learned policy. Automatic capture and the
+read-only memory server are enabled, but automatic Linear archival remains
+disabled. Generated topic documentation is staged under
+`.opensymphony/memory/generated-docs` in that same private volume because the
+canonical checkout remains read-only. Promoting generated text into tracked
+documentation requires a separate review and normal repository checks.
+`memory-init` also performs one narrowly scoped migration from the former
+`docs`/public staging fields, preserving a backup named
+`memory.yaml.pre-private-doc-staging`. Existing learned area targets under
+`docs/` are redirected into the private generated-doc staging directory while
+the rest of each learned area is preserved.
+
+Use the contained operator commands:
+
+```sh
+./scripts/opensymphony-container.sh preflight
+./scripts/opensymphony-container.sh memory-status
+./scripts/opensymphony-container.sh memory-context GUI-5
+./scripts/opensymphony-container.sh tui
+./scripts/opensymphony-container.sh doctor
+./scripts/opensymphony-container.sh debug GUI-5
+```
+
+`doctor` is exposed for exact upstream diagnostics. With the Codex route it
+parses the configuration and workflow, renders the prompt, validates the
+workspace, and correctly skips `uv` and managed OpenHands tooling. OpenSymphony
+v2.10.0 still requires `cargo` and `curl` even after recognizing that the target
+is not a Rust workspace, so the lean runtime reports those two failures. The
+contained `preflight` command instead verifies strict Codex configuration,
+login status, app-server schema generation and required lifecycle methods,
+workspace and memory-volume writability, and the passing configuration,
+workflow, and prompt-rendering portions of `doctor`. Do not add a second
+compiler toolchain to the standalone C++ project merely to turn an unrelated
+generic diagnostic green.
+
+OpenSymphony v2.10.0 `rehydrate` operates on OpenHands conversation manifests,
+so it is deliberately not exposed for the Codex route. Use `debug ISSUE`,
+which supports persisted Codex thread unarchive and recovery.
 
 On the managed development Mac, use the machine-wide wrapper from the
 `macos-development-environment` project. It prompts without echo, writes Doppler

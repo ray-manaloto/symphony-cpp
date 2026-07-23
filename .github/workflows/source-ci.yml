@@ -50,6 +50,8 @@ jobs:
           ccache --zero-stats
       - name: Enforce dependency-first policy
         run: node scripts/check-dependency-policy.mjs
+      - name: Validate contained OpenSymphony launcher
+        run: ./scripts/test-opensymphony-container.sh
       - name: Bootstrap pinned vcpkg
         run: ./scripts/bootstrap-vcpkg.sh
       - name: Configure, build, and test Debug

@@ -7,6 +7,12 @@ on:
     paths:
       - .github/workflows/opensymphony-image.yml
       - containers/OpenSymphony.Containerfile
+      - .opensymphony/memory/memory.yaml
+      - WORKFLOW.md
+      - ops/opensymphony/config.yaml
+      - ops/opensymphony/codex-config.toml
+      - scripts/opensymphony-container.sh
+      - scripts/test-opensymphony-container.sh
 
 permissions:
   contents: read
@@ -49,7 +55,18 @@ jobs:
       - name: Smoke-test pinned tools
         run: |
           docker run --rm --entrypoint opensymphony symphony-orchestrator:ci --help | grep -F "OpenSymphony local MVP"
+          docker run --rm --entrypoint opensymphony symphony-orchestrator:ci doctor --help | grep -F "preflight"
+          docker run --rm --entrypoint opensymphony symphony-orchestrator:ci memory --help | grep -F "project memory"
+          docker run --rm --entrypoint opensymphony symphony-orchestrator:ci run --help | grep -F -- "--dry-run"
           test "$(docker run --rm --entrypoint codex symphony-orchestrator:ci --version)" = "codex-cli 0.145.0"
+      - name: Exercise contained launcher against pinned image
+        env:
+          OPENSYMPHONY_INTEGRATION_IMAGE: symphony-orchestrator:ci
+          OPENSYMPHONY_CODEX_AUTH_VOLUME: symphony-codex-auth-ci-${{ github.run_id }}
+          OPENSYMPHONY_STATE_VOLUME: symphony-opensymphony-state-ci-${{ github.run_id }}
+          OPENSYMPHONY_SEED_FIXTURE_CODEX_LOGIN: "true"
+          OPENSYMPHONY_TEST_LEGACY_MEMORY_MIGRATION: "true"
+        run: ./scripts/test-opensymphony-container.sh
       - name: Publish tested image
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"

@@ -3,7 +3,10 @@ target_repo: /target
 control_plane:
   bind: 0.0.0.0:2468
 
+openhands:
+  tool_dir: /home/orchestrator/.opensymphony/openhands-server
+
 memory:
-  auto_capture: false
+  auto_capture: true
   auto_archive: false
-  serve: false
+  serve: true
