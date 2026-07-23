@@ -5,8 +5,13 @@ function(symphony_library name)
 endfunction()
 
 symphony_library(symphony_domain domain/domain.cpp)
+add_library(symphony_reflection INTERFACE)
+target_include_directories(symphony_reflection
+  INTERFACE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(symphony_reflection INTERFACE symphony_options)
 symphony_library(symphony_meta meta/meta.cpp)
-target_link_libraries(symphony_meta PUBLIC glaze::glaze)
+target_link_libraries(symphony_meta PUBLIC
+  symphony_reflection glaze::glaze)
 symphony_library(symphony_workflow workflow/workflow.cpp)
 target_link_libraries(symphony_workflow PUBLIC glaze::glaze)
 symphony_library(symphony_tracker tracker/tracker.cpp)
