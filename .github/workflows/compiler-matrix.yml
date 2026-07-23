@@ -61,7 +61,15 @@ jobs:
           image="ghcr.io/ray-manaloto/symphony-dev:${GITHUB_SHA}"
           test "$(docker image inspect "${image}" --format '{{.Architecture}}')" = "amd64"
           test "$(docker image inspect "${image}" --format '{{len .Config.Entrypoint}}')" = "0"
-          docker run --rm "${image}" bash -lc 'test "$(g++ -dumpfullversion)" = "16.1.0"'
+          docker run --rm "${image}" bash -lc '
+            test "$(g++ -dumpfullversion)" = "16.1.0"
+            printf "%s\n" "#include <iostream>" \
+              "int main() { std::cout << 16; }" |
+              g++ -x c++ - -o /tmp/gcc-runtime-check
+            ldd /tmp/gcc-runtime-check |
+              grep -F "libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6"
+            test "$(/tmp/gcc-runtime-check)" = "16"
+          '
 
   clang-p2996:
     name: clang-p2996 differential reflection
