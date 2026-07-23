@@ -8,6 +8,7 @@
     "cli11",
     "fmt",
     "glaze",
+    "picosha2",
     "spdlog",
     "stdexec",
     "ut",

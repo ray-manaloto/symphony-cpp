@@ -20,6 +20,7 @@ The agent model and effort recommendation additionally uses the current
 - [x] [OpenAI OpenAPI](https://github.com/openai/openai-openapi), pinned REST API schema and generated C++ reference surface
 - [x] [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator), pinned C++ Boost.Beast reference generator
 - [x] [Glaze](https://github.com/stephenberry/glaze) and its [HTTP/REST](https://stephenberry.github.io/glaze/networking/http-rest-support/), [REPE RPC](https://stephenberry.github.io/glaze/rpc/repe-rpc/), and [P2996](https://stephenberry.github.io/glaze/p2996-reflection/) documentation
+- [x] [PicoSHA2](https://github.com/okdshin/PicoSHA2) `v1.0.1` for the Draft v1 stable workspace-key hash suffix
 - [x] [`openalgz/ut`](https://github.com/openalgz/ut), selected unit and compile-time test library
 - [x] [vcpkg manifest mode and versioning](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode), selected dependency manager
 - [x] [`reflect-cpp`](https://github.com/getml/reflect-cpp) and [`sqlgen`](https://github.com/getml/sqlgen), persistence/reflection comparisons

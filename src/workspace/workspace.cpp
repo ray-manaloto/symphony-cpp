@@ -1,12 +1,11 @@
 #include "symphony/workspace/workspace.hpp"
 
 #include <algorithm>
-#include <iomanip>
-#include <sstream>
 #include <stdexcept>
 #include <thread>
 
 #include <csignal>
+#include <picosha2.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -16,15 +15,6 @@ bool is_ascii_alphanumeric(const unsigned char value) {
   return (value >= 'A' && value <= 'Z') ||
          (value >= 'a' && value <= 'z') ||
          (value >= '0' && value <= '9');
-}
-
-std::uint64_t fnv1a(const std::string_view value) {
-  std::uint64_t hash = 14695981039346656037ULL;
-  for (const unsigned char byte : value) {
-    hash ^= byte;
-    hash *= 1099511628211ULL;
-  }
-  return hash;
 }
 }  // namespace
 
@@ -48,10 +38,9 @@ std::string workspace_leaf(const domain::Issue& issue) {
     changed = true;
   }
   if (!changed) return safe;
-  std::ostringstream suffix;
-  suffix << std::hex << std::setfill('0') << std::setw(16)
-         << fnv1a(issue.identifier);
-  return safe + '-' + suffix.str();
+  const auto digest = picosha2::hash256_hex_string(
+      issue.identifier.begin(), issue.identifier.end());
+  return safe + '-' + digest.substr(0, 32);
 }
 
 FixtureWorkspaceExecutor::FixtureWorkspaceExecutor(std::filesystem::path root)

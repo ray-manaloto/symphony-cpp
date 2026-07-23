@@ -15,9 +15,9 @@ static ut::suite workspace_tests = [] {
     const auto second = symphony::workspace::workspace_leaf(two);
     ut::expect(first == second);
     ut::expect(first.starts_with(".._SYM_1-"));
-    ut::expect(first.size() == std::string{".._SYM_1-"}.size() + 16);
+    ut::expect(first.size() == std::string{".._SYM_1-"}.size() + 32);
     ut::expect(std::ranges::all_of(
-        first.substr(first.size() - 16), [](const unsigned char character) {
+        first.substr(first.size() - 32), [](const unsigned char character) {
           return std::isxdigit(character) != 0;
         }));
   };
@@ -45,8 +45,10 @@ static ut::suite workspace_tests = [] {
         ut::expect(second.starts_with("SYM_1-"));
         ut::expect(third.starts_with("SYM-__-"));
         ut::expect(first != second);
-        ut::expect(first.size() == std::string{"SYM_1-"}.size() + 16);
-        ut::expect(second.size() == std::string{"SYM_1-"}.size() + 16);
+        ut::expect(first ==
+                   std::string{"SYM_1-5fd1b797e690bf120102dc7e77c6a3ff"});
+        ut::expect(first.size() == std::string{"SYM_1-"}.size() + 32);
+        ut::expect(second.size() == std::string{"SYM_1-"}.size() + 32);
       };
 
   ut::test("workspace leaf rejects a missing required identifier") = [] {
@@ -65,8 +67,8 @@ static ut::suite workspace_tests = [] {
     ut::expect(second != std::string{".."});
     ut::expect(first.starts_with("_-"));
     ut::expect(second.starts_with("__-"));
-    ut::expect(first.size() == std::string{"_-"}.size() + 16);
-    ut::expect(second.size() == std::string{"__-"}.size() + 16);
+    ut::expect(first.size() == std::string{"_-"}.size() + 32);
+    ut::expect(second.size() == std::string{"__-"}.size() + 32);
   };
 
   ut::test("fixture workspace creates hooks and removes only contained paths") =
