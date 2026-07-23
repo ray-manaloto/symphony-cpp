@@ -168,6 +168,24 @@ static ut::suite codex_tests = [] {
         ut::expect(bad.error.find("malformed") != std::string::npos);
       };
 
+  ut::test("app-server conversation reports stdout closure without spinning") = [] {
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    symphony::codex::FakeProtocolChannel closed;
+    closed.close();
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        closed,
+        request,
+        std::chrono::milliseconds{1},
+        100,
+        std::chrono::seconds{1},
+        std::chrono::seconds{1});
+
+    ut::expect(!result.normal_exit);
+    ut::expect(result.error == std::string{"app-server stdout closed"});
+  };
+
   ut::test("app-server conversation distinguishes a stalled session") = [] {
     symphony::codex::FakeProtocolChannel channel;
     channel.enqueue(R"({"id":0,"result":{}})");

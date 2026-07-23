@@ -1,15 +1,14 @@
 #include "symphony/codex/codex.hpp"
 
 #include <array>
-#include <cerrno>
 #include <stdexcept>
 #include <thread>
 
-#include <csignal>
-#include <poll.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
+#include <boost/asio.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/process/v2/process.hpp>
+#include <boost/process/v2/start_dir.hpp>
+#include <boost/process/v2/stdio.hpp>
 #include <glaze/glaze.hpp>
 #include <glaze/json/generic.hpp>
 
@@ -126,84 +125,51 @@ void merge_rate_limits(RateLimits& current, const RateLimits& update) {
 }
 
 namespace {
-class PosixProtocolChannel final : public ProtocolChannel {
+class BoostProcessProtocolChannel final : public ProtocolChannel {
 public:
-  PosixProtocolChannel(const std::string &command,
-                       const std::filesystem::path &cwd,
-                       std::atomic<int> &active_process)
-      : active_process_(active_process) {
-    int input_pipe[2]{};
-    int output_pipe[2]{};
-    if (::pipe(input_pipe) != 0 || ::pipe(output_pipe) != 0) {
-      throw std::runtime_error("cannot create app-server pipes");
+  BoostProcessProtocolChannel(
+      const std::string& command,
+      const std::filesystem::path& cwd)
+      : input_(context_),
+        output_(context_),
+        child_(
+            context_,
+            boost::filesystem::path("/bin/bash"),
+            {"-lc", command},
+            boost::process::v2::process_start_dir(
+                boost::filesystem::path(cwd.string())),
+            boost::process::v2::process_stdio{input_, output_, nullptr}) {}
+
+  ~BoostProcessProtocolChannel() override {
+    boost::system::error_code ignored;
+    input_.close(ignored);
+    output_.close(ignored);
+    ignored.clear();
+    if (child_.running(ignored)) {
+      ignored.clear();
+      child_.terminate(ignored);
     }
-    child_ = ::fork();
-    if (child_ < 0) {
-      ::close(input_pipe[0]);
-      ::close(input_pipe[1]);
-      ::close(output_pipe[0]);
-      ::close(output_pipe[1]);
-      throw std::runtime_error("cannot fork app-server");
-    }
-    if (child_ == 0) {
-      static_cast<void>(::setpgid(0, 0));
-      if (::chdir(cwd.c_str()) != 0)
-        _exit(126);
-      ::dup2(input_pipe[0], STDIN_FILENO);
-      ::dup2(output_pipe[1], STDOUT_FILENO);
-      ::close(input_pipe[0]);
-      ::close(input_pipe[1]);
-      ::close(output_pipe[0]);
-      ::close(output_pipe[1]);
-      ::execl("/bin/bash", "bash", "-lc", command.c_str(),
-              static_cast<char *>(nullptr));
-      _exit(127);
-    }
-    ::close(input_pipe[0]);
-    ::close(output_pipe[1]);
-    input_ = input_pipe[1];
-    output_ = output_pipe[0];
-    active_process_.store(child_);
+    ignored.clear();
+    static_cast<void>(child_.wait(ignored));
   }
 
-  ~PosixProtocolChannel() override {
-    if (input_ >= 0)
-      ::close(input_);
-    if (output_ >= 0)
-      ::close(output_);
-    if (child_ > 0) {
-      int status = 0;
-      if (::waitpid(child_, &status, WNOHANG) == 0) {
-        static_cast<void>(::kill(-child_, SIGTERM));
-        for (int count = 0;
-             count < 20 && ::waitpid(child_, &status, WNOHANG) == 0; ++count) {
-          ::usleep(5000);
-        }
-        if (::waitpid(child_, &status, WNOHANG) == 0) {
-          static_cast<void>(::kill(-child_, SIGKILL));
-          static_cast<void>(::waitpid(child_, &status, 0));
-        }
-      }
+  void request_exit() noexcept {
+    boost::system::error_code ignored;
+    if (child_.running(ignored)) {
+      ignored.clear();
+      child_.request_exit(ignored);
     }
-    active_process_.store(-1);
   }
-
-  [[nodiscard]] int process_id() const noexcept { return child_; }
 
   void write(const std::string_view frame) override {
-    std::size_t offset = 0;
-    while (offset < frame.size()) {
-      const auto count =
-          ::write(input_, frame.data() + offset, frame.size() - offset);
-      if (count < 0 && errno == EINTR)
-        continue;
-      if (count <= 0)
-        throw std::runtime_error("app-server stdin closed");
-      offset += static_cast<std::size_t>(count);
+    boost::system::error_code error;
+    boost::asio::write(input_, boost::asio::buffer(frame), error);
+    if (error) {
+      throw std::runtime_error("app-server stdin closed");
     }
   }
 
-  std::optional<std::string>
+  ReadResult
   read(const std::chrono::milliseconds timeout) override {
     constexpr std::size_t max_line_bytes = 10U * 1024U * 1024U;
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -212,42 +178,67 @@ public:
           newline != std::string::npos) {
         auto line = buffered_.substr(0, newline + 1);
         buffered_.erase(0, newline + 1);
-        return line;
+        return {ReadStatus::message, std::move(line)};
       }
       if (buffered_.size() > max_line_bytes)
         throw std::runtime_error("app-server line exceeds 10 MB");
+      if (end_of_stream_) {
+        if (!buffered_.empty()) {
+          throw std::runtime_error(
+              "app-server stdout closed with incomplete frame");
+        }
+        return {ReadStatus::end_of_stream, {}};
+      }
       const auto remaining =
           std::chrono::duration_cast<std::chrono::milliseconds>(
               deadline - std::chrono::steady_clock::now());
       if (remaining <= std::chrono::milliseconds::zero())
-        return std::nullopt;
-      pollfd descriptor{output_, POLLIN, 0};
-      const auto ready =
-          ::poll(&descriptor, 1, static_cast<int>(remaining.count()));
-      if (ready == 0)
-        return std::nullopt;
-      if (ready < 0 && errno == EINTR)
-        continue;
-      if (ready < 0)
-        throw std::runtime_error("app-server poll failed");
+        return {ReadStatus::timeout, {}};
+
       std::array<char, 8192> chunk{};
-      const auto count = ::read(output_, chunk.data(), chunk.size());
-      if (count == 0)
-        return std::nullopt;
-      if (count < 0 && errno == EINTR)
+      boost::system::error_code read_error;
+      std::size_t count = 0;
+      bool read_finished = false;
+      bool timed_out = false;
+      boost::asio::steady_timer timer(context_, remaining);
+      output_.async_read_some(
+          boost::asio::buffer(chunk),
+          [&](const boost::system::error_code& error, const std::size_t size) {
+            read_error = error;
+            count = size;
+            read_finished = true;
+            boost::system::error_code ignored;
+            timer.cancel(ignored);
+          });
+      timer.async_wait([&](const boost::system::error_code& error) {
+        if (!error && !read_finished) {
+          timed_out = true;
+          boost::system::error_code ignored;
+          output_.cancel(ignored);
+        }
+      });
+      context_.restart();
+      context_.run();
+
+      if (timed_out) return {ReadStatus::timeout, {}};
+      if (read_error == boost::asio::error::eof) {
+        end_of_stream_ = true;
         continue;
-      if (count < 0)
+      }
+      if (read_error) {
         throw std::runtime_error("app-server stdout failed");
-      buffered_.append(chunk.data(), static_cast<std::size_t>(count));
+      }
+      buffered_.append(chunk.data(), count);
     }
   }
 
 private:
-  std::atomic<int> &active_process_;
-  int child_{-1};
-  int input_{-1};
-  int output_{-1};
+  boost::asio::io_context context_;
+  boost::asio::writable_pipe input_;
+  boost::asio::readable_pipe output_;
+  boost::process::v2::process child_;
   std::string buffered_;
+  bool end_of_stream_{false};
 };
 } // namespace
 
@@ -293,16 +284,43 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
     return RunResult{
         false, false, std::nullopt, {}, "invalid app-server workspace"};
   }
-  PosixProtocolChannel channel(command_, request.workspace.path,
-                               active_process_);
-  return AppServerConversation::run(
-      channel, request, read_timeout_, 10000, stall_timeout_, turn_timeout_);
+  std::string command;
+  std::chrono::milliseconds read_timeout;
+  std::chrono::milliseconds stall_timeout;
+  std::chrono::milliseconds turn_timeout;
+  {
+    const std::scoped_lock lock(active_process_mutex_);
+    command = command_;
+    read_timeout = read_timeout_;
+    stall_timeout = stall_timeout_;
+    turn_timeout = turn_timeout_;
+  }
+  BoostProcessProtocolChannel channel(command, request.workspace.path);
+  {
+    const std::scoped_lock lock(active_process_mutex_);
+    if (cancel_active_process_) {
+      throw std::runtime_error("Codex runtime already has an active process");
+    }
+    cancel_active_process_ = [&channel] { channel.request_exit(); };
+  }
+  const auto clear_active_process = [&] {
+    const std::scoped_lock lock(active_process_mutex_);
+    cancel_active_process_ = {};
+  };
+  try {
+    auto result = AppServerConversation::run(
+        channel, request, read_timeout, 10000, stall_timeout, turn_timeout);
+    clear_active_process();
+    return result;
+  } catch (...) {
+    clear_active_process();
+    throw;
+  }
 }
 
 void CodexAppServerRuntime::cancel(std::string_view) {
-  const auto process = active_process_.load();
-  if (process > 0)
-    static_cast<void>(::kill(-process, SIGTERM));
+  const std::scoped_lock lock(active_process_mutex_);
+  if (cancel_active_process_) cancel_active_process_();
 }
 
 void CodexAppServerRuntime::reconfigure(
@@ -310,7 +328,8 @@ void CodexAppServerRuntime::reconfigure(
     const std::chrono::milliseconds read_timeout,
     const std::chrono::milliseconds stall_timeout,
     const std::chrono::milliseconds turn_timeout) {
-  if (active_process_.load() > 0)
+  const std::scoped_lock lock(active_process_mutex_);
+  if (cancel_active_process_)
     throw std::runtime_error("cannot reconfigure active Codex process");
   if (command.empty() || read_timeout <= std::chrono::milliseconds::zero()) {
     throw std::invalid_argument("invalid Codex runtime configuration");
@@ -458,15 +477,17 @@ void FakeProtocolChannel::enqueue(std::string line) {
 void FakeProtocolChannel::write(const std::string_view frame) {
   writes_.emplace_back(frame);
 }
-std::optional<std::string>
+void FakeProtocolChannel::close() { closed_ = true; }
+ProtocolChannel::ReadResult
 FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
   if (reads_.empty()) {
+    if (closed_) return {ReadStatus::end_of_stream, {}};
     std::this_thread::sleep_for(timeout);
-    return std::nullopt;
+    return {ReadStatus::timeout, {}};
   }
   auto line = std::move(reads_.front());
   reads_.pop_front();
-  return line;
+  return {ReadStatus::message, std::move(line)};
 }
 const std::vector<std::string> &FakeProtocolChannel::writes() const noexcept {
   return writes_;
@@ -488,8 +509,15 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
   const auto started_at = std::chrono::steady_clock::now();
   auto last_event = started_at;
   for (std::size_t count = 0; count < max_messages; ++count) {
-    const auto line = channel.read(read_timeout);
-    if (!line) {
+    const auto read = channel.read(read_timeout);
+    if (read.status == ProtocolChannel::ReadStatus::end_of_stream) {
+      result.error = "app-server stdout closed";
+      result.session_id = thread_id.empty() || turn_id.empty()
+                              ? ""
+                              : thread_id + '-' + turn_id;
+      return result;
+    }
+    if (read.status == ProtocolChannel::ReadStatus::timeout) {
       const auto now = std::chrono::steady_clock::now();
       if (turn_timeout > std::chrono::milliseconds::zero() &&
           now - started_at > turn_timeout) {
@@ -518,7 +546,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     last_event = std::chrono::steady_clock::now();
     ProtocolUpdate update;
     try {
-      update = AppServerProtocol::decode(*line);
+      update = AppServerProtocol::decode(read.message);
     } catch (const std::exception &error) {
       result.error =
           std::string{"malformed app-server message: "} + error.what();

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <chrono>
-#include <atomic>
 #include <cstdint>
 #include <deque>
+#include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -121,7 +122,8 @@ class CodexAppServerRuntime final : public AgentRuntime {
   std::chrono::milliseconds read_timeout_;
   std::chrono::milliseconds stall_timeout_;
   std::chrono::milliseconds turn_timeout_;
-  std::atomic<int> active_process_{-1};
+  std::mutex active_process_mutex_;
+  std::function<void()> cancel_active_process_;
 };
 
 class JsonLineCodec {
@@ -160,21 +162,29 @@ class AppServerProtocol {
 
 class ProtocolChannel {
  public:
+  enum class ReadStatus { message, timeout, end_of_stream };
+  struct ReadResult {
+    ReadStatus status{ReadStatus::timeout};
+    std::string message;
+  };
+
   virtual ~ProtocolChannel() = default;
   virtual void write(std::string_view frame) = 0;
-  [[nodiscard]] virtual std::optional<std::string> read(std::chrono::milliseconds timeout) = 0;
+  [[nodiscard]] virtual ReadResult read(std::chrono::milliseconds timeout) = 0;
 };
 
 class FakeProtocolChannel final : public ProtocolChannel {
  public:
   void enqueue(std::string line);
+  void close();
   void write(std::string_view frame) override;
-  [[nodiscard]] std::optional<std::string> read(std::chrono::milliseconds timeout) override;
+  [[nodiscard]] ReadResult read(std::chrono::milliseconds timeout) override;
   [[nodiscard]] const std::vector<std::string>& writes() const noexcept;
 
  private:
   std::deque<std::string> reads_;
   std::vector<std::string> writes_;
+  bool closed_{false};
 };
 
 class AppServerConversation {
