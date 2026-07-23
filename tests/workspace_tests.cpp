@@ -55,6 +55,20 @@ static ut::suite workspace_tests = [] {
         [&] { static_cast<void>(symphony::workspace::workspace_leaf(issue)); }));
   };
 
+  ut::test("workspace leaf does not emit reserved path components") = [] {
+    const symphony::domain::Issue dot{"dot-id", ".", "", "Todo", {}};
+    const symphony::domain::Issue dot_dot{
+        "dot-dot-id", "..", "", "Todo", {}};
+    const auto first = symphony::workspace::workspace_leaf(dot);
+    const auto second = symphony::workspace::workspace_leaf(dot_dot);
+    ut::expect(first != std::string{"."});
+    ut::expect(second != std::string{".."});
+    ut::expect(first.starts_with("_-"));
+    ut::expect(second.starts_with("__-"));
+    ut::expect(first.size() == std::string{"_-"}.size() + 16);
+    ut::expect(second.size() == std::string{"__-"}.size() + 16);
+  };
+
   ut::test("fixture workspace creates hooks and removes only contained paths") =
       [] {
         const auto root =
