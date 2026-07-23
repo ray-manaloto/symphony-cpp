@@ -66,5 +66,11 @@ repository does not duplicate Codex's evolving enums.
 Codex remains responsible for the compaction mechanism. Symphony preserves the reported model
 context-window size, recognizes both the legacy `thread/compacted` notification and the current
 `contextCompaction` completed item, counts them, and emits an operator event. The repository does
-not yet pin model/effort, enforce `agent.max_turns`, or request proactive compaction at a local
-threshold; those remain explicit context-policy gaps.
+not yet pin model/effort or request proactive compaction at a local threshold; those remain explicit
+context-policy gaps.
+
+One worker invocation owns one app-server process and coding-agent thread. After each successful
+turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a
+continuation-only prompt on the same thread until the current workflow snapshot's positive
+`agent.max_turns` cap is reached. The worker then exits normally and retains the normative short
+continuation retry so a still-active issue can begin a new bounded session.

@@ -167,6 +167,47 @@ static ut::suite codex_tests = [] {
         ut::expect(channel.writes().size() == std::size_t{4});
       };
 
+  ut::test("app-server conversation reuses one thread up to max turns") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/completed","params":{"turn":{"id":"turn_1"}}})");
+    channel.enqueue(
+        R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+    channel.enqueue(
+        R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    request.prompt = "Full issue prompt";
+    request.max_turns = 2;
+    request.continuation_prompt_after_turn =
+        [](const std::uint32_t completed_turns) {
+          return std::optional<std::string>{
+              "Continue with turn " + std::to_string(completed_turns + 1)};
+        };
+
+    const auto result = symphony::codex::AppServerConversation::run(
+        channel, request, std::chrono::seconds{1});
+
+    ut::expect(result.normal_exit);
+    ut::expect(result.turns_completed == std::uint32_t{2});
+    ut::expect(result.session_id == std::string{"thr_1-turn_2"});
+    ut::expect(channel.writes().size() == std::size_t{5});
+    const auto continuation = parse_json(
+        symphony::codex::JsonLineCodec::parse(channel.writes().back()));
+    ut::expect(continuation.at("method").get<std::string>() == "turn/start");
+    ut::expect(continuation.at("params")
+                   .at("threadId")
+                   .get<std::string>() == "thr_1");
+    ut::expect(continuation.at("params")
+                   .at("input")[0]
+                   .at("text")
+                   .get<std::string>() == "Continue with turn 2");
+  };
+
   ut::test("app-server conversation returns latest telemetry with completion") = [] {
     symphony::codex::FakeProtocolChannel channel;
     channel.enqueue(R"({"id":0,"result":{}})");

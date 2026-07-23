@@ -57,6 +57,9 @@ struct RunRequest {
   domain::Attempt attempt;
   workspace::Workspace workspace;
   std::string prompt;
+  std::uint32_t max_turns{1};
+  std::function<std::optional<std::string>(std::uint32_t completed_turns)>
+      continuation_prompt_after_turn;
 };
 
 struct RunResult {
@@ -83,6 +86,7 @@ struct RunResult {
   std::optional<TokenUsage> token_usage;
   std::optional<RateLimits> rate_limits;
   std::uint32_t compaction_count{0};
+  std::uint32_t turns_completed{0};
 };
 
 struct AppServerPolicy {

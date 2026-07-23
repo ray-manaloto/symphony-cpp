@@ -43,6 +43,7 @@ Scheduler::Scheduler(
       events_(events),
       clock_(clock) {
   if (config_.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
+  if (config_.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
 }
 
 bool Scheduler::active_state(const std::string_view state) const {
@@ -161,7 +162,28 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
       workspaces_.run_hook(
           run.workspace, "before_run", {"bash", "-lc", *config_.before_run_hook}, config_.hook_timeout);
     }
-    result = runtime_.run({run.issue, run.attempt, run.workspace, prompt});
+    codex::RunRequest request;
+    request.issue = run.issue;
+    request.attempt = run.attempt;
+    request.workspace = run.workspace;
+    request.prompt = prompt;
+    request.max_turns = config_.max_turns;
+    request.continuation_prompt_after_turn =
+        [this, &run](const std::uint32_t completed_turns)
+        -> std::optional<std::string> {
+          const auto refreshed = tracker_.refresh_by_id(run.issue.id);
+          if (!refreshed || !eligible(*refreshed)) return std::nullopt;
+          run.issue = *refreshed;
+          if (completed_turns >= config_.max_turns) return std::nullopt;
+          const auto turn_number = completed_turns + 1;
+          return "Continue working on issue " + run.issue.identifier +
+                 ". This is turn " + std::to_string(turn_number) + " of " +
+                 std::to_string(config_.max_turns) +
+                 " in the current worker session. Re-read the current workspace "
+                 "and tracker state, continue toward completion, and run the "
+                 "relevant checks. Do not repeat the original task prompt.";
+        };
+    result = runtime_.run(request);
   } catch (const std::exception& error) {
     result.error = error.what();
   }
@@ -174,6 +196,13 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     }
   }
   run.session_id = result.session_id;
+  if (result.turns_completed > 0) {
+    events_.append({
+        "worker_turns_completed", run.issue.id, run.issue.identifier,
+        result.session_id,
+        "completed " + std::to_string(result.turns_completed) +
+            " Codex turn(s) in one live thread"});
+  }
   if (result.token_usage) {
     saturating_add(codex_totals_.input_tokens, result.token_usage->input_tokens);
     saturating_add(
@@ -335,6 +364,7 @@ const std::optional<codex::RateLimits>& Scheduler::latest_rate_limits() const no
 
 void Scheduler::reconfigure(SchedulerConfig config) {
   if (config.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
+  if (config.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
   config_ = std::move(config);
 }
 }  // namespace symphony::scheduler

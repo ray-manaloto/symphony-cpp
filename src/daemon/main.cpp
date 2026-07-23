@@ -23,6 +23,7 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
   config.terminal_states = workflow.tracker.terminal_states;
   config.required_labels = workflow.tracker.required_labels;
   config.max_concurrent = workflow.agent.max_concurrent_agents;
+  config.max_turns = workflow.agent.max_turns;
   for (const auto& [state, limit] : workflow.agent.max_concurrent_agents_by_state) {
     config.max_concurrent_by_state.emplace(state, limit);
   }

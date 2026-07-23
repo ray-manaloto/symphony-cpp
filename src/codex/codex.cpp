@@ -591,8 +591,13 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
   bool initialized = false;
   bool thread_requested = false;
   bool turn_started = false;
-  const auto started_at = std::chrono::steady_clock::now();
-  auto last_event = started_at;
+  auto turn_started_at = std::chrono::steady_clock::now();
+  auto last_event = turn_started_at;
+  std::uint64_t next_request_id = 3;
+  if (request.max_turns == 0) {
+    result.error = "max_turns must be positive";
+    return result;
+  }
   for (std::size_t count = 0; count < max_messages; ++count) {
     const auto read = channel.read(read_timeout);
     if (read.status == ProtocolChannel::ReadStatus::end_of_stream) {
@@ -605,7 +610,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     if (read.status == ProtocolChannel::ReadStatus::timeout) {
       const auto now = std::chrono::steady_clock::now();
       if (turn_timeout > std::chrono::milliseconds::zero() &&
-          now - started_at > turn_timeout) {
+          now - turn_started_at > turn_timeout) {
         result.timed_out = true;
         result.error = "app-server turn timeout";
         result.session_id = thread_id.empty() || turn_id.empty()
@@ -705,9 +710,33 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         result.error = "turn completed without thread and turn identities";
         return result;
       }
-      result.normal_exit = true;
       result.session_id = thread_id + '-' + turn_id;
-      return result;
+      if (result.turns_completed <
+          std::numeric_limits<std::uint32_t>::max()) {
+        ++result.turns_completed;
+      }
+      std::optional<std::string> continuation;
+      if (request.continuation_prompt_after_turn) {
+        try {
+          continuation = request.continuation_prompt_after_turn(
+              result.turns_completed);
+        } catch (const std::exception& error) {
+          result.error =
+              std::string{"continuation decision failed: "} + error.what();
+          return result;
+        }
+      }
+      if (result.turns_completed >= request.max_turns || !continuation) {
+        result.normal_exit = true;
+        return result;
+      }
+      turn_id.clear();
+      channel.write(AppServerProtocol::turn_start_request(
+          next_request_id++, thread_id, request.workspace.path,
+          *continuation, policy));
+      turn_started_at = std::chrono::steady_clock::now();
+      last_event = turn_started_at;
+      continue;
     }
     if (update.event == ProtocolEvent::turn_failed ||
         update.event == ProtocolEvent::turn_cancelled) {

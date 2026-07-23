@@ -10,6 +10,106 @@ using symphony::codex::RunResult;
 using symphony::domain::ProgressSnapshot;
 
 static ut::suite scheduler_tests = [] {
+  ut::test("scheduler refreshes active issue between bounded live turns") = [] {
+    class MultiTurnRuntime final : public symphony::codex::AgentRuntime {
+     public:
+      symphony::codex::RunResult run(
+          const symphony::codex::RunRequest& request) override {
+        max_turns = request.max_turns;
+        prompts.push_back(request.prompt);
+        for (std::uint32_t completed = 1;
+             completed <= request.max_turns;
+             ++completed) {
+          const auto continuation =
+              request.continuation_prompt_after_turn(completed);
+          if (completed >= request.max_turns || !continuation) break;
+          prompts.push_back(*continuation);
+        }
+        symphony::codex::RunResult result{
+            true, false, std::nullopt, "thr_1-turn_2", {}};
+        result.turns_completed = static_cast<std::uint32_t>(prompts.size());
+        return result;
+      }
+      void cancel(std::string_view) override {}
+
+      std::uint32_t max_turns{0};
+      std::vector<std::string> prompts;
+    };
+
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Multi-turn", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-max-turns-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    MultiTurnRuntime runtime;
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    config.max_turns = 2;
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+                                             runtime, events, clock);
+
+    scheduler.tick("Full prompt for {{ issue.identifier }}");
+
+    ut::expect(runtime.max_turns == std::uint32_t{2});
+    ut::expect(runtime.prompts.size() == std::size_t{2});
+    ut::expect(runtime.prompts.front() == "Full prompt for SYM-1");
+    ut::expect(runtime.prompts.back().find("Continue working") !=
+               std::string::npos);
+    ut::expect(runtime.prompts.back().find("turn 2 of 2") !=
+               std::string::npos);
+    ut::expect(scheduler.runs().at("1").retry.has_value());
+    std::filesystem::remove_all(root);
+  };
+
+  ut::test("scheduler stops live turn loop when refreshed issue is terminal") = [] {
+    class TerminalRuntime final : public symphony::codex::AgentRuntime {
+     public:
+      explicit TerminalRuntime(symphony::tracker::FakeTracker& tracker)
+          : tracker_(tracker) {}
+
+      symphony::codex::RunResult run(
+          const symphony::codex::RunRequest& request) override {
+        tracker_.upsert({"1", "SYM-1", "Finished", "Done", {}});
+        continued = request.continuation_prompt_after_turn(1).has_value();
+        symphony::codex::RunResult result{
+            true, false, std::nullopt, "thr_1-turn_1", {}};
+        result.turns_completed = 1;
+        return result;
+      }
+      void cancel(std::string_view) override {}
+
+      bool continued{false};
+
+     private:
+      symphony::tracker::FakeTracker& tracker_;
+    };
+
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Finish", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-terminal-between-turns-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    TerminalRuntime runtime(tracker);
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    config.max_turns = 3;
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+                                             runtime, events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    ut::expect(!runtime.continued);
+    ut::expect(scheduler.runs().at("1").retry.has_value());
+    clock.advance(std::chrono::seconds{1});
+    scheduler.tick("{{ issue.identifier }}");
+    ut::expect(scheduler.runs().empty());
+    std::filesystem::remove_all(root);
+  };
+
   ut::test(
       "scheduler applies corrective continuation then stalls unchanged work") =
       [] {
@@ -26,7 +126,9 @@ static ut::suite scheduler_tests = [] {
         runtime.enqueue(RunResult{true, false, unchanged, "s3", {}});
         symphony::observability::MemoryEventStore events;
         symphony::scheduler::FakeClock clock;
-        symphony::scheduler::Scheduler scheduler({}, tracker, workspaces,
+        symphony::scheduler::SchedulerConfig config;
+        config.max_turns = 1;
+        symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
                                                  runtime, events, clock);
 
         scheduler.tick("Work on {{ issue.identifier }} attempt {{ attempt }}");

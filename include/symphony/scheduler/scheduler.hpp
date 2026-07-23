@@ -41,6 +41,7 @@ struct SchedulerConfig {
   std::vector<std::string> terminal_states{"Done", "Cancelled"};
   std::vector<std::string> required_labels;
   std::size_t max_concurrent{1};
+  std::uint32_t max_turns{20};
   std::map<std::string, std::size_t> max_concurrent_by_state;
   std::chrono::milliseconds retry_base{1000};
   std::chrono::milliseconds failure_retry_base{10000};
