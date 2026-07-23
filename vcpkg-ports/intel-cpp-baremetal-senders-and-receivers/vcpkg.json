@@ -1,0 +1,12 @@
+{
+  "name": "intel-cpp-baremetal-senders-and-receivers",
+  "version-string": "git-3e3c8aaa1b0aa8035453050997ae25ab08d936f1",
+  "description": "Intel header-only embedded senders and receivers",
+  "homepage": "https://github.com/intel/cpp-baremetal-senders-and-receivers",
+  "license": "BSL-1.0",
+  "dependencies": [
+    "boost-mp11",
+    "intel-cpp-baremetal-concurrency",
+    "intel-cpp-std-extensions"
+  ]
+}

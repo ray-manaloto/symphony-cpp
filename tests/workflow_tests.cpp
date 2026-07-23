@@ -128,6 +128,43 @@ static ut::suite workflow_tests = [] {
         }));
       };
 
+  ut::test("dispatch validation requires tracker state sets") = [] {
+    symphony::workflow::WorkflowConfig config;
+    config.tracker.kind = "fake";
+    config.tracker.active_states = {"Todo"};
+    ut::expect(ut::throws([&] {
+      symphony::workflow::validate_for_dispatch(config, {"fake"});
+    }));
+    config.tracker.active_states.clear();
+    config.tracker.terminal_states = {"Done"};
+    ut::expect(ut::throws([&] {
+      symphony::workflow::validate_for_dispatch(config, {"fake"});
+    }));
+  };
+
+  ut::test("dispatch validation rejects blank Codex settings") = [] {
+    const auto expect_rejected =
+        [](const auto& mutate) {
+          symphony::workflow::WorkflowConfig config;
+          config.tracker.kind = "fake";
+          config.tracker.active_states = {"Todo"};
+          config.tracker.terminal_states = {"Done"};
+          mutate(config.codex);
+          ut::expect(ut::throws([&] {
+            symphony::workflow::validate_for_dispatch(config, {"fake"});
+          }));
+        };
+
+    expect_rejected([](auto& codex) { codex.command = " "; });
+    expect_rejected([](auto& codex) { codex.model = " "; });
+    expect_rejected([](auto& codex) { codex.reasoning_effort = " "; });
+    expect_rejected([](auto& codex) { codex.escalation_model = " "; });
+    expect_rejected(
+        [](auto& codex) { codex.escalation_reasoning_effort = " "; });
+    expect_rejected(
+        [](auto& codex) { codex.repeated_failure_reasoning_effort = " "; });
+  };
+
   ut::test("workflow rejects ineffective context rollover percentages") = [] {
     FakeEnvironment env;
     for (const auto percent : {0, 100}) {

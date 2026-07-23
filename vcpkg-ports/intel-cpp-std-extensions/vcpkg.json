@@ -1,0 +1,12 @@
+{
+  "name": "intel-cpp-std-extensions",
+  "version-string": "git-a35c5f2cb6d5180afd459495e9e26c279f1aa77a",
+  "description": "Intel header-only C++ standard-library polyfills and extensions",
+  "homepage": "https://github.com/intel/cpp-std-extensions",
+  "license": "BSL-1.0",
+  "dependencies": [
+    "boost-mp11",
+    "fmt",
+    "intel-cpp-baremetal-concurrency"
+  ]
+}

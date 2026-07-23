@@ -1,0 +1,7 @@
+{
+  "name": "intel-cpp-baremetal-concurrency",
+  "version-string": "git-b8a486a3bd1d166128ebbdb8e88f7a43443a5e83",
+  "description": "Intel header-only low-level concurrency hooks",
+  "homepage": "https://github.com/intel/cpp-baremetal-concurrency",
+  "license": "BSL-1.0"
+}

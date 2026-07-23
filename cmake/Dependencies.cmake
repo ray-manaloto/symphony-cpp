@@ -3,6 +3,7 @@ find_package(boost-sqlite CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glaze CONFIG REQUIRED)
+find_package(intel-compile-time-init-build CONFIG REQUIRED)
 find_path(PICOSHA2_INCLUDE_DIR NAMES picosha2.h REQUIRED)
 add_library(picosha2::picosha2 INTERFACE IMPORTED)
 set_property(TARGET picosha2::picosha2 PROPERTY

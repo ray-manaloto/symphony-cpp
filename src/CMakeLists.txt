@@ -16,6 +16,7 @@ target_link_libraries(symphony_meta INTERFACE
   symphony_reflection glaze::glaze)
 symphony_library(symphony_workflow workflow/workflow.cpp)
 target_link_libraries(symphony_workflow PUBLIC glaze::glaze)
+target_link_libraries(symphony_workflow PRIVATE cib::nexus)
 symphony_library(symphony_tracker tracker/tracker.cpp)
 symphony_library(symphony_workspace workspace/workspace.cpp)
 target_link_libraries(symphony_workspace PRIVATE picosha2::picosha2)

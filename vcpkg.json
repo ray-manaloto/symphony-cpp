@@ -9,6 +9,7 @@
     "cli11",
     "fmt",
     "glaze",
+    "intel-compile-time-init-build",
     "picosha2",
     "spdlog",
     "stdexec",

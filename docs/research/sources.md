@@ -1,6 +1,7 @@
 # Research sources and ingestion checklist
 
-Primary sources define behavior; comparisons only identify possible gaps. Accessed 2026-07-22.
+Primary sources define behavior; comparisons only identify possible gaps. Accessed 2026-07-22
+through 2026-07-23.
 
 The agent model and effort recommendation additionally uses the current
 [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model),
@@ -27,6 +28,7 @@ The agent model and effort recommendation additionally uses the current
 - [x] [`klemens-morgenstern/sqlite`](https://github.com/klemens-morgenstern/sqlite), selected synchronous SQLite adapter behind the persistence executor
 - [x] [`fmt`](https://github.com/fmtlib/fmt), [`scnlib`](https://github.com/eliaskosunen/scnlib), and [Boost.Decimal](https://github.com/boostorg/decimal)
 - [x] [Intel bare-metal concurrency](https://github.com/intel/cpp-baremetal-concurrency), [senders/receivers](https://github.com/intel/cpp-baremetal-senders-and-receivers), [compile-time init/build](https://github.com/intel/compile-time-init-build), and [standard extensions](https://github.com/intel/cpp-std-extensions)
+- [x] [Intel Safe Arithmetic](https://github.com/intel/safe-arithmetic) and [generic register operation optimizer](https://github.com/intel/generic-register-operation-optimizer), plus curated [Boost.MP11](https://www.boost.org/libs/mp11), [Frozen](https://github.com/serge-sans-paille/frozen), [Tesla fixed-containers](https://github.com/teslamotors/fixed-containers), and [magic_enum](https://github.com/Neargye/magic_enum) compile-time comparisons
 - [x] [`mirror_bridge`](https://github.com/FranciscoThiesen/mirror_bridge), [`imrefl`](https://github.com/fullptr/imrefl), and [`splice`](https://github.com/FloofyPlasma/splice), reflection references only
 - [x] [NVIDIA `stdexec`](https://github.com/NVIDIA/stdexec), current reference implementation for C++26 `std::execution`
 - [x] [Development Containers specification](https://github.com/devcontainers/spec), [reference CLI](https://github.com/devcontainers/cli), and [CI action](https://github.com/devcontainers/ci)
@@ -43,6 +45,10 @@ The broader, maintainable discovery and engineering-tool inbox is
 [`cpp-ecosystem-catalog.md`](cpp-ecosystem-catalog.md). Entries there are not adopted dependencies;
 they carry authority and status labels so catalogs, blogs, talks, and social feeds cannot silently
 override primary evidence.
+
+The focused deletion ledger for compile-time and Intel candidates is
+[`compile-time-library-review.md`](compile-time-library-review.md). It lists every reviewed
+candidate, the selected providers, and explicit re-evaluation triggers.
 
 The runtime comparison is in
 [`elixir-vs-rust-runtime-comparison.md`](elixir-vs-rust-runtime-comparison.md). Run the official

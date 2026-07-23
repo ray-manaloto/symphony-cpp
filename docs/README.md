@@ -8,6 +8,7 @@
 - [Normative and comparative sources](research/sources.md)
 - [C++ ecosystem and engineering source catalog](research/cpp-ecosystem-catalog.md)
 - [C++26 library-stack evaluation](research/cpp-library-evaluation.md)
+- [Compile-time and Intel library review](research/compile-time-library-review.md)
 - [Agent model, effort, and specialization policy](research/agent-model-policy.md)
 - [Elixir reference versus Rust OpenSymphony runtime comparison](research/elixir-vs-rust-runtime-comparison.md)
 - [Section 18.1 conformance matrix](conformance.md)

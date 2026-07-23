@@ -44,3 +44,10 @@ signed corresponding-source archive, signature, signer key, and COPYING files ar
 
 Bloomberg's clang-p2996 fork derives from LLVM and is distributed under Apache-2.0 with LLVM
 exceptions. Its exact source revision is recorded in `docs/upstream-lock.md`.
+
+## Intel compile-time libraries
+
+Intel compile-time-init-build, cpp-std-extensions, cpp-baremetal-concurrency, and
+cpp-baremetal-senders-and-receivers are distributed under the Boost Software License 1.0. Their
+exact source revisions and archive hashes are recorded in `docs/upstream-lock.md`; the vcpkg
+overlay packages install each upstream license with the corresponding headers.

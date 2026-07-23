@@ -22,6 +22,22 @@ add_test(
   NAME symphony_workflow_document
   COMMAND $<TARGET_FILE:symphonyctl> validate ${PROJECT_SOURCE_DIR}/WORKFLOW.md)
 
+add_executable(symphony_intel_provider_tests
+  test_main.cpp
+  intel_provider_tests.cpp)
+set_property(TARGET symphony_intel_provider_tests
+  PROPERTY CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(symphony_intel_provider_tests PRIVATE
+  symphony_options
+  ut::ut
+  Intel::baremetal_async
+  Intel::baremetal_concurrency
+  cib::nexus
+  stdx::stdx)
+add_test(
+  NAME symphony_intel_provider_tests
+  COMMAND symphony_intel_provider_tests)
+
 add_executable(symphony_execution_tests test_main.cpp execution_tests.cpp)
 set_property(TARGET symphony_execution_tests PROPERTY CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(symphony_execution_tests PRIVATE
