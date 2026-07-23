@@ -17,8 +17,8 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
 | Codex default command | config default test | Implemented |
 | Codex usage and rate-limit telemetry | protocol, conversation, and scheduler tests | Implemented for cumulative token usage, latest-turn usage, and sparse rate-limit-window merging against Codex CLI 0.145.0 generated schema |
-| Codex turn and stall deadlines | protocol, scheduler, and workflow tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, and distinct outcomes/events; deterministic child-lifecycle coverage remains with the Boost.Process v2 migration |
-| Child-process dependency gate | Boost.Process v2 fixtures | GCC 16.1-verified for separate stdout/stderr, EOF, start directory, terminal cancellation, and reap; Codex runtime migration pending |
+| Codex turn and stall deadlines | protocol, scheduler, workflow, and Boost.Process-backed runtime tests | Implemented with bounded read polling, independent total-turn and last-event clocks, disabled-stall semantics, distinct outcomes/events, and explicit EOF handling |
+| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for launch, working directory, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, and reap; GCC 16.1 Source CI run `29969683664` passed |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
@@ -35,7 +35,8 @@ the pinned compiler matrix must be green before the implementation may claim ful
 
 The following required evidence is not yet complete and prevents a conformance claim:
 
-- Codex stderr separation, approval/user-input policy, and unsupported tool calls;
+- bounded Codex stderr diagnostics, process-tree/group cancellation, approval/user-input policy,
+  and unsupported tool calls;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - positional workflow CLI behavior and process lifecycle exit tests;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential

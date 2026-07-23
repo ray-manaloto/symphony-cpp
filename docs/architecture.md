@@ -30,7 +30,7 @@ bootstrap mechanism to remove only through a bounded, always-green migration.
 | HTTP client/server | bounded Glaze HTTP prototype | another ASIO adapter if the prototype gate fails | cancellation, TLS, bounded bodies, graceful shutdown |
 | JSON | Glaze behind `symphony_meta` and the Codex protocol adapter | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
 | YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |
-| Child processes | Boost.Process v2 | contained POSIX implementation | separate stderr, process groups, timeouts |
+| Child processes | Boost.Process v2 behind the Codex protocol channel | none concurrently | separate bounded stderr, process-tree cancellation, timeouts, deterministic reap |
 | Persistence | `klemens-morgenstern/sqlite` behind a serialized executor and repository interface | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
 | Tests | `openalgz/ut` plus libFuzzer/property fixtures | none concurrently | deterministic state-machine properties and compile-time tests |
 | CLI/logging | CLI11 and spdlog | owner-selected alternatives | typed errors and structured redaction |
@@ -49,3 +49,9 @@ shutdown. Intel's bare-metal libraries remain references, not hosted-Linux runti
 The selected SQLite wrapper is synchronous, so it never runs on the scheduler's I/O thread. A
 repository-owned executor serializes access and supplies cancellation at the queued-operation seam;
 domain types and durable schema do not depend on Boost.Describe/PFR metadata.
+
+The Codex protocol channel uses Boost.Process v2 and Boost.Asio pipes for launch, working directory,
+stdin/stdout transport, EOF, exit requests, termination, wait, and reap. JSONL framing, protocol
+sequencing, and deadline policy remain product-specific. Stderr has a separate process handle and is
+currently discarded; bounded diagnostic capture and process-tree cancellation remain explicit
+conformance gaps rather than reasons to reintroduce direct POSIX lifecycle ownership.
