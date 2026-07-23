@@ -19,9 +19,15 @@ RUN git clone --filter=blob:none --no-checkout "${OPENSYMPHONY_REPOSITORY}" open
     && test "$(git -C opensymphony rev-parse HEAD)" = "${OPENSYMPHONY_COMMIT}"
 
 WORKDIR /src/opensymphony
+RUN groupadd --gid 10001 orchestrator \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash orchestrator \
+    && chown -R orchestrator:orchestrator /src/opensymphony
+USER orchestrator
+ENV CARGO_HOME=/home/orchestrator/.cargo
 RUN cargo test --locked --workspace \
-    && cargo build --locked --release \
-    && install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
+    && cargo build --locked --release
+USER root
+RUN install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
     && install -D --mode=0644 LICENSE /opt/licenses/OpenSymphony-LICENSE
 
 FROM ${RUST_IMAGE} AS symphony-orchestrator
