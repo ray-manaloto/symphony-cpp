@@ -244,7 +244,7 @@ static ut::suite codex_tests = [] {
         "'{\"id\":0,\"result\":{}}' "
         "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
         "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
-        "cat >/dev/null";
+        "while IFS= read -r line; do :; done";
     symphony::codex::CodexAppServerRuntime runtime(
         command,
         std::chrono::milliseconds{1},
