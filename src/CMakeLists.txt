@@ -9,8 +9,10 @@ add_library(symphony_reflection INTERFACE)
 target_include_directories(symphony_reflection
   INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(symphony_reflection INTERFACE symphony_options)
-symphony_library(symphony_meta meta/meta.cpp)
-target_link_libraries(symphony_meta PUBLIC
+add_library(symphony_meta INTERFACE)
+target_include_directories(symphony_meta
+  INTERFACE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(symphony_meta INTERFACE
   symphony_reflection glaze::glaze)
 symphony_library(symphony_workflow workflow/workflow.cpp)
 target_link_libraries(symphony_workflow PUBLIC glaze::glaze)
@@ -28,7 +30,8 @@ set_property(TARGET symphony_persistence PROPERTY CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(symphony_persistence PRIVATE
   Boost::sqlite symphony_execution)
 symphony_library(symphony_observability observability/observability.cpp)
-target_link_libraries(symphony_observability PUBLIC symphony_meta spdlog::spdlog)
+target_link_libraries(symphony_observability PUBLIC spdlog::spdlog)
+target_link_libraries(symphony_observability PRIVATE glaze::glaze)
 symphony_library(symphony_persistence_events persistence/event_store.cpp)
 target_link_libraries(symphony_persistence_events PUBLIC
   symphony_observability symphony_persistence)

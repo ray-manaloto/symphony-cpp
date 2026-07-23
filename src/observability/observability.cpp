@@ -2,13 +2,20 @@
 #include "symphony/observability/spdlog_event_store.hpp"
 
 #include <algorithm>
-#include <sstream>
 #include <stdexcept>
 
+#include <glaze/glaze.hpp>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
-#include "symphony/meta/meta.hpp"
+template <>
+struct glz::meta<symphony::observability::Event> {
+  using T = symphony::observability::Event;
+  static constexpr auto value =
+      object("type", &T::type, "issue_id", &T::issue_id, "issue_identifier",
+             &T::issue_identifier, "session_id", &T::session_id, "message",
+             &T::message);
+};
 
 namespace symphony::observability {
 namespace {
@@ -74,12 +81,11 @@ Event redact(Event event) {
 }
 
 std::string to_json(const Event& event) {
-  std::ostringstream output;
-  output << "{\"type\":\"" << meta::json_escape(event.type)
-         << "\",\"issue_id\":\"" << meta::json_escape(event.issue_id)
-         << "\",\"issue_identifier\":\"" << meta::json_escape(event.issue_identifier)
-         << "\",\"session_id\":\"" << meta::json_escape(event.session_id)
-         << "\",\"message\":\"" << meta::json_escape(event.message) << "\"}";
-  return output.str();
+  auto result = glz::write_json(event);
+  if (!result) {
+    throw std::runtime_error("Glaze could not serialize an observability event: " +
+                             glz::format_error(result.error()));
+  }
+  return std::move(*result);
 }
 }  // namespace symphony::observability

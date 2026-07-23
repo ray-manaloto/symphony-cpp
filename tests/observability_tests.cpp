@@ -8,9 +8,27 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <glaze/glaze.hpp>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/ostream_sink.h>
+
+struct EventProbe {
+  std::string type;
+  std::string issue_id;
+  std::string issue_identifier;
+  std::string session_id;
+  std::string message;
+};
+
+template <>
+struct glz::meta<EventProbe> {
+  using T = EventProbe;
+  static constexpr auto value =
+      object("type", &T::type, "issue_id", &T::issue_id, "issue_identifier",
+             &T::issue_identifier, "session_id", &T::session_id, "message",
+             &T::message);
+};
 
 namespace {
 class FailingSink final : public spdlog::sinks::base_sink<std::mutex> {
@@ -37,6 +55,32 @@ static ut::suite observability_tests = [] {
         ut::expect(json.find("issue_identifier") != std::string::npos);
         ut::expect(json.find("nope") == std::string::npos);
       };
+
+  ut::test("structured event JSON preserves fields and escapes controls") = [] {
+    auto session_id = std::string{"session"};
+    session_id.push_back('\0');
+    session_id += "id";
+    const symphony::observability::Event event{
+        .type = "worker_\"completed",
+        .issue_id = "line\nid",
+        .issue_identifier = "SYM\\7",
+        .session_id = session_id,
+        .message = "tab\tbackspace\bformfeed\fcarriage\r",
+    };
+
+    const auto json = symphony::observability::to_json(event);
+    EventProbe decoded;
+    const auto error = glz::read_json(decoded, json);
+    ut::expect(!error);
+    ut::expect(decoded.type == event.type);
+    ut::expect(decoded.issue_id == event.issue_id);
+    ut::expect(decoded.issue_identifier == event.issue_identifier);
+    ut::expect(decoded.session_id == event.session_id);
+    ut::expect(decoded.message == event.message);
+    ut::expect(json.find('\n') == std::string::npos);
+    ut::expect(json.find('\t') == std::string::npos);
+    ut::expect(json.find("\\u0000") != std::string::npos);
+  };
 
   ut::test("structured event store isolates sink failures") = [] {
     std::ostringstream output;

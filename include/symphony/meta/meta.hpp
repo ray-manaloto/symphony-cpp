@@ -3,7 +3,6 @@
 #include <concepts>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -13,8 +12,6 @@
 #include "symphony/meta/reflection.hpp"
 
 namespace symphony::meta {
-
-[[nodiscard]] std::string json_escape(std::string_view input);
 
 template <typename T>
 [[nodiscard]] std::string reflected_json(const T &object) {
