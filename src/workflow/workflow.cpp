@@ -6,10 +6,135 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
-#include <yaml-cpp/yaml.h>
+#include <glaze/yaml.hpp>
+
+namespace symphony::workflow::detail {
+struct RawPolling {
+  std::optional<std::uint64_t> interval_ms;
+};
+
+struct RawWorkspace {
+  std::optional<std::string> root;
+};
+
+struct RawAgent {
+  std::optional<std::uint64_t> max_concurrent_agents;
+  std::optional<std::uint64_t> max_turns;
+  std::optional<std::uint64_t> max_retry_backoff_ms;
+  std::optional<glz::generic_u64> max_concurrent_agents_by_state;
+};
+
+struct RawHooks {
+  std::optional<std::uint64_t> timeout_ms;
+  std::optional<std::string> after_create;
+  std::optional<std::string> before_run;
+  std::optional<std::string> after_run;
+  std::optional<std::string> before_remove;
+};
+
+struct RawCodex {
+  std::optional<std::string> command;
+  std::optional<std::string> model;
+  std::optional<std::string> reasoning_effort;
+  std::optional<std::string> escalation_model;
+  std::optional<std::string> escalation_reasoning_effort;
+  std::optional<std::string> repeated_failure_reasoning_effort;
+  std::optional<std::uint64_t> context_rollover_percent;
+  std::optional<std::string> approval_policy;
+  std::optional<std::string> thread_sandbox;
+  std::optional<std::string> turn_sandbox_policy;
+  std::optional<std::uint64_t> turn_timeout_ms;
+  std::optional<std::uint64_t> read_timeout_ms;
+  std::optional<std::int64_t> stall_timeout_ms;
+};
+
+struct RawTracker {
+  std::optional<std::string> kind;
+  std::optional<glz::generic_u64> provider;
+  std::optional<std::vector<std::string>> required_labels;
+  std::optional<std::vector<std::string>> active_states;
+  std::optional<std::vector<std::string>> terminal_states;
+};
+
+struct RawWorkflow {
+  std::optional<RawTracker> tracker;
+  std::optional<RawPolling> polling;
+  std::optional<RawWorkspace> workspace;
+  std::optional<RawAgent> agent;
+  std::optional<RawHooks> hooks;
+  std::optional<RawCodex> codex;
+};
+}  // namespace symphony::workflow::detail
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawPolling> {
+  using T = symphony::workflow::detail::RawPolling;
+  static constexpr auto value = object("interval_ms", &T::interval_ms);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawWorkspace> {
+  using T = symphony::workflow::detail::RawWorkspace;
+  static constexpr auto value = object("root", &T::root);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawAgent> {
+  using T = symphony::workflow::detail::RawAgent;
+  static constexpr auto value =
+      object("max_concurrent_agents", &T::max_concurrent_agents, "max_turns",
+             &T::max_turns, "max_retry_backoff_ms",
+             &T::max_retry_backoff_ms, "max_concurrent_agents_by_state",
+             &T::max_concurrent_agents_by_state);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawHooks> {
+  using T = symphony::workflow::detail::RawHooks;
+  static constexpr auto value =
+      object("timeout_ms", &T::timeout_ms, "after_create", &T::after_create,
+             "before_run", &T::before_run, "after_run", &T::after_run,
+             "before_remove", &T::before_remove);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawCodex> {
+  using T = symphony::workflow::detail::RawCodex;
+  static constexpr auto value = object(
+      "command", &T::command, "model", &T::model, "reasoning_effort",
+      &T::reasoning_effort, "escalation_model", &T::escalation_model,
+      "escalation_reasoning_effort", &T::escalation_reasoning_effort,
+      "repeated_failure_reasoning_effort",
+      &T::repeated_failure_reasoning_effort, "context_rollover_percent",
+      &T::context_rollover_percent, "approval_policy", &T::approval_policy,
+      "thread_sandbox", &T::thread_sandbox, "turn_sandbox_policy",
+      &T::turn_sandbox_policy, "turn_timeout_ms", &T::turn_timeout_ms,
+      "read_timeout_ms", &T::read_timeout_ms, "stall_timeout_ms",
+      &T::stall_timeout_ms);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawTracker> {
+  using T = symphony::workflow::detail::RawTracker;
+  static constexpr auto value =
+      object("kind", &T::kind, "provider", &T::provider, "required_labels",
+             &T::required_labels, "active_states", &T::active_states,
+             "terminal_states", &T::terminal_states);
+};
+
+template <>
+struct glz::meta<symphony::workflow::detail::RawWorkflow> {
+  using T = symphony::workflow::detail::RawWorkflow;
+  static constexpr auto value =
+      object("tracker", &T::tracker, "polling", &T::polling, "workspace",
+             &T::workspace, "agent", &T::agent, "hooks", &T::hooks, "codex",
+             &T::codex);
+};
 
 namespace symphony::workflow {
 namespace {
@@ -47,24 +172,6 @@ std::uint64_t unsigned_value(const std::string& text, const std::string_view key
   return result;
 }
 
-void require_map(const YAML::Node& node, const std::string_view key) {
-  if (!node || !node.IsMap()) throw std::runtime_error(std::string{key} + " must be a YAML mapping");
-}
-
-std::string scalar(const YAML::Node& node, const std::string_view key) {
-  if (!node || !node.IsScalar()) throw std::runtime_error(std::string{key} + " must be a scalar");
-  return node.as<std::string>();
-}
-
-std::vector<std::string> string_list(
-    const YAML::Node& node,
-    const std::string_view key) {
-  if (!node || !node.IsSequence()) throw std::runtime_error(std::string{key} + " must be a sequence");
-  std::vector<std::string> result;
-  for (const auto& item : node) result.push_back(scalar(item, key));
-  return result;
-}
-
 std::string normalized_state(std::string value) {
   value = trim(std::move(value));
   std::ranges::transform(value, value.begin(), [](const unsigned char character) {
@@ -74,10 +181,9 @@ std::string normalized_state(std::string value) {
 }
 
 std::filesystem::path workspace_root(
-    const YAML::Node& node,
+    std::string value,
     const Environment& env,
     const std::filesystem::path& workflow_path) {
-  auto value = scalar(node, "workspace.root");
   if (value.starts_with('$')) value = expand(std::move(value), env);
   if (value == "~" || value.starts_with("~/")) {
     const auto home = env.get("HOME");
@@ -139,74 +245,80 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
     yaml_text << line << '\n';
   }
   if (!closed) throw std::runtime_error("unterminated YAML front matter");
-  const auto root = YAML::Load(yaml_text.str());
-  require_map(root, "workflow front matter");
-  if (const auto polling = root["polling"]) {
-    require_map(polling, "polling");
-    if (const auto node = polling["interval_ms"]) {
-      document.config.polling.interval = std::chrono::milliseconds{
-          unsigned_value(scalar(node, "polling.interval_ms"), "polling.interval_ms")};
-    }
+  auto yaml = yaml_text.str();
+  if (trim(yaml).empty()) {
+    throw std::runtime_error("workflow front matter must be a YAML mapping");
   }
-  if (const auto workspace = root["workspace"]) {
-    require_map(workspace, "workspace");
-    if (const auto node = workspace["root"]) {
-      document.config.workspace.root = workspace_root(node, env, path);
-    }
+  detail::RawWorkflow raw;
+  const auto yaml_error =
+      glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(
+          raw, yaml);
+  if (yaml_error) {
+    throw std::runtime_error("invalid workflow YAML");
   }
-  if (const auto agent = root["agent"]) {
-    require_map(agent, "agent");
-    if (const auto node = agent["max_concurrent_agents"]) {
-      document.config.agent.max_concurrent_agents = static_cast<std::uint32_t>(unsigned_value(
-          scalar(node, "agent.max_concurrent_agents"), "agent.max_concurrent_agents"));
+
+  if (raw.polling && raw.polling->interval_ms) {
+    document.config.polling.interval =
+        std::chrono::milliseconds{*raw.polling->interval_ms};
+  }
+  if (raw.workspace && raw.workspace->root) {
+    document.config.workspace.root =
+        workspace_root(*raw.workspace->root, env, path);
+  }
+  if (raw.agent) {
+    if (raw.agent->max_concurrent_agents) {
+      document.config.agent.max_concurrent_agents =
+          static_cast<std::uint32_t>(*raw.agent->max_concurrent_agents);
     }
-    if (const auto node = agent["max_turns"]) {
-      document.config.agent.max_turns = static_cast<std::uint32_t>(
-          unsigned_value(scalar(node, "agent.max_turns"), "agent.max_turns"));
+    if (raw.agent->max_turns) {
+      document.config.agent.max_turns =
+          static_cast<std::uint32_t>(*raw.agent->max_turns);
     }
-    if (const auto node = agent["max_retry_backoff_ms"]) {
-      document.config.agent.max_retry_backoff = std::chrono::milliseconds{unsigned_value(
-          scalar(node, "agent.max_retry_backoff_ms"), "agent.max_retry_backoff_ms")};
+    if (raw.agent->max_retry_backoff_ms) {
+      document.config.agent.max_retry_backoff =
+          std::chrono::milliseconds{*raw.agent->max_retry_backoff_ms};
     }
-    if (const auto limits = agent["max_concurrent_agents_by_state"]) {
-      require_map(limits, "agent.max_concurrent_agents_by_state");
-      for (const auto& entry : limits) {
-        try {
-          const auto limit = unsigned_value(entry.second.as<std::string>(), "state concurrency");
-          if (limit > 0) {
-            document.config.agent.max_concurrent_agents_by_state.emplace(
-                normalized_state(entry.first.as<std::string>()),
-                static_cast<std::uint32_t>(limit));
+    if (raw.agent->max_concurrent_agents_by_state &&
+        raw.agent->max_concurrent_agents_by_state->is_object()) {
+      for (const auto& [state, value] :
+           raw.agent->max_concurrent_agents_by_state->get_object()) {
+        std::optional<std::uint64_t> limit;
+        if (const auto* number = value.get_if<std::uint64_t>()) {
+          limit = *number;
+        } else if (const auto* text = value.get_if<std::string>()) {
+          try {
+            limit = unsigned_value(*text, "state concurrency");
+          } catch (const std::exception&) {
           }
-        } catch (const std::exception&) {
-          // The specification requires invalid per-state entries to be ignored.
+        }
+        if (limit && *limit > 0) {
+          document.config.agent.max_concurrent_agents_by_state.emplace(
+              normalized_state(state), static_cast<std::uint32_t>(*limit));
         }
       }
     }
   }
-  if (const auto hooks = root["hooks"]) {
-    require_map(hooks, "hooks");
-    if (const auto node = hooks["timeout_ms"]) {
-      document.config.hooks.timeout = std::chrono::milliseconds{
-          unsigned_value(scalar(node, "hooks.timeout_ms"), "hooks.timeout_ms")};
+  if (raw.hooks) {
+    if (raw.hooks->timeout_ms) {
+      document.config.hooks.timeout =
+          std::chrono::milliseconds{*raw.hooks->timeout_ms};
     }
-    if (const auto node = hooks["after_create"]; node && !node.IsNull()) document.config.hooks.after_create = scalar(node, "hooks.after_create");
-    if (const auto node = hooks["before_run"]; node && !node.IsNull()) document.config.hooks.before_run = scalar(node, "hooks.before_run");
-    if (const auto node = hooks["after_run"]; node && !node.IsNull()) document.config.hooks.after_run = scalar(node, "hooks.after_run");
-    if (const auto node = hooks["before_remove"]; node && !node.IsNull()) document.config.hooks.before_remove = scalar(node, "hooks.before_remove");
+    document.config.hooks.after_create = raw.hooks->after_create;
+    document.config.hooks.before_run = raw.hooks->before_run;
+    document.config.hooks.after_run = raw.hooks->after_run;
+    document.config.hooks.before_remove = raw.hooks->before_remove;
   }
-  if (const auto codex = root["codex"]) {
-    require_map(codex, "codex");
-    if (const auto node = codex["command"]) document.config.codex.command = scalar(node, "codex.command");
-    if (const auto node = codex["model"]) document.config.codex.model = scalar(node, "codex.model");
-    if (const auto node = codex["reasoning_effort"]) document.config.codex.reasoning_effort = scalar(node, "codex.reasoning_effort");
-    if (const auto node = codex["escalation_model"]) document.config.codex.escalation_model = scalar(node, "codex.escalation_model");
-    if (const auto node = codex["escalation_reasoning_effort"]) document.config.codex.escalation_reasoning_effort = scalar(node, "codex.escalation_reasoning_effort");
-    if (const auto node = codex["repeated_failure_reasoning_effort"]) document.config.codex.repeated_failure_reasoning_effort = scalar(node, "codex.repeated_failure_reasoning_effort");
-    if (const auto node = codex["context_rollover_percent"]) {
-      const auto value = unsigned_value(
-          scalar(node, "codex.context_rollover_percent"),
-          "codex.context_rollover_percent");
+  if (raw.codex) {
+    if (raw.codex->command) document.config.codex.command = *raw.codex->command;
+    document.config.codex.model = raw.codex->model;
+    document.config.codex.reasoning_effort = raw.codex->reasoning_effort;
+    document.config.codex.escalation_model = raw.codex->escalation_model;
+    document.config.codex.escalation_reasoning_effort =
+        raw.codex->escalation_reasoning_effort;
+    document.config.codex.repeated_failure_reasoning_effort =
+        raw.codex->repeated_failure_reasoning_effort;
+    if (raw.codex->context_rollover_percent) {
+      const auto value = *raw.codex->context_rollover_percent;
       if (value == 0 || value >= 100) {
         throw std::runtime_error(
             "codex.context_rollover_percent must be between 1 and 99");
@@ -214,23 +326,47 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
       document.config.codex.context_rollover_percent =
           static_cast<std::uint32_t>(value);
     }
-    if (const auto node = codex["approval_policy"]) document.config.codex.approval_policy = scalar(node, "codex.approval_policy");
-    if (const auto node = codex["thread_sandbox"]) document.config.codex.thread_sandbox = scalar(node, "codex.thread_sandbox");
-    if (const auto node = codex["turn_sandbox_policy"]) document.config.codex.turn_sandbox_policy = scalar(node, "codex.turn_sandbox_policy");
-    if (const auto node = codex["turn_timeout_ms"]) document.config.codex.turn_timeout = std::chrono::milliseconds{unsigned_value(scalar(node, "codex.turn_timeout_ms"), "codex.turn_timeout_ms")};
-    if (const auto node = codex["read_timeout_ms"]) document.config.codex.read_timeout = std::chrono::milliseconds{unsigned_value(scalar(node, "codex.read_timeout_ms"), "codex.read_timeout_ms")};
-    if (const auto node = codex["stall_timeout_ms"]) document.config.codex.stall_timeout = std::chrono::milliseconds{std::stoll(scalar(node, "codex.stall_timeout_ms"))};
-  }
-  if (const auto tracker = root["tracker"]) {
-    require_map(tracker, "tracker");
-    if (const auto node = tracker["kind"]) document.config.tracker.kind = scalar(node, "tracker.kind");
-    if (const auto node = tracker["provider"]) {
-      if (!node.IsMap()) throw std::runtime_error("tracker.provider must be a YAML mapping");
-      document.config.tracker.provider_yaml = YAML::Dump(node);
+    document.config.codex.approval_policy = raw.codex->approval_policy;
+    document.config.codex.thread_sandbox = raw.codex->thread_sandbox;
+    document.config.codex.turn_sandbox_policy =
+        raw.codex->turn_sandbox_policy;
+    if (raw.codex->turn_timeout_ms) {
+      document.config.codex.turn_timeout =
+          std::chrono::milliseconds{*raw.codex->turn_timeout_ms};
     }
-    if (const auto node = tracker["required_labels"]) document.config.tracker.required_labels = string_list(node, "tracker.required_labels");
-    if (const auto node = tracker["active_states"]) document.config.tracker.active_states = string_list(node, "tracker.active_states");
-    if (const auto node = tracker["terminal_states"]) document.config.tracker.terminal_states = string_list(node, "tracker.terminal_states");
+    if (raw.codex->read_timeout_ms) {
+      document.config.codex.read_timeout =
+          std::chrono::milliseconds{*raw.codex->read_timeout_ms};
+    }
+    if (raw.codex->stall_timeout_ms) {
+      document.config.codex.stall_timeout =
+          std::chrono::milliseconds{*raw.codex->stall_timeout_ms};
+    }
+  }
+  if (raw.tracker) {
+    if (raw.tracker->kind) document.config.tracker.kind = *raw.tracker->kind;
+    if (raw.tracker->provider) {
+      if (!raw.tracker->provider->is_object()) {
+        throw std::runtime_error("tracker.provider must be a YAML mapping");
+      }
+      std::string provider_yaml;
+      if (glz::write_yaml(*raw.tracker->provider, provider_yaml)) {
+        throw std::runtime_error("cannot preserve tracker.provider YAML");
+      }
+      document.config.tracker.provider_yaml = std::move(provider_yaml);
+    }
+    if (raw.tracker->required_labels) {
+      document.config.tracker.required_labels =
+          std::move(*raw.tracker->required_labels);
+    }
+    if (raw.tracker->active_states) {
+      document.config.tracker.active_states =
+          std::move(*raw.tracker->active_states);
+    }
+    if (raw.tracker->terminal_states) {
+      document.config.tracker.terminal_states =
+          std::move(*raw.tracker->terminal_states);
+    }
   }
   document.prompt.assign(std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{});
   if (trim(document.prompt).empty()) throw std::runtime_error("workflow prompt must not be empty");

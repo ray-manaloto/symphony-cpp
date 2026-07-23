@@ -9,4 +9,3 @@ set_property(TARGET picosha2::picosha2 PROPERTY
 find_package(spdlog CONFIG REQUIRED)
 find_package(stdexec CONFIG REQUIRED)
 find_package(ut CONFIG REQUIRED)
-find_package(yaml-cpp CONFIG REQUIRED)
