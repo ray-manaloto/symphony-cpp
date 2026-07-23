@@ -3,8 +3,18 @@ name: C++26 toolchain base images
 on:
   workflow_dispatch:
     inputs:
+      lineage:
+        description: Toolchain lineage to validate
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - gcc16
+          - clang-p2996
+          - llvm-analysis
       publish_images:
-        description: Publish tested toolchain base images to GHCR
+        description: Publish all tested toolchain bases to GHCR (requires lineage=all)
         required: false
         default: false
         type: boolean
@@ -17,8 +27,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-inputs:
+    name: Validate dispatch boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require the complete matrix for publication
+        if: ${{ inputs.publish_images && inputs.lineage != 'all' }}
+        run: |
+          echo "publish_images requires lineage=all" >&2
+          exit 2
+
   gcc16:
     name: GCC 16.1 base and source contracts
+    if: ${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' }}
+    needs: validate-inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -99,6 +121,8 @@ jobs:
             '
   clang-p2996:
     name: clang-p2996 base and differential contract
+    if: ${{ inputs.lineage == 'all' || inputs.lineage == 'clang-p2996' }}
+    needs: validate-inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -172,6 +196,8 @@ jobs:
             '
   llvm-analysis:
     name: LLVM 22.1.8 analysis base and source-quality contract
+    if: ${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}
+    needs: validate-inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -254,6 +280,7 @@ jobs:
       - gcc16
       - clang-p2996
       - llvm-analysis
+      - validate-inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:

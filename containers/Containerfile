@@ -72,23 +72,37 @@ ARG LLVM_SHA256=df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384
 ARG LLVM_SIGNER=FFB3368980F3E6BB5737145A316C56D064CACBA5
 ARG LLVM_RELEASE_KEYS_SHA256=f38bd19b7f2d22cafa755841e6ce9375b9a2e6d41f7b974e4953d6b084839001
 WORKDIR /tmp/llvm
-RUN curl --fail --location --proto '=https' --tlsv1.2 \
+RUN set -eux; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz \
-      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz" \
- && curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz.sig \
-      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz.sig" \
- && echo "${LLVM_SHA256}  llvm.tar.xz" | sha256sum --check - \
- && curl --fail --location --proto '=https' --tlsv1.2 \
-      -o signer.asc "https://releases.llvm.org/release-keys.asc" \
- && echo "${LLVM_RELEASE_KEYS_SHA256}  signer.asc" | sha256sum --check - \
- && gpg --batch --import signer.asc \
- && test "$(gpg --batch --with-colons --fingerprint "${LLVM_SIGNER}" | awk -F: '$1=="fpr" {print $10; exit}')" = "${LLVM_SIGNER}" \
- && gpg --batch --verify llvm.tar.xz.sig llvm.tar.xz \
- && mkdir -p "/opt/llvm-${LLVM_VERSION}" \
- && tar -xJf llvm.tar.xz --strip-components=1 -C "/opt/llvm-${LLVM_VERSION}" \
- && test "$("/opt/llvm-${LLVM_VERSION}/bin/clang-format" --version)" = "clang-format version ${LLVM_VERSION}" \
- && rm -rf /tmp/llvm
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz.sig"; \
+    echo "${LLVM_SHA256}  llvm.tar.xz" | sha256sum --check -; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      -o signer.asc "https://releases.llvm.org/release-keys.asc"; \
+    echo "${LLVM_RELEASE_KEYS_SHA256}  signer.asc" | sha256sum --check -; \
+    gpg --batch --import signer.asc; \
+    test "$(gpg --batch --with-colons --fingerprint "${LLVM_SIGNER}" | awk -F: '$1=="fpr" {print $10; exit}')" = "${LLVM_SIGNER}"; \
+    gpg --batch --verify llvm.tar.xz.sig llvm.tar.xz; \
+    echo "LLVM archive verification complete"; \
+    df -h / /opt /tmp; \
+    df -i / /opt /tmp; \
+    xz --test llvm.tar.xz; \
+    xz --robot --list llvm.tar.xz; \
+    tar -tf llvm.tar.xz | sed -n '1,5p'; \
+    mkdir -p "/opt/llvm-${LLVM_VERSION}"; \
+    echo "LLVM archive extraction starting"; \
+    tar -xJf llvm.tar.xz --strip-components=1 -C "/opt/llvm-${LLVM_VERSION}"; \
+    echo "LLVM archive extraction complete"; \
+    df -h / /opt /tmp; \
+    du -xhd1 "/opt/llvm-${LLVM_VERSION}" | sort -h; \
+    test -x "/opt/llvm-${LLVM_VERSION}/bin/clang-format"; \
+    actual_version="$("/opt/llvm-${LLVM_VERSION}/bin/clang-format" --version)"; \
+    printf 'clang-format version output: <%s>\n' "${actual_version}"; \
+    test "${actual_version}" = "clang-format version ${LLVM_VERSION}"; \
+    rm -rf /tmp/llvm
 
 FROM compiler-build-base AS symphony-gcc-runtime
 ARG SOURCE_REVISION=unknown
