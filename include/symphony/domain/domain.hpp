@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -31,10 +32,22 @@ struct Issue {
   std::string id;
   std::string identifier;
   std::string title;
+  std::optional<std::string> description;
   std::string state;
   std::vector<std::string> labels;
+  std::map<std::string, std::string> native_ref;
+  std::optional<std::string> branch_name;
+  std::optional<std::string> url;
+  std::optional<std::string> assignee_id;
+  struct BlockerRef {
+    std::optional<std::string> id;
+    std::optional<std::string> identifier;
+    std::optional<std::string> state;
+  };
+  std::vector<BlockerRef> blocked_by;
   std::optional<int> priority;
   std::optional<std::chrono::system_clock::time_point> created_at;
+  std::optional<std::chrono::system_clock::time_point> updated_at;
   bool dispatchable{true};
 };
 

@@ -3,6 +3,7 @@ add_executable(symphony_tests
   domain_tests.cpp
   scheduler_tests.cpp
   workflow_tests.cpp
+  tracker_tests.cpp
   workspace_tests.cpp
   codex_tests.cpp
   observability_tests.cpp)
