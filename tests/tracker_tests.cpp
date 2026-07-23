@@ -1,10 +1,28 @@
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ut/ut.hpp>
 
 #include "symphony/tracker/tracker.hpp"
+
+namespace {
+symphony::tracker::IssueRecord record(
+    std::string id,
+    std::string identifier,
+    std::string title,
+    std::string state,
+    const bool dispatchable) {
+  symphony::tracker::IssueRecord value;
+  value.id = std::move(id);
+  value.identifier = std::move(identifier);
+  value.title = std::move(title);
+  value.state = std::move(state);
+  value.dispatchable = dispatchable;
+  return value;
+}
+}  // namespace
 
 static ut::suite tracker_tests = [] {
   ut::test("tracker normalization maps complete issue fields and canonical labels") = [] {
@@ -44,10 +62,10 @@ static ut::suite tracker_tests = [] {
           cursors.push_back(cursor);
           if (!cursor) {
             return symphony::tracker::IssuePage{
-                {{"1", "SYM-1", "First", "Todo", true}}, "next"};
+                {record("1", "SYM-1", "First", "Todo", true)}, "next"};
           }
           return symphony::tracker::IssuePage{
-              {{"2", "SYM-2", "Second", "Todo", true}}, std::nullopt};
+              {record("2", "SYM-2", "Second", "Todo", true)}, std::nullopt};
         });
 
     ut::expect(result.has_value());
@@ -63,7 +81,7 @@ static ut::suite tracker_tests = [] {
         [](const std::optional<std::string>&)
             -> symphony::tracker::IssuePageResult {
           return symphony::tracker::IssuePage{
-              {{"", "SYM-1", "Missing id", "Todo", true}}, std::nullopt};
+              {record("", "SYM-1", "Missing id", "Todo", true)}, std::nullopt};
         });
     ut::expect(!malformed.has_value());
     ut::expect(malformed.error().code ==
