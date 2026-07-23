@@ -20,6 +20,7 @@
 
 namespace symphony::persistence {
 namespace sqlite = boost::sqlite;
+constexpr sqlite3_int64 current_schema_version = 1;
 
 struct SqliteEventRepository::Impl {
   explicit Impl(const std::size_t max_pending)
@@ -131,17 +132,40 @@ SqliteEventRepository::open(const std::filesystem::path &path,
        filename = path.string()]() -> std::expected<void, Error> {
         try {
           impl->connection.connect(filename);
+          sqlite3_int64 schema_version = 0;
+          for (const auto &[version] :
+               sqlite::query<std::tuple<sqlite3_int64>>(
+                   impl->connection, "PRAGMA user_version")) {
+            schema_version = version;
+          }
+          if (schema_version > current_schema_version) {
+            throw std::runtime_error(
+                "database schema version " +
+                std::to_string(schema_version) +
+                " is newer than supported version " +
+                std::to_string(current_schema_version));
+          }
+
           impl->connection.execute(
               "PRAGMA journal_mode=WAL;"
               "PRAGMA foreign_keys=ON;"
-              "PRAGMA busy_timeout=5000;"
-              "CREATE TABLE IF NOT EXISTS symphony_events("
-              "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
-              "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
-              "  type TEXT NOT NULL,"
-              "  issue_id TEXT NOT NULL,"
-              "  payload TEXT NOT NULL"
-              ");");
+              "PRAGMA busy_timeout=5000;");
+          if (schema_version < current_schema_version) {
+            sqlite::transaction migration{impl->connection};
+            impl->connection.execute(
+                "CREATE TABLE IF NOT EXISTS symphony_events("
+                "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
+                "  type TEXT NOT NULL,"
+                "  issue_id TEXT NOT NULL,"
+                "  payload TEXT NOT NULL"
+                ");"
+                "PRAGMA user_version=1;");
+            migration.commit();
+          }
+          impl->connection.execute(
+              "SELECT sequence, schema_version, type, issue_id, payload "
+              "FROM symphony_events LIMIT 0");
           return {};
         } catch (...) {
           return std::unexpected(current_error());
