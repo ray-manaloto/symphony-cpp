@@ -1,0 +1,17 @@
+{
+  "name": "Symphony C++26 CI — clang-p2996",
+  "build": {
+    "dockerfile": "../../../containers/Containerfile",
+    "context": "../../..",
+    "target": "symphony-ci-clang"
+  },
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/symphony-cpp",
+  "containerEnv": {
+    "CC": "/opt/clang-p2996/bin/clang",
+    "CXX": "/opt/clang-p2996/bin/clang++",
+    "CCACHE_DIR": "/root/.cache/ccache"
+  },
+  "postCreateCommand": "./scripts/devcontainer-setup.sh clang-p2996"
+}

@@ -36,28 +36,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build pinned GCC development image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-dev
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: symphony-dev:ci
-          cache-from: type=gha,scope=symphony-gcc16
-          cache-to: type=gha,mode=max,scope=symphony-gcc16
-      - name: Tag local GCC devcontainer image
-        run: |
-          test "$(docker image inspect symphony-dev:ci --format '{{len .Config.Entrypoint}}')" = "0"
-          docker run --rm symphony-dev:ci bash -lc 'test "$(g++ -dumpfullversion)" = "16.1.0"'
-          docker tag symphony-dev:ci ghcr.io/ray-manaloto/symphony-dev:edge
-      - name: GCC reflection suite
+      - name: Build and test GCC development container
         uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
         with:
-          configFile: .devcontainer/devcontainer.json
-          push: never
+          configFile: .devcontainer/ci/gcc/devcontainer.json
+          imageName: ghcr.io/ray-manaloto/symphony-dev
+          imageTag: ${{ github.sha }},edge
+          push: ${{ inputs.publish_images && 'always' || 'never' }}
+          cacheFrom: type=gha,scope=symphony-gcc16
+          cacheTo: type=gha,mode=max,scope=symphony-gcc16
           runCmd: >-
             test "$(g++ -dumpfullversion)" = "16.1.0"
             && cmake --preset gcc-debug
@@ -66,15 +53,12 @@ jobs:
             && cmake --preset gcc-sanitizers
             && cmake --build --preset gcc-sanitizers
             && ctest --preset gcc-sanitizers
-      - name: Publish tested GCC development image
-        if: ${{ inputs.publish_images }}
+      - name: Verify direct GCC image contract
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image="ghcr.io/${owner}/symphony-dev"
-          docker tag symphony-dev:ci "${image}:${GITHUB_SHA}"
-          docker tag symphony-dev:ci "${image}:edge"
-          docker push "${image}:${GITHUB_SHA}"
-          docker push "${image}:edge"
+          image="ghcr.io/ray-manaloto/symphony-dev:${GITHUB_SHA}"
+          test "$(docker image inspect "${image}" --format '{{.Architecture}}')" = "amd64"
+          test "$(docker image inspect "${image}" --format '{{len .Config.Entrypoint}}')" = "0"
+          docker run --rm "${image}" bash -lc 'test "$(g++ -dumpfullversion)" = "16.1.0"'
 
   clang-p2996:
     name: clang-p2996 differential reflection
@@ -94,39 +78,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build pinned Clang differential image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-ci-clang
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: symphony-ci-clang:ci
-          cache-from: type=gha,scope=symphony-clang-p2996
-          cache-to: type=gha,mode=max,scope=symphony-clang-p2996
-      - name: Tag local Clang devcontainer image
-        run: |
-          test "$(docker image inspect symphony-ci-clang:ci --format '{{len .Config.Entrypoint}}')" = "0"
-          docker run --rm symphony-ci-clang:ci bash -lc 'test -x /opt/clang-p2996/bin/clang++'
-          docker tag symphony-ci-clang:ci ghcr.io/ray-manaloto/symphony-ci-clang:edge
-      - name: Clang differential reflection suite
+      - name: Build and test Clang differential container
         uses: devcontainers/ci@b63b30de439b47a52267f241112c5b453b673db5
         with:
-          configFile: .devcontainer/clang-p2996/devcontainer.json
-          push: never
+          configFile: .devcontainer/ci/clang-p2996/devcontainer.json
+          imageName: ghcr.io/ray-manaloto/symphony-ci-clang
+          imageTag: ${{ github.sha }},edge
+          push: ${{ inputs.publish_images && 'always' || 'never' }}
+          cacheFrom: type=gha,scope=symphony-clang-p2996
+          cacheTo: type=gha,mode=max,scope=symphony-clang-p2996
           runCmd: >-
             test -x /opt/clang-p2996/bin/clang++
             && cmake --preset clang-reflection
             && cmake --build --preset clang-reflection
             && ctest --preset clang-reflection
-      - name: Publish tested Clang differential image
-        if: ${{ inputs.publish_images }}
+      - name: Verify direct Clang image contract
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image="ghcr.io/${owner}/symphony-ci-clang"
-          docker tag symphony-ci-clang:ci "${image}:${GITHUB_SHA}"
-          docker tag symphony-ci-clang:ci "${image}:edge"
-          docker push "${image}:${GITHUB_SHA}"
-          docker push "${image}:edge"
+          image="ghcr.io/ray-manaloto/symphony-ci-clang:${GITHUB_SHA}"
+          test "$(docker image inspect "${image}" --format '{{.Architecture}}')" = "amd64"
+          test "$(docker image inspect "${image}" --format '{{len .Config.Entrypoint}}')" = "0"
+          docker run --rm "${image}" bash -lc 'test -x /opt/clang-p2996/bin/clang++'
