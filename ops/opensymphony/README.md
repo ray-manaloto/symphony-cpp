@@ -33,6 +33,15 @@ GitHub Actions so the compiler-heavy build does not consume the development Mac.
 5. Inspect `http://127.0.0.1:2468` and the container logs. Activate exactly one
    fixture-only canary issue only after the dry run is healthy.
 
+That ceremony completed against immutable image manifest
+`sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982`,
+which is therefore the launcher's default. A later workflow-only rebuild moved
+the mutable `edge` tag to
+`sha256:56d7fd2274e2d7eda4ff1d3556a6a9315014e3a05055422e9c4c68849be36911`
+and passed tool smoke tests, but it has not repeated the credential-bearing
+read-only ceremony. Set `OPENSYMPHONY_IMAGE` only for an explicitly authorized
+re-validation; never let `edge` silently replace the proven runtime.
+
 `scripts/opensymphony-container.sh run` is deliberately separate from the dry
 run. Running it is authorization to operate only on issues deliberately moved
 into a workflow active state; it does not authorize deployment, production
