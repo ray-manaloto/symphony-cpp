@@ -98,17 +98,21 @@ Use the contained operator commands:
 parses the configuration and workflow, renders the prompt, validates the
 workspace, and correctly skips `uv` and managed OpenHands tooling. OpenSymphony
 v2.10.0 still requires `cargo` and `curl` even after recognizing that the target
-is not a Rust workspace, so the lean runtime reports those two failures. The
-contained `preflight` command instead verifies strict Codex configuration,
+is not a Rust workspace. The complete image therefore retains its exact Rust
+1.93 toolchain and installs `curl`; the guarded acceptance suite requires
+`doctor` to pass. The contained `preflight` command additionally verifies strict Codex configuration,
 login status, app-server schema generation and required lifecycle methods,
 workspace and memory-volume writability, and the passing configuration,
 workflow, and prompt-rendering portions of `doctor`. Do not add a second
-compiler toolchain to the standalone C++ project merely to turn an unrelated
-generic diagnostic green.
+compiler toolchain to the standalone C++ service: these tools exist only in the
+external orchestrator image.
 
 OpenSymphony v2.10.0 `rehydrate` operates on OpenHands conversation manifests,
 so it is deliberately not exposed for the Codex route. Use `debug ISSUE`,
 which supports persisted Codex thread unarchive and recovery.
+
+The adopted, deferred, and rejected feature boundaries are tracked in
+[`docs/opensymphony-feature-matrix.md`](../../docs/opensymphony-feature-matrix.md).
 
 On the managed development Mac, use the machine-wide wrapper from the
 `macos-development-environment` project. It prompts without echo, writes Doppler

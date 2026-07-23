@@ -17,6 +17,18 @@ docs:
   public_root: .opensymphony/memory/generated-docs
   default_visibility: private
   deny_private_links: true
-areas: {}
+areas:
+  orchestration:
+    title: Symphony orchestration
+    docs_target: .opensymphony/memory/generated-docs/orchestration.md
+    visibility: private
+    status: stable
+    confidence: 100
+    aliases:
+      - orchestration
+    source_refs:
+      docs:
+        - docs/architecture.md
+        - docs/conformance.md
 redaction:
   deny_patterns: []

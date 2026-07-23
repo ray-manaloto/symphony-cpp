@@ -1,0 +1,29 @@
+issues:
+  - identifier: FIX-100
+    title: Validate contained project memory
+    url: https://linear.example.invalid/issue/FIX-100
+    description: Exercise deterministic private memory capture without tracker mutation.
+    state: Done
+    completed_at: 2026-07-23T00:00:00Z
+    labels:
+      - orchestration
+    linked_prs:
+      - 100
+    comments:
+      - body: "Decision: keep generated documentation inside the private state volume."
+prs:
+  - number: 100
+    title: FIX-100 validate contained project memory
+    url: https://github.example.invalid/ray-manaloto/symphony-cpp/pull/100
+    branch: fixture/memory-acceptance
+    merge_sha: 1111111111111111111111111111111111111111
+    changed_files:
+      - path: ops/opensymphony/config.yaml
+        change_kind: modified
+    checks:
+      - name: fixture
+        conclusion: success
+    reviews:
+      - reviewer: fixture-reviewer
+        state: APPROVED
+        disposition: Private staging boundary preserved.

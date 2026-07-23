@@ -11,7 +11,9 @@ on:
       - WORKFLOW.md
       - ops/opensymphony/config.yaml
       - ops/opensymphony/codex-config.toml
+      - ops/opensymphony/fixtures/**
       - scripts/opensymphony-container.sh
+      - scripts/test-opensymphony-acceptance.sh
       - scripts/test-opensymphony-container.sh
 
 permissions:
@@ -67,6 +69,13 @@ jobs:
           OPENSYMPHONY_SEED_FIXTURE_CODEX_LOGIN: "true"
           OPENSYMPHONY_TEST_LEGACY_MEMORY_MIGRATION: "true"
         run: ./scripts/test-opensymphony-container.sh
+      - name: Run Codex-mode OpenSymphony acceptance
+        env:
+          OPENSYMPHONY_INTEGRATION_IMAGE: symphony-orchestrator:ci
+          OPENSYMPHONY_CODEX_AUTH_VOLUME: symphony-codex-auth-acceptance-${{ github.run_id }}
+          OPENSYMPHONY_STATE_VOLUME: symphony-opensymphony-state-acceptance-${{ github.run_id }}
+          OPENSYMPHONY_ACCEPTANCE_SUFFIX: ${{ github.run_id }}
+        run: ./scripts/test-opensymphony-acceptance.sh
       - name: Publish tested image
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"

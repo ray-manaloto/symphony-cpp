@@ -1,5 +1,4 @@
 ARG RUST_IMAGE=rust:1.93.0-bookworm@sha256:d0a4aa3ca2e1088ac0c81690914a0d810f2eee188197034edf366ed010a2b382
-ARG RUNTIME_IMAGE=debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 FROM ${RUST_IMAGE} AS builder
 
@@ -20,11 +19,12 @@ RUN git clone --filter=blob:none --no-checkout "${OPENSYMPHONY_REPOSITORY}" open
     && test "$(git -C opensymphony rev-parse HEAD)" = "${OPENSYMPHONY_COMMIT}"
 
 WORKDIR /src/opensymphony
-RUN cargo build --locked --release \
+RUN cargo test --locked --workspace \
+    && cargo build --locked --release \
     && install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
     && install -D --mode=0644 LICENSE /opt/licenses/OpenSymphony-LICENSE
 
-FROM ${RUNTIME_IMAGE} AS symphony-orchestrator
+FROM ${RUST_IMAGE} AS symphony-orchestrator
 
 ARG CODEX_CLI_VERSION=0.145.0
 ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
@@ -32,6 +32,7 @@ ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         ca-certificates \
+        curl \
         git \
         nodejs \
         npm \
