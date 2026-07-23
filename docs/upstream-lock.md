@@ -13,6 +13,7 @@ Accessed 2026-07-22.
 | stephenberry/glaze | `v7.9.0` / `f33758ad0c912471f2580fb7b3bf3a2b103214b9`; source tarball SHA-512 `902e3d707f5c2d07bd74abb232ba6dfed78a5b83ed2a9c6151d4cb53ef5724f4162afaba8b398b910c795b03692d0a648f615d89ad4e35ac8fdeeaf7bf1d9eff` | JSON codecs, typed protocol DTOs, and reflected schema generation |
 | openalgz/ut | `v1.2.0` / `864c810899c497640784baa82c93e2fad4a3f7ce`; source tarball SHA-512 `dd5acfc244ec7a746cbffafc4739728cccef02f591ae714db22a20b7d5d70352aaade16ae92cca528ae4715a1f57952335e9cba184053b283562a28fca784994` | Unit-test framework supplied by the repository overlay port |
 | Boost.Process | `1.91.0` from pinned vcpkg baseline; source archive SHA-512 `5e7199970509baa84199899f5f47d2114a9f44a4ecd9dc91ed55590fc4ec79ee7ef56b70e79e1a2b44da7e2e47d6a4fb55dcd2e3776f4fd2b279b91b8413ad02` | Process v2 compatibility gate and planned child-process lifecycle owner |
+| CLI11 | `2.6.2` from pinned vcpkg baseline; source archive SHA-512 `3b17c02e120d6c14246157fcfef1e55c34462d8ee3adb55e49f4b180fc2e0d52ec4371505c009839c623ccc5bf4ac16c8c94707d10b1f1cb0e916c3402d2e7a6` | Command-line argument parsing, help, diagnostics, and parse exit codes |
 | openai/openai-openapi | `f9400172ebe08522ab228b771d885e3bd5456e42`; `openapi.yaml` SHA-256 `0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7` | OpenAI REST API reference schema |
 | OpenAPI Generator | `v7.24.0`; image digest `sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88` | Disposable C++ Boost.Beast reference generation |
 

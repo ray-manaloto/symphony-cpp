@@ -37,8 +37,12 @@ This describes the OpenAI REST API and does not replace Symphony's Codex app-ser
 ```sh
 symphonyctl validate ./WORKFLOW.md
 symphonyctl conformance
-symphonyd --workflow ./WORKFLOW.md --once
+symphonyd ./WORKFLOW.md --once
 ```
+
+`symphonyd` defaults to `WORKFLOW.md` in the current directory. The older
+`--workflow ./WORKFLOW.md` spelling remains a compatibility alias; supplying both forms is an
+error.
 
 CI publishes only tested compiler images to this repository's GHCR namespace. It does not publish a
 service deployment, install privileged VM components, mutate a live tracker, or use production

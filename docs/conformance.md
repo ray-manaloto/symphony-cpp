@@ -8,6 +8,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | YAML front matter and prompt split | workflow tests | Implemented |
 | Typed defaults and `$` expansion | workflow tests | Implemented |
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
+| Positional workflow CLI and process exits | CLI11 parser fixtures plus Boost.Process-backed executable tests | Implemented for cwd default, one positional path, `--workflow` compatibility, strict conflicts/extras, help success, parse failure, and startup-validation failure |
 | Single-authority polling | deterministic scheduler tests | Implemented |
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
 | Tracker normalization, pagination, profiles, and portable errors | tracker contract fixtures | Implemented for the provider-neutral fixture boundary; live Glaze HTTP adapters remain gated and disabled |
@@ -43,6 +44,5 @@ The following required evidence is not yet complete and prevents a conformance c
 - bounded Codex stderr diagnostics, process-tree/group cancellation, and proactive compaction
   thresholds;
 - logging-sink failure isolation and repeated telemetry aggregation;
-- positional workflow CLI behavior and process lifecycle exit tests;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential
   reflection evidence required by the implementation plan.

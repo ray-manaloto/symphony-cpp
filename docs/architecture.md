@@ -33,7 +33,8 @@ bootstrap mechanism to remove only through a bounded, always-green migration.
 | Child processes | Boost.Process v2 behind the Codex protocol channel | none concurrently | separate bounded stderr, process-tree cancellation, timeouts, deterministic reap |
 | Persistence | `klemens-morgenstern/sqlite` behind a serialized executor and repository interface | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
 | Tests | `openalgz/ut` plus libFuzzer/property fixtures | none concurrently | deterministic state-machine properties and compile-time tests |
-| CLI/logging | CLI11 and spdlog | owner-selected alternatives | typed errors and structured redaction |
+| CLI | CLI11 2.6.2 behind executable option structs | none concurrently | positional workflow path, strict options, standard help and exit codes |
+| Logging | spdlog candidate; not yet selected | owner-selected alternatives | sink failure isolation and structured redaction |
 | Formatting | `{fmt}` | standard formatting when supported equivalently | type safety and redact-before-format discipline |
 | Dependencies | vcpkg manifest mode at a Git baseline | minimal pinned overlay ports | immutable, reproducible, auditable inputs |
 

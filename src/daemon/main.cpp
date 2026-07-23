@@ -5,6 +5,7 @@
 #include <optional>
 #include <thread>
 
+#include "symphony/cli/cli.hpp"
 #include "symphony/codex/codex.hpp"
 #include "symphony/observability/observability.hpp"
 #include "symphony/scheduler/scheduler.hpp"
@@ -57,16 +58,15 @@ symphony::codex::AppServerPolicy codex_policy(
 
 int main(int argc, char** argv) {
   try {
-    std::optional<std::filesystem::path> explicit_path;
-    bool once = false;
-    for (int index = 1; index < argc; ++index) {
-      const std::string_view argument{argv[index]};
-      if (argument == "--workflow" && index + 1 < argc) explicit_path = argv[++index];
-      else if (argument == "--once") once = true;
-      else throw std::runtime_error("usage: symphonyd [--workflow PATH] [--once]");
+    const auto parsed = symphony::cli::parse_daemon_arguments(argc, argv);
+    if (!parsed) {
+      std::cout << parsed.error().standard_output;
+      std::cerr << parsed.error().standard_error;
+      return parsed.error().code;
     }
     symphony::workflow::ProcessEnvironment environment;
-    const auto path = symphony::workflow::WorkflowLoader::resolve_path(explicit_path, std::filesystem::current_path());
+    const auto path = symphony::workflow::WorkflowLoader::resolve_path(
+        parsed->workflow_path, std::filesystem::current_path());
     auto workflow = symphony::workflow::WorkflowLoader{}.load(path, environment);
     symphony::workflow::validate_for_dispatch(workflow.config, {"fake", "github", "linear"});
     symphony::tracker::FakeTracker tracker;
@@ -111,8 +111,10 @@ int main(int argc, char** argv) {
         std::cerr << "symphonyd: workflow reload rejected: " << error.what() << '\n';
       }
       scheduler.tick(workflow.prompt);
-      if (!once) std::this_thread::sleep_for(workflow.config.polling.interval);
-    } while (!once && !stop_requested.load());
+      if (!parsed->once) {
+        std::this_thread::sleep_for(workflow.config.polling.interval);
+      }
+    } while (!parsed->once && !stop_requested.load());
     std::cout << "symphonyd fixture loop stopped; live adapters disabled\n";
     return 0;
   } catch (const std::exception& error) {
