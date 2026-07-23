@@ -10,6 +10,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
 | Single-authority polling | deterministic scheduler tests | Implemented |
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
+| Tracker normalization, pagination, profiles, and portable errors | tracker contract fixtures | Implemented for the provider-neutral fixture boundary; live Glaze HTTP adapters remain gated and disabled |
 | Candidate completeness, routability, and dispatch ordering | scheduler fixture tests | Implemented for normalized core fields, adapter `dispatchable`, priority, creation time, and identifier tie-breaks |
 | Safe per-issue workspaces | workspace tests | Implemented |
 | Lifecycle hooks and 60s default | workflow, scheduler, and workspace tests | Implemented in fixture and contained POSIX executors |
@@ -33,8 +34,6 @@ the pinned compiler matrix must be green before the implementation may claim ful
 
 The following required evidence is not yet complete and prevents a conformance claim:
 
-- tracker normalization, pagination, malformed-record behavior, compact adapter profiles, and
-  portable error mapping;
 - Codex stderr separation, approval/user-input policy, and unsupported tool calls;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - positional workflow CLI behavior and process lifecycle exit tests;
