@@ -55,7 +55,14 @@ schema_property_type(const glz::generic_u64 &schema,
 ut::suite reflection_tests = [] {
   ut::test("C++26 reflection enumerates schema fields without registration") =
       [] {
-        const auto fields = symphony::meta::fields<ReflectedConfig>();
+        static constexpr auto fields =
+            symphony::meta::fields<ReflectedConfig>();
+        static_assert(fields.size() == std::size_t{2});
+        static_assert(fields[0].name == "poll_interval_ms");
+        static_assert(fields[0].type == "int");
+        static_assert(fields[1].name == "enabled");
+        static_assert(fields[1].type == "bool");
+
         ut::expect(fields.size() == std::size_t{2});
         ut::expect(fields[0].name == std::string{"poll_interval_ms"});
         ut::expect(fields[0].type == std::string{"int"});
