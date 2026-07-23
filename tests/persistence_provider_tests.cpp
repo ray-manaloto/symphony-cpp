@@ -13,9 +13,10 @@ namespace sqlite = boost::sqlite;
 
 namespace {
 
-int row_count(sqlite::connection_ref connection) {
+sqlite3_int64 row_count(sqlite::connection_ref connection) {
   for (const auto& [count] :
-       sqlite::query<std::tuple<int>>(connection, "SELECT count(*) FROM events")) {
+       sqlite::query<std::tuple<sqlite3_int64>>(
+           connection, "SELECT count(*) FROM events")) {
     return count;
   }
   return -1;
