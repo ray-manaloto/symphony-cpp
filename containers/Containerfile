@@ -7,6 +7,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     autoconf automake bison build-essential ca-certificates ccache cmake curl flex git gnupg \
     libgmp-dev libisl-dev libmpc-dev libmpfr-dev libzstd-dev ninja-build python3 texinfo xz-utils \
  && rm -rf /var/lib/apt/lists/*
+COPY scripts/install-cmake.sh /tmp/install-cmake.sh
+RUN /tmp/install-cmake.sh \
+ && rm /tmp/install-cmake.sh
 
 FROM compiler-build-base AS gcc-builder
 ARG GCC_VERSION=16.1.0
@@ -67,9 +70,7 @@ LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
- && cmake_bin="$(.build/vcpkg/vcpkg fetch cmake | tail -n 1)" \
- && test "$("${cmake_bin}" --version | head -n 1)" = "cmake version 4.3.3" \
- && ln -sf "${cmake_bin}" /usr/local/bin/cmake \
+ && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
  && .build/vcpkg/vcpkg install --clean-after-build
 WORKDIR /workspaces/symphony-cpp
 ENTRYPOINT []
@@ -84,9 +85,7 @@ LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
- && cmake_bin="$(.build/vcpkg/vcpkg fetch cmake | tail -n 1)" \
- && test "$("${cmake_bin}" --version | head -n 1)" = "cmake version 4.3.3" \
- && ln -sf "${cmake_bin}" /usr/local/bin/cmake \
+ && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
  && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
       --overlay-triplets vcpkg-triplets --clean-after-build
 WORKDIR /workspaces/symphony-cpp

@@ -1,16 +1,30 @@
 {
-  "version": 8,
-  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "$schema": "https://raw.githubusercontent.com/Kitware/CMake/v4.4.0/Help/manual/presets/schema.json",
+  "version": 12,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 4,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "gcc-debug",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/gcc-debug",
+      "toolchainFile": "${sourceDir}/.build/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "warnings": {
+        "author": true,
+        "deprecated": true,
+        "experimental": true,
+        "installAbsoluteDestination": true,
+        "policy": true,
+        "uninitialized": true,
+        "unusedCli": true
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.build/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "SYMPHONY_ENABLE_REFLECTION": "ON"
       },
       "environment": {
@@ -21,7 +35,9 @@
       "name": "gcc-release",
       "inherits": "gcc-debug",
       "binaryDir": "${sourceDir}/build/gcc-release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     },
     {
       "name": "gcc-sanitizers",
@@ -44,26 +60,54 @@
       "inherits": "gcc-debug",
       "binaryDir": "${sourceDir}/build/clang-reflection",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "/opt/clang-p2996/bin/clang",
         "CMAKE_CXX_COMPILER": "/opt/clang-p2996/bin/clang++",
-        "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+        "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-p2996"
       }
     }
   ],
   "buildPresets": [
-    { "name": "gcc-debug", "configurePreset": "gcc-debug" },
-    { "name": "gcc-release", "configurePreset": "gcc-release" },
-    { "name": "gcc-sanitizers", "configurePreset": "gcc-sanitizers" },
-    { "name": "gcc-tsan", "configurePreset": "gcc-tsan" },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug",
+      "jobs": 4
+    },
+    {
+      "name": "gcc-release",
+      "configurePreset": "gcc-release",
+      "jobs": 4
+    },
+    {
+      "name": "gcc-sanitizers",
+      "configurePreset": "gcc-sanitizers",
+      "jobs": 4
+    },
+    {
+      "name": "gcc-tsan",
+      "configurePreset": "gcc-tsan",
+      "jobs": 4
+    },
     {
       "name": "clang-reflection",
       "configurePreset": "clang-reflection",
-      "targets": ["symphony_p2996_tests"]
+      "jobs": 2,
+      "targets": [
+        "symphony_p2996_tests"
+      ]
     }
   ],
   "testPresets": [
-    { "name": "gcc-debug", "configurePreset": "gcc-debug", "output": { "outputOnFailure": true } },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
+    },
     {
       "name": "gcc-sanitizers",
       "configurePreset": "gcc-sanitizers",
@@ -71,7 +115,13 @@
         "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
         "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
       },
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
     },
     {
       "name": "gcc-tsan",
@@ -79,13 +129,99 @@
       "environment": {
         "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"
       },
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
     },
     {
       "name": "clang-reflection",
       "configurePreset": "clang-reflection",
-      "filter": { "include": { "name": "symphony_p2996_tests" } },
-      "output": { "outputOnFailure": true }
+      "filter": {
+        "include": {
+          "name": "symphony_p2996_tests"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "gcc-debug",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-debug"
+        },
+        {
+          "type": "build",
+          "name": "gcc-debug"
+        },
+        {
+          "type": "test",
+          "name": "gcc-debug"
+        }
+      ]
+    },
+    {
+      "name": "gcc-sanitizers",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-sanitizers"
+        },
+        {
+          "type": "build",
+          "name": "gcc-sanitizers"
+        },
+        {
+          "type": "test",
+          "name": "gcc-sanitizers"
+        }
+      ]
+    },
+    {
+      "name": "gcc-tsan",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-tsan"
+        },
+        {
+          "type": "build",
+          "name": "gcc-tsan"
+        },
+        {
+          "type": "test",
+          "name": "gcc-tsan"
+        }
+      ]
+    },
+    {
+      "name": "clang-reflection",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "clang-reflection"
+        },
+        {
+          "type": "build",
+          "name": "clang-reflection"
+        },
+        {
+          "type": "test",
+          "name": "clang-reflection"
+        }
+      ]
     }
   ]
 }

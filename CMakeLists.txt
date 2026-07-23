@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 4.4)
 project(symphony_cpp VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
@@ -11,21 +11,35 @@ option(SYMPHONY_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(symphony_options INTERFACE)
+target_compile_features(symphony_options INTERFACE cxx_std_26)
 target_compile_options(symphony_options INTERFACE
-  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>
+  $<$<CXX_COMPILER_ID:GNU,Clang>:
+    -Wall
+    -Wextra
+    -Wformat=2
+    -Wnon-virtual-dtor
+    -Woverloaded-virtual
+    -Wpedantic
+    -Wshadow
+    -Wundef>
   $<$<AND:$<BOOL:${SYMPHONY_WARNINGS_AS_ERRORS}>,$<CXX_COMPILER_ID:GNU,Clang>>:-Werror>)
+target_compile_definitions(symphony_options INTERFACE
+  $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:_GLIBCXX_ASSERTIONS>)
 if(SYMPHONY_ENABLE_ASAN_UBSAN)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(FATAL_ERROR "ASan+UBSan requires GCC or Clang")
   endif()
   target_compile_options(symphony_options INTERFACE
     -fsanitize=address,undefined
+    -fno-sanitize-recover=all
     -fno-omit-frame-pointer)
   target_link_options(symphony_options INTERFACE
     -fsanitize=address,undefined
+    -fno-sanitize-recover=all
     -fno-omit-frame-pointer)
 endif()
 if(SYMPHONY_ENABLE_TSAN)
@@ -46,9 +60,10 @@ endif()
 
 add_library(symphony_reflection_options INTERFACE)
 if(SYMPHONY_ENABLE_REFLECTION)
+  include(cmake/CheckReflection.cmake)
   target_compile_options(symphony_reflection_options INTERFACE
     $<$<CXX_COMPILER_ID:GNU>:-freflection>
-    $<$<CXX_COMPILER_ID:Clang>:-freflection-latest>)
+    $<$<CXX_COMPILER_ID:Clang>:-freflection;-fexpansion-statements>)
   target_compile_definitions(symphony_reflection_options INTERFACE SYMPHONY_ENABLE_REFLECTION=1)
 endif()
 

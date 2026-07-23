@@ -47,15 +47,10 @@ jobs:
           cacheTo: type=gha,mode=min,scope=symphony-gcc16-min-v1,timeout=30m
           runCmd: >-
             test "$(g++ -dumpfullversion)" = "16.1.0"
-            && cmake --preset gcc-debug
-            && cmake --build --preset gcc-debug
-            && ctest --preset gcc-debug
-            && cmake --preset gcc-sanitizers
-            && cmake --build --preset gcc-sanitizers
-            && ctest --preset gcc-sanitizers
-            && cmake --preset gcc-tsan
-            && cmake --build --preset gcc-tsan
-            && ctest --preset gcc-tsan
+            && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
+            && cmake --workflow --preset gcc-debug
+            && cmake --workflow --preset gcc-sanitizers
+            && cmake --workflow --preset gcc-tsan
       - name: Verify direct GCC image contract
         run: |
           image="ghcr.io/ray-manaloto/symphony-dev:${GITHUB_SHA}"
@@ -100,9 +95,8 @@ jobs:
           cacheTo: type=gha,mode=min,scope=symphony-clang-p2996-min-v1,timeout=30m
           runCmd: >-
             test -x /opt/clang-p2996/bin/clang++
-            && cmake --preset clang-reflection
-            && cmake --build --preset clang-reflection
-            && ctest --preset clang-reflection
+            && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
+            && cmake --workflow --preset clang-reflection
       - name: Verify direct Clang image contract
         run: |
           image="ghcr.io/ray-manaloto/symphony-ci-clang:${GITHUB_SHA}"

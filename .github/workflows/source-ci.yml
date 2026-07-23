@@ -29,6 +29,8 @@ jobs:
           apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build nodejs tar unzip zip zstd
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned CMake 4.4.0
+        run: ./scripts/install-cmake.sh
       - name: Restore pinned vcpkg binary cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
@@ -50,24 +52,12 @@ jobs:
         run: node scripts/check-dependency-policy.mjs
       - name: Bootstrap pinned vcpkg
         run: ./scripts/bootstrap-vcpkg.sh
-      - name: Configure
-        run: cmake --preset gcc-debug
-      - name: Build
-        run: cmake --build --preset gcc-debug --parallel 4
-      - name: Test
-        run: ctest --preset gcc-debug
-      - name: Configure ASan and UBSan
-        run: cmake --preset gcc-sanitizers
-      - name: Build ASan and UBSan
-        run: cmake --build --preset gcc-sanitizers --parallel 4
-      - name: Test ASan and UBSan
-        run: ctest --preset gcc-sanitizers
-      - name: Configure TSan
-        run: cmake --preset gcc-tsan
-      - name: Build TSan
-        run: cmake --build --preset gcc-tsan --parallel 4
-      - name: Test TSan
-        run: ctest --preset gcc-tsan
+      - name: Configure, build, and test Debug
+        run: cmake --workflow --preset gcc-debug
+      - name: Configure, build, and test ASan and UBSan
+        run: cmake --workflow --preset gcc-sanitizers
+      - name: Configure, build, and test TSan
+        run: cmake --workflow --preset gcc-tsan
       - name: Report compiler cache
         if: ${{ always() }}
         run: ccache --show-stats
