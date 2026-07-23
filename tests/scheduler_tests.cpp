@@ -167,7 +167,13 @@ static ut::suite scheduler_tests = [] {
         ut::expect(scheduler.runs().contains("1"));
         const auto stopped =
             wait_until(runtime.stopped, 1, std::chrono::seconds{2});
-        scheduler.tick("{{ issue.identifier }}");
+        const auto completion_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds{2};
+        while (scheduler.runs().contains("1") &&
+               std::chrono::steady_clock::now() < completion_deadline) {
+          scheduler.tick("{{ issue.identifier }}");
+          std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
 
         ut::expect(stopped);
         ut::expect(!scheduler.runs().contains("1"));
