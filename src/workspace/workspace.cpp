@@ -73,6 +73,10 @@ void FixtureWorkspaceExecutor::run_hook(
     const std::chrono::milliseconds timeout) {
   const auto verified = contained(workspace.path.filename().native());
   if (verified != workspace.path.lexically_normal()) throw std::runtime_error("uncontained hook workspace");
+  if (std::filesystem::is_symlink(verified) ||
+      std::filesystem::canonical(verified) != verified) {
+    throw std::runtime_error("hook workspace is not canonical and contained");
+  }
   if (timeout <= std::chrono::milliseconds::zero()) throw std::runtime_error("hook timeout must be positive");
   if (command.empty()) return;
   hook_history_.push_back(std::string{hook_name});
