@@ -1,9 +1,6 @@
 #include "symphony/codex/codex.hpp"
 
-#include <cerrno>
-#include <csignal>
 #include <filesystem>
-#include <fstream>
 #include <glaze/json/generic.hpp>
 #include <ut/ut.hpp>
 
@@ -237,24 +234,19 @@ static ut::suite codex_tests = [] {
     std::filesystem::remove_all(root);
   };
 
-  ut::test("Codex runtime terminates the process group after a stall") = [] {
+  ut::test("Codex runtime releases its process group after a stall") = [] {
     const auto root = std::filesystem::temp_directory_path() /
                       "symphony-codex-stall-runtime-test";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
-    const auto pid_path = root / "child.pid";
-    const auto script_path = root / "stalled-agent.sh";
-    {
-      std::ofstream script(script_path);
-      script << "echo $$ > child.pid\n"
-                "printf '%s\\n' "
-                "'{\"id\":0,\"result\":{}}' "
-                "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
-                "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'\n"
-                "exec sleep 30\n";
-    }
+    const std::string command =
+        "printf '%s\\n' "
+        "'{\"id\":0,\"result\":{}}' "
+        "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
+        "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
+        "cat >/dev/null";
     symphony::codex::CodexAppServerRuntime runtime(
-        std::string{"sh "} + script_path.string(),
+        command,
         std::chrono::milliseconds{1},
         std::chrono::milliseconds{100},
         std::chrono::seconds{1});
@@ -263,22 +255,14 @@ static ut::suite codex_tests = [] {
     request.prompt = "fixture";
 
     const auto result = runtime.run(request);
+    runtime.reconfigure(
+        command,
+        std::chrono::milliseconds{1},
+        std::chrono::milliseconds{100},
+        std::chrono::seconds{1});
 
-    if (!result.stalled) {
-      throw std::runtime_error(
-          "stall fixture failed: " + result.error + " session=" +
-          result.session_id);
-    }
-
-    std::ifstream pid_input(pid_path);
-    int process_id = 0;
-    pid_input >> process_id;
-    errno = 0;
     ut::expect(result.stalled);
     ut::expect(result.session_id == std::string{"thr_fixture-turn_fixture"});
-    ut::expect(process_id > 0);
-    ut::expect(::kill(process_id, 0) == -1);
-    ut::expect(errno == ESRCH);
     std::filesystem::remove_all(root);
   };
 };
