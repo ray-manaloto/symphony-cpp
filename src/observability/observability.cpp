@@ -19,6 +19,12 @@ struct glz::meta<symphony::observability::Event> {
 
 namespace symphony::observability {
 namespace {
+struct EventJsonOptions : glz::opts {
+  bool escape_control_characters = true;
+};
+
+inline constexpr EventJsonOptions event_json_options{};
+
 std::shared_ptr<spdlog::logger> make_stderr_logger() {
   return std::make_shared<spdlog::logger>(
       "symphony", std::make_shared<spdlog::sinks::stderr_sink_mt>());
@@ -81,7 +87,7 @@ Event redact(Event event) {
 }
 
 std::string to_json(const Event& event) {
-  auto result = glz::write_json(event);
+  auto result = glz::write<event_json_options>(event);
   if (!result) {
     throw std::runtime_error("Glaze could not serialize an observability event: " +
                              glz::format_error(result.error()));
