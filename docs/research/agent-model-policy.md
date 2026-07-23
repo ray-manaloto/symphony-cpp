@@ -54,9 +54,10 @@ then expand only after measured throughput and defect-recall evidence.
 - Pin model and effort in each supported worker launch/session path after its compatibility probe;
   both the external OpenSymphony and standalone C++ paths now use Sol/high.
 - Preserve Codex-reported context-window and compaction telemetry.
-- Let Codex own automatic compaction initially; observe compaction frequency before setting a local
-  threshold. End the bounded worker session after any observed compaction, then resume from durable
-  workspace and tracker state in a fresh process and thread.
+- Let Codex own automatic compaction. End the bounded worker session after any observed compaction,
+  then resume from durable workspace and tracker state in a fresh process and thread. When Codex
+  reports cumulative tokens and a positive context window, apply the repository's configured 70%
+  between-turn rollover threshold; never estimate missing utilization.
 - Enforce a turn budget independently of context size. The repository workflow uses four turns per
   session. A compaction is not progress and does not reset retry/no-progress policy.
 - Select Sol/high at baseline, Sol/xhigh for the next session after one abnormal failure or verified

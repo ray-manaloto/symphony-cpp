@@ -32,6 +32,8 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
       workflow.codex.escalation_reasoning_effort;
   config.repeated_failure_reasoning_effort =
       workflow.codex.repeated_failure_reasoning_effort;
+  config.context_rollover_percent =
+      workflow.codex.context_rollover_percent;
   for (const auto& [state, limit] : workflow.agent.max_concurrent_agents_by_state) {
     config.max_concurrent_by_state.emplace(state, limit);
   }

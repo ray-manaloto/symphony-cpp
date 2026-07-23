@@ -203,6 +203,17 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
     if (const auto node = codex["escalation_model"]) document.config.codex.escalation_model = scalar(node, "codex.escalation_model");
     if (const auto node = codex["escalation_reasoning_effort"]) document.config.codex.escalation_reasoning_effort = scalar(node, "codex.escalation_reasoning_effort");
     if (const auto node = codex["repeated_failure_reasoning_effort"]) document.config.codex.repeated_failure_reasoning_effort = scalar(node, "codex.repeated_failure_reasoning_effort");
+    if (const auto node = codex["context_rollover_percent"]) {
+      const auto value = unsigned_value(
+          scalar(node, "codex.context_rollover_percent"),
+          "codex.context_rollover_percent");
+      if (value == 0 || value >= 100) {
+        throw std::runtime_error(
+            "codex.context_rollover_percent must be between 1 and 99");
+      }
+      document.config.codex.context_rollover_percent =
+          static_cast<std::uint32_t>(value);
+    }
     if (const auto node = codex["approval_policy"]) document.config.codex.approval_policy = scalar(node, "codex.approval_policy");
     if (const auto node = codex["thread_sandbox"]) document.config.codex.thread_sandbox = scalar(node, "codex.thread_sandbox");
     if (const auto node = codex["turn_sandbox_policy"]) document.config.codex.turn_sandbox_policy = scalar(node, "codex.turn_sandbox_policy");

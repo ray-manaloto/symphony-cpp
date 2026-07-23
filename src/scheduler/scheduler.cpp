@@ -101,6 +101,12 @@ Scheduler::Scheduler(
       clock_(clock) {
   if (config_.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
   if (config_.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
+  if (config_.context_rollover_percent &&
+      (*config_.context_rollover_percent == 0 ||
+       *config_.context_rollover_percent >= 100)) {
+    throw std::invalid_argument(
+        "context_rollover_percent must be between 1 and 99");
+  }
 }
 
 bool Scheduler::active_state(const std::string_view state) const {
@@ -228,6 +234,7 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
     const auto policy = select_policy(config_, run.attempt);
     request.model = policy.model;
     request.reasoning_effort = policy.reasoning_effort;
+    request.context_rollover_percent = config_.context_rollover_percent;
     events_.append({
         "agent_policy_selected",
         run.issue.id,
@@ -306,6 +313,16 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
         run.issue.identifier,
         result.session_id,
         "Codex compacted the active context"});
+  }
+  if (result.context_pressure_rollover) {
+    events_.append({
+        "context_pressure_rollover",
+        run.issue.id,
+        run.issue.identifier,
+        result.session_id,
+        fmt::format(
+            "Codex context utilization reached the configured {}% rollover threshold",
+            config_.context_rollover_percent.value_or(0))});
   }
   if (result.rate_limits) {
     if (!latest_rate_limits_) latest_rate_limits_.emplace();
@@ -448,6 +465,12 @@ const std::optional<codex::RateLimits>& Scheduler::latest_rate_limits() const no
 void Scheduler::reconfigure(SchedulerConfig config) {
   if (config.max_concurrent == 0) throw std::invalid_argument("max_concurrent must be positive");
   if (config.max_turns == 0) throw std::invalid_argument("max_turns must be positive");
+  if (config.context_rollover_percent &&
+      (*config.context_rollover_percent == 0 ||
+       *config.context_rollover_percent >= 100)) {
+    throw std::invalid_argument(
+        "context_rollover_percent must be between 1 and 99");
+  }
   config_ = std::move(config);
 }
 }  // namespace symphony::scheduler

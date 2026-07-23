@@ -44,6 +44,7 @@ codex:
   escalation_model: gpt-5.6-sol
   escalation_reasoning_effort: xhigh
   repeated_failure_reasoning_effort: max
+  context_rollover_percent: 70
 
 routing:
   harness: codex_app_server

@@ -47,6 +47,7 @@ static ut::suite workflow_tests = [] {
         "\n  escalation_model: gpt-5.6-sol"
         "\n  escalation_reasoning_effort: xhigh"
         "\n  repeated_failure_reasoning_effort: max"
+        "\n  context_rollover_percent: 70"
         "\nfuture_extension:\n  enabled: true\n---\nWork on {{ "
         "issue.identifier }} attempt {{ attempt }}.\n");
     FakeEnvironment env;
@@ -70,6 +71,8 @@ static ut::suite workflow_tests = [] {
                std::optional<std::string>{"xhigh"});
     ut::expect(document.config.codex.repeated_failure_reasoning_effort ==
                std::optional<std::string>{"max"});
+    ut::expect(document.config.codex.context_rollover_percent ==
+               std::optional<std::uint32_t>{70});
     ut::expect(document.prompt.find("issue.identifier") != std::string::npos);
     std::filesystem::remove(path);
   };
@@ -124,6 +127,20 @@ static ut::suite workflow_tests = [] {
           symphony::workflow::validate_for_dispatch(config, {"fake"});
         }));
       };
+
+  ut::test("workflow rejects ineffective context rollover percentages") = [] {
+    FakeEnvironment env;
+    for (const auto percent : {0, 100}) {
+      const auto path = temp_workflow(
+          "---\ncodex:\n  context_rollover_percent: " +
+          std::to_string(percent) + "\n---\nprompt\n");
+      ut::expect(ut::throws([&] {
+        static_cast<void>(
+            symphony::workflow::WorkflowLoader{}.load(path, env));
+      }));
+      std::filesystem::remove(path);
+    }
+  };
 
   ut::test("workflow watcher retries unaccepted changes and quiets accepted "
            "content") = [] {

@@ -78,9 +78,11 @@ Codex remains responsible for the compaction mechanism. Symphony preserves the r
 context-window size, recognizes both the legacy `thread/compacted` notification and the current
 `contextCompaction` completed item, counts them, and emits an operator event. Once compaction is
 observed, the current worker session exits normally at the next completed turn without requesting a
-continuation; a retry starts from the durable workspace in a fresh process and thread. The
-repository does not request proactive compaction and cannot yet preempt an internal compaction from
-reliable context-utilization evidence; that remains an explicit context-policy gap.
+continuation; a retry starts from the durable workspace in a fresh process and thread. When Codex
+reports both cumulative tokens and a positive context-window size, the configured
+`codex.context_rollover_percent` stops continuation at or above that utilization between completed
+turns. Missing telemetry is never estimated. This reduces compaction pressure but cannot interrupt
+an internal compaction that Codex performs during a single turn.
 
 One worker invocation owns one app-server process and coding-agent thread. After each successful
 turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a

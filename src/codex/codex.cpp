@@ -161,6 +161,18 @@ AppServerPolicy normalized_policy(AppServerPolicy policy) {
   return policy;
 }
 
+bool context_pressure_reached(const TokenUsage& usage,
+                              const std::uint32_t percent) {
+  if (!usage.model_context_window || *usage.model_context_window <= 0) {
+    return false;
+  }
+  const auto window =
+      static_cast<std::uint64_t>(*usage.model_context_window);
+  const auto whole = (window / 100U) * percent;
+  const auto remainder = ((window % 100U) * percent + 99U) / 100U;
+  return usage.total_tokens >= whole + remainder;
+}
+
 class BoostProcessProtocolChannel final : public ProtocolChannel {
 public:
   BoostProcessProtocolChannel(
@@ -340,6 +352,7 @@ RunResult FakeAgentRuntime::run(const RunRequest &request) {
   ++run_count_;
   last_model_ = request.model;
   last_reasoning_effort_ = request.reasoning_effort;
+  last_context_rollover_percent_ = request.context_rollover_percent;
   if (results_.empty()) {
     RunResult result;
     result.error = "no fixture result queued";
@@ -358,6 +371,10 @@ const std::optional<std::string>& FakeAgentRuntime::last_model() const noexcept 
 const std::optional<std::string>&
 FakeAgentRuntime::last_reasoning_effort() const noexcept {
   return last_reasoning_effort_;
+}
+const std::optional<std::uint32_t>&
+FakeAgentRuntime::last_context_rollover_percent() const noexcept {
+  return last_context_rollover_percent_;
 }
 
 CodexAppServerRuntime::CodexAppServerRuntime(
@@ -673,6 +690,12 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     result.error = "max_turns must be positive";
     return result;
   }
+  if (request.context_rollover_percent &&
+      (*request.context_rollover_percent == 0 ||
+       *request.context_rollover_percent >= 100)) {
+    result.error = "context_rollover_percent must be between 1 and 99";
+    return result;
+  }
   for (std::size_t count = 0; count < max_messages; ++count) {
     const auto read = channel.read(read_timeout);
     if (read.status == ProtocolChannel::ReadStatus::end_of_stream) {
@@ -791,6 +814,13 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         ++result.turns_completed;
       }
       if (result.compaction_count > 0) {
+        result.normal_exit = true;
+        return result;
+      }
+      if (request.context_rollover_percent && result.token_usage &&
+          context_pressure_reached(
+              *result.token_usage, *request.context_rollover_percent)) {
+        result.context_pressure_rollover = true;
         result.normal_exit = true;
         return result;
       }

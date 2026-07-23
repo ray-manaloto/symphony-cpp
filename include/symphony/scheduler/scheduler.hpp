@@ -47,6 +47,7 @@ struct SchedulerConfig {
   std::optional<std::string> escalation_model;
   std::optional<std::string> escalation_reasoning_effort;
   std::optional<std::string> repeated_failure_reasoning_effort;
+  std::optional<std::uint32_t> context_rollover_percent;
   std::map<std::string, std::size_t> max_concurrent_by_state;
   std::chrono::milliseconds retry_base{1000};
   std::chrono::milliseconds failure_retry_base{10000};
