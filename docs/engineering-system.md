@@ -197,7 +197,7 @@ experimental clang-p2996 fork.
   findings and never auto-rewrite includes in CI.
 - Add self-contained compilation fixtures for every public header and compile-time/static-assert
   contract fixtures.
-- Build and test the existing `gcc-release` preset because optimized diagnostics differ.
+- [x] Build and test the existing `gcc-release` preset because optimized diagnostics differ.
 
 Pilot additional GCC 16.1 warnings individually against project code:
 

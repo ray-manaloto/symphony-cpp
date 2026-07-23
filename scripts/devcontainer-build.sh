@@ -14,6 +14,10 @@ case "${profile}" in
     readonly config="${repository_root}/.devcontainer/devcontainer.json"
     readonly preset="gcc-sanitizers"
     ;;
+  gcc-release)
+    readonly config="${repository_root}/.devcontainer/devcontainer.json"
+    readonly preset="gcc-release"
+    ;;
   clang-p2996)
     readonly config="${repository_root}/.devcontainer/clang-p2996/devcontainer.json"
     readonly preset="clang-reflection"
@@ -23,7 +27,7 @@ case "${profile}" in
     readonly preset="clang-analysis"
     ;;
   *)
-    echo "usage: $0 {gcc|gcc-sanitizers|clang-p2996|analysis}" >&2
+    echo "usage: $0 {gcc|gcc-release|gcc-sanitizers|clang-p2996|analysis}" >&2
     exit 2
     ;;
 esac

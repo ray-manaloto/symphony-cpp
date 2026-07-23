@@ -20,6 +20,12 @@ Day-to-day development runs inside the pinned GCC 16.1 devcontainer:
 ./scripts/devcontainer-build.sh gcc
 ```
 
+Run the optimized GCC 16.1 build and test path:
+
+```sh
+./scripts/devcontainer-build.sh gcc-release
+```
+
 Run the GCC 16.1 AddressSanitizer and UndefinedBehaviorSanitizer gate in the same devcontainer:
 
 ```sh

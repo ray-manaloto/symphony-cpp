@@ -49,6 +49,7 @@ jobs:
             test "$(g++ -dumpfullversion)" = "16.1.0"
             && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
             && cmake --workflow --preset gcc-debug
+            && cmake --workflow --preset gcc-release
             && cmake --workflow --preset gcc-sanitizers
             && cmake --workflow --preset gcc-tsan
       - name: Verify direct GCC image contract

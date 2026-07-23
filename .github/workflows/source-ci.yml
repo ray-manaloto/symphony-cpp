@@ -54,6 +54,8 @@ jobs:
         run: ./scripts/bootstrap-vcpkg.sh
       - name: Configure, build, and test Debug
         run: cmake --workflow --preset gcc-debug
+      - name: Configure, build, and test Release
+        run: cmake --workflow --preset gcc-release
       - name: Configure, build, and test ASan and UBSan
         run: cmake --workflow --preset gcc-sanitizers
       - name: Configure, build, and test TSan

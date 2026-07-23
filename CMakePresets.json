@@ -126,6 +126,17 @@
       }
     },
     {
+      "name": "gcc-release",
+      "configurePreset": "gcc-release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
+    },
+    {
       "name": "gcc-sanitizers",
       "configurePreset": "gcc-sanitizers",
       "environment": {
@@ -186,6 +197,23 @@
         {
           "type": "test",
           "name": "gcc-debug"
+        }
+      ]
+    },
+    {
+      "name": "gcc-release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-release"
+        },
+        {
+          "type": "build",
+          "name": "gcc-release"
+        },
+        {
+          "type": "test",
+          "name": "gcc-release"
         }
       ]
     },
