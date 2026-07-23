@@ -43,6 +43,7 @@ jobs:
           restore-keys: source-ccache-gcc16-v1-
       - name: Bound compiler cache
         run: |
+          mkdir -p "${VCPKG_DEFAULT_BINARY_CACHE}"
           ccache --max-size=750M
           ccache --zero-stats
       - name: Enforce dependency-first policy
