@@ -20,16 +20,16 @@ release artifact. Conventional headers avoid the fork's documented serialization
 
 ## Library decisions
 
-The owner selected Glaze, `ut`, and vcpkg on 2026-07-22. Glaze now owns JSON codecs and schema
-generation, and `ut` owns the test framework. The remaining `yaml-cpp` workflow loader is a
-bootstrap mechanism to remove only through a bounded, always-green migration.
+The owner selected Glaze, `ut`, and vcpkg on 2026-07-22. Glaze now owns JSON, YAML, and schema
+mechanics, and `ut` owns the test framework. Workflow front-matter framing, environment expansion,
+path normalization, validation, and prompt semantics remain repository policy outside the codec.
 
 | Capability | Preferred candidate | Alternatives under discussion | Required property |
 | --- | --- | --- | --- |
 | Async execution | pinned NVIDIA stdexec behind a local sender/receiver boundary | Glaze's ASIO substrate behind an adapter | one scheduler authority, cancellation, fake time |
 | HTTP client/server | bounded Glaze HTTP prototype | another ASIO adapter if the prototype gate fails | cancellation, TLS, bounded bodies, graceful shutdown |
 | JSON | Glaze behind `symphony_meta` and the Codex protocol adapter | none concurrently | strict JSON-RPC, explicit DTO names, limits and redaction |
-| YAML | Glaze fixture gate, then remove `yaml-cpp` if conformant | retain isolated `yaml-cpp` loader | Symphony frontmatter, unknown-key and expansion semantics |
+| YAML | Glaze 7.9.0 typed DTOs plus generic provider subtree | none concurrently | Symphony front matter, extension-key tolerance, provider preservation, block hooks, and expansion semantics |
 | Child processes | Boost.Process v2 behind the Codex protocol channel | none concurrently | separate bounded stderr, process-tree cancellation, timeouts, deterministic reap |
 | Persistence | `klemens-morgenstern/sqlite` behind a serialized executor and repository interface | bounded `sqlgen` deletion-test spike | restart-safe atomic retries, events and migrations |
 | Tests | `openalgz/ut` plus libFuzzer/property fixtures | none concurrently | deterministic state-machine properties and compile-time tests |

@@ -5,7 +5,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Runtime path and cwd default | `WorkflowLoader::resolve_path` tests | Implemented |
-| YAML front matter and prompt split | workflow tests | Implemented |
+| YAML front matter and prompt split | Glaze YAML shape/provider fixtures, workflow tests, and named repository `WORKFLOW.md` CTest | Implemented with typed known fields, extension-key tolerance, generic provider-subtree preservation, block hooks, environment/path policy, and strict prompt separation; exact GCC 16.1 Source CI run `29987362658` passed debug, ASan/UBSan, and TSan |
 | Typed defaults and `$` expansion | workflow tests | Implemented |
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
 | Positional workflow CLI and process exits | CLI11 parser fixtures plus Boost.Process-backed executable tests | Implemented for cwd default, one positional path, `--workflow` compatibility, strict conflicts/extras, help success, parse failure, and startup-validation failure |
