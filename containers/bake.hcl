@@ -1,5 +1,5 @@
 group "default" {
-  targets = ["symphony-dev", "symphony-ci-clang"]
+  targets = ["symphony-gcc-runtime", "symphony-ci-clang", "symphony-analysis"]
 }
 
 target "common" {
@@ -18,9 +18,9 @@ target "symphony-clang-p2996" {
   target = "symphony-clang-p2996"
 }
 
-target "symphony-dev" {
+target "symphony-gcc-runtime" {
   inherits = ["common"]
-  target = "symphony-dev"
+  target = "symphony-gcc-runtime"
 }
 
 target "symphony-ci-clang" {
@@ -28,3 +28,7 @@ target "symphony-ci-clang" {
   target = "symphony-ci-clang"
 }
 
+target "symphony-analysis" {
+  inherits = ["common"]
+  target = "symphony-analysis"
+}

@@ -52,9 +52,12 @@ archives. Do not configure or compile this project directly on the macOS host.
 
 The compiler images are deliberately expensive source builds. Their source hashes, signatures, base
 image digest, fork commit, and vcpkg registry baseline are pinned in source. GitHub builds and
-validates all three devcontainer images; publication to GHCR is an explicit workflow input. Each image
-preseeds the vcpkg binary archive, while lifecycle setup bootstraps the same repository-local pinned
-vcpkg checkout in the mounted workspace. See [docs/upstream-lock.md](docs/upstream-lock.md).
+validates three reusable toolchain base images; publication to GHCR is an explicit workflow input.
+After publication, a separate reviewed change pins the immutable manifest digests used by thin local
+development-container Dockerfiles. Local lifecycle setup bootstraps the repository's pinned vcpkg
+graph in the mounted workspace. See
+[docs/toolchain-and-devcontainer-workflow.md](docs/toolchain-and-devcontainer-workflow.md) and
+[docs/upstream-lock.md](docs/upstream-lock.md).
 
 Verify that every overlay port uses an immutable commit, SHA-512, synchronized manifest version,
 and matching upstream lock row:
@@ -85,9 +88,10 @@ symphonyd ./WORKFLOW.md --once
 `--workflow ./WORKFLOW.md` spelling remains a compatibility alias; supplying both forms is an
 error.
 
-When explicitly requested, CI publishes only tested devcontainer images to this repository's GHCR
-namespace. It does not publish a service deployment, install privileged VM components, mutate a live
-tracker, or use production credentials.
+When explicitly requested from the approved branch, CI publishes only directly verified toolchain
+base images to this repository's GHCR namespace. Full development containers are built locally with
+the pinned reference CLI; CI does not publish them. It also does not publish a service deployment,
+install privileged VM components, mutate a live tracker, or use production credentials.
 
 The pinned external OpenSymphony development orchestrator is documented under
 [`ops/opensymphony`](ops/opensymphony/README.md). It runs behind a container boundary and remains

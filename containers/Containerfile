@@ -91,6 +91,7 @@ RUN curl --fail --location --proto '=https' --tlsv1.2 \
  && rm -rf /tmp/llvm
 
 FROM compiler-build-base AS symphony-gcc-runtime
+ARG SOURCE_REVISION=unknown
 COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
 RUN printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
  && ldconfig \
@@ -98,59 +99,31 @@ RUN printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
 ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/gcc-16.1/bin/gcc \
     CXX=/opt/gcc-16.1/bin/g++
-LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.description="GCC 16.1 C++26 toolchain base for symphony-cpp CI and local devcontainers"
 ENTRYPOINT []
-CMD ["sleep", "infinity"]
-
-FROM symphony-gcc-runtime AS symphony-dev
-WORKDIR /opt/symphony-cpp-seed
-COPY vcpkg.json vcpkg-configuration.json ./
-COPY vcpkg-ports/ ./vcpkg-ports/
-COPY vcpkg-triplets/ ./vcpkg-triplets/
-COPY cmake/toolchains/clang-p2996.cmake ./cmake/toolchains/clang-p2996.cmake
-COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
-RUN ./scripts/bootstrap-vcpkg.sh \
- && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
- && .build/vcpkg/vcpkg install --clean-after-build \
- && rm -rf .build vcpkg_installed
-WORKDIR /workspaces/symphony-cpp
+CMD ["bash"]
 
 FROM symphony-gcc-runtime AS symphony-analysis
+ARG SOURCE_REVISION=unknown
 COPY --from=llvm-analysis-tools /opt/llvm-22.1.8 /opt/llvm-22.1.8
 ENV PATH=/opt/llvm-22.1.8/bin:/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/llvm-22.1.8/bin/clang \
     CXX=/opt/llvm-22.1.8/bin/clang++
-WORKDIR /opt/symphony-cpp-analysis-seed
-COPY vcpkg.json vcpkg-configuration.json ./
-COPY vcpkg-ports/ ./vcpkg-ports/
-COPY vcpkg-triplets/ ./vcpkg-triplets/
-COPY cmake/toolchains/clang-analysis.cmake ./cmake/toolchains/clang-analysis.cmake
-COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
-RUN ./scripts/bootstrap-vcpkg.sh \
- && test "$(clang++ --version | sed -n 's/^clang version \\([^ ]*\\).*$/\\1/p' | head -n 1)" = "22.1.8" \
- && .build/vcpkg/vcpkg install \
-      --triplet x64-linux-clang-analysis \
-      --overlay-triplets vcpkg-triplets \
-      --clean-after-build \
- && rm -rf .build vcpkg_installed
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.description="LLVM 22.1.8 analysis toolchain base for symphony-cpp CI and local devcontainers"
 WORKDIR /workspaces/symphony-cpp
 
 FROM compiler-build-base AS symphony-ci-clang
+ARG SOURCE_REVISION=unknown
 COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996
 ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CC=/opt/clang-p2996/bin/clang \
     CXX=/opt/clang-p2996/bin/clang++
-LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
-WORKDIR /opt/symphony-cpp-seed
-COPY vcpkg.json vcpkg-configuration.json ./
-COPY vcpkg-ports/ ./vcpkg-ports/
-COPY vcpkg-triplets/ ./vcpkg-triplets/
-COPY cmake/toolchains/clang-p2996.cmake ./cmake/toolchains/clang-p2996.cmake
-COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
-RUN ./scripts/bootstrap-vcpkg.sh \
- && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
- && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
-      --overlay-triplets vcpkg-triplets --clean-after-build
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.description="Bloomberg clang-p2996 C++26 reflection toolchain base for symphony-cpp CI and local devcontainers"
 WORKDIR /workspaces/symphony-cpp
 ENTRYPOINT []
-CMD ["sleep", "infinity"]
+CMD ["bash"]

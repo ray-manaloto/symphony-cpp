@@ -34,6 +34,18 @@ esac
 
 command -v devcontainer >/dev/null
 
+readonly required_cli_version="$(
+  tr -d '[:space:]' < "${repository_root}/.devcontainer/devcontainer-cli.version"
+)"
+readonly actual_cli_version="$(devcontainer --version)"
+if [[ "${actual_cli_version}" != "${required_cli_version}" ]]; then
+  printf 'Dev Container CLI %s is required; found %s at %s\n' \
+    "${required_cli_version}" "${actual_cli_version}" "$(command -v devcontainer)" >&2
+  exit 1
+fi
+
+printf 'Dev Container profile: %s; CLI: %s\n' "${profile}" "${actual_cli_version}"
+
 devcontainer up \
   --workspace-folder "${repository_root}" \
   --config "${config}"
