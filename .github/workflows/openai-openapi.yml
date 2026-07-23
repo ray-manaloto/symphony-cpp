@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Report upstream movement
         env:
           GH_TOKEN: ${{ github.token }}
@@ -25,6 +25,7 @@ jobs:
           locked=f9400172ebe08522ab228b771d885e3bd5456e42
           current=$(gh api repos/openai/openai-openapi/commits/main --jq .sha)
           if [ "$current" != "$locked" ]; then
+            # shellcheck disable=SC2016  # The printf format is intentionally literal.
             printf '### OpenAI OpenAPI update available\n\nLocked: `%s`  \nCurrent: `%s`\n' "$locked" "$current" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Generate pinned C++ reference client
