@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <latch>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
@@ -12,7 +13,40 @@
 #include <exec/static_thread_pool.hpp>
 #include <stdexec/execution.hpp>
 
+#include "symphony/execution/execution.hpp"
+
 static ut::suite execution_tests = [] {
+  ut::test(
+      "stdexec keyed executor serializes and carries queued cancellation") =
+      [] {
+        symphony::execution::StdexecTaskExecutor executor{1};
+        std::latch first_started{1};
+        std::latch release_first{1};
+        std::atomic<bool> first_finished{false};
+        std::atomic<bool> second_saw_stop{false};
+        std::atomic<bool> second_after_first{false};
+
+        executor.submit("first", [&](std::stop_token) noexcept {
+          first_started.count_down();
+          release_first.wait();
+          first_finished.store(true);
+        });
+        first_started.wait();
+
+        executor.submit("second",
+                        [&](const std::stop_token stop_token) noexcept {
+                          second_saw_stop.store(stop_token.stop_requested());
+                          second_after_first.store(first_finished.load());
+                        });
+        ut::expect(executor.request_stop("second"));
+        release_first.count_down();
+        executor.wait();
+
+        ut::expect(second_saw_stop.load());
+        ut::expect(second_after_first.load());
+        ut::expect(!executor.request_stop("second"));
+      };
+
   ut::test("stdexec parallel pool propagates completion channels") = [] {
     exec::static_thread_pool pool{2};
     const auto scheduler = pool.get_scheduler();

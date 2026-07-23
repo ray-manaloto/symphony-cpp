@@ -54,14 +54,26 @@ std::size_t InlineWorkerExecutor::capacity() const noexcept {
 void InlineWorkerExecutor::wait() {}
 
 struct StdexecWorkerExecutor::Impl {
-  explicit Impl(const std::size_t count) : worker_count(count), pool(count) {}
+  explicit Impl(const std::size_t count) : tasks(count) {}
 
   void complete(std::string key, WorkerOutcome outcome) {
+    const std::scoped_lock lock(mutex);
+    ready.push_back(WorkerCompletion{std::move(key), std::move(outcome)});
+  }
+
+  std::mutex mutex;
+  std::vector<WorkerCompletion> ready;
+  StdexecTaskExecutor tasks;
+};
+
+struct StdexecTaskExecutor::Impl {
+  explicit Impl(const std::size_t count)
+      : worker_count(validated_worker_count(count)), pool(worker_count) {}
+
+  void finish(const std::string_view key) {
     {
       const std::scoped_lock lock(mutex);
       stop_sources.erase(key);
-      ready.push_back(
-          WorkerCompletion{std::move(key), std::move(outcome)});
     }
     idle.notify_all();
   }
@@ -69,20 +81,18 @@ struct StdexecWorkerExecutor::Impl {
   std::mutex mutex;
   std::condition_variable idle;
   std::map<std::string, std::stop_source, std::less<>> stop_sources;
-  std::vector<WorkerCompletion> ready;
   std::size_t worker_count;
   exec::static_thread_pool pool;
 };
 
-StdexecWorkerExecutor::StdexecWorkerExecutor(const std::size_t worker_count)
-    : impl_(std::make_unique<Impl>(
-          validated_worker_count(worker_count))) {}
+StdexecTaskExecutor::StdexecTaskExecutor(const std::size_t worker_count)
+    : impl_(std::make_unique<Impl>(worker_count)) {}
 
-StdexecWorkerExecutor::~StdexecWorkerExecutor() {
+StdexecTaskExecutor::~StdexecTaskExecutor() {
   if (impl_) wait();
 }
 
-void StdexecWorkerExecutor::submit(std::string key, WorkerTask task) {
+void StdexecTaskExecutor::submit(std::string key, ExecutionTask task) {
   const auto registered_key = key;
   std::stop_token stop_token;
   {
@@ -90,7 +100,7 @@ void StdexecWorkerExecutor::submit(std::string key, WorkerTask task) {
     auto [position, inserted] =
         impl_->stop_sources.emplace(key, std::stop_source{});
     if (!inserted) {
-      throw std::invalid_argument("worker key is already active");
+      throw std::invalid_argument("execution key is already active");
     }
     stop_token = position->second.get_token();
   }
@@ -98,25 +108,21 @@ void StdexecWorkerExecutor::submit(std::string key, WorkerTask task) {
   try {
     auto sender = stdexec::starts_on(
         impl_->pool.get_scheduler(),
-        stdexec::just()
-            | stdexec::then(
-                  [impl = impl_.get(), key = std::move(key),
-                   task = std::move(task), stop_token]() mutable noexcept {
-                    impl->complete(
-                        std::move(key), invoke(task, stop_token));
-                  }));
+        stdexec::just() |
+            stdexec::then([impl = impl_.get(), key = std::move(key),
+                           task = std::move(task),
+                           stop_token]() mutable noexcept {
+              task(stop_token);
+              impl->finish(key);
+            }));
     exec::start_detached(std::move(sender));
   } catch (...) {
-    {
-      const std::scoped_lock lock(impl_->mutex);
-      impl_->stop_sources.erase(registered_key);
-    }
-    impl_->idle.notify_all();
+    impl_->finish(registered_key);
     throw;
   }
 }
 
-bool StdexecWorkerExecutor::request_stop(const std::string_view key) {
+bool StdexecTaskExecutor::request_stop(const std::string_view key) {
   const std::scoped_lock lock(impl_->mutex);
   const auto found = impl_->stop_sources.find(key);
   if (found == impl_->stop_sources.end()) return false;
@@ -124,17 +130,11 @@ bool StdexecWorkerExecutor::request_stop(const std::string_view key) {
   return true;
 }
 
-std::vector<WorkerCompletion> StdexecWorkerExecutor::take_ready() {
-  const std::scoped_lock lock(impl_->mutex);
-  return std::exchange(
-      impl_->ready, std::vector<WorkerCompletion>{});
-}
-
-std::size_t StdexecWorkerExecutor::capacity() const noexcept {
+std::size_t StdexecTaskExecutor::capacity() const noexcept {
   return impl_->worker_count;
 }
 
-void StdexecWorkerExecutor::wait() {
+void StdexecTaskExecutor::wait() {
   std::unique_lock lock(impl_->mutex);
   for (auto& [key, source] : impl_->stop_sources) {
     static_cast<void>(key);
@@ -142,5 +142,37 @@ void StdexecWorkerExecutor::wait() {
   }
   impl_->idle.wait(lock, [this] { return impl_->stop_sources.empty(); });
 }
+
+StdexecWorkerExecutor::StdexecWorkerExecutor(const std::size_t worker_count)
+    : impl_(std::make_unique<Impl>(validated_worker_count(worker_count))) {}
+
+StdexecWorkerExecutor::~StdexecWorkerExecutor() {
+  if (impl_) wait();
+}
+
+void StdexecWorkerExecutor::submit(std::string key, WorkerTask task) {
+  const auto task_key = key;
+  impl_->tasks.submit(
+      task_key,
+      [impl = impl_.get(), key = std::move(key), task = std::move(task)](
+          const std::stop_token stop_token) mutable noexcept {
+        impl->complete(std::move(key), invoke(task, stop_token));
+      });
+}
+
+bool StdexecWorkerExecutor::request_stop(const std::string_view key) {
+  return impl_->tasks.request_stop(key);
+}
+
+std::vector<WorkerCompletion> StdexecWorkerExecutor::take_ready() {
+  const std::scoped_lock lock(impl_->mutex);
+  return std::exchange(impl_->ready, std::vector<WorkerCompletion>{});
+}
+
+std::size_t StdexecWorkerExecutor::capacity() const noexcept {
+  return impl_->tasks.capacity();
+}
+
+void StdexecWorkerExecutor::wait() { impl_->tasks.wait(); }
 
 }  // namespace symphony::execution

@@ -29,6 +29,28 @@ struct WorkerCompletion {
 
 using WorkerTask = std::function<WorkerOutcome(std::stop_token)>;
 
+using ExecutionTask = std::move_only_function<void(std::stop_token) noexcept>;
+
+class StdexecTaskExecutor final {
+ public:
+  explicit StdexecTaskExecutor(std::size_t worker_count);
+  ~StdexecTaskExecutor();
+
+  StdexecTaskExecutor(const StdexecTaskExecutor&) = delete;
+  StdexecTaskExecutor& operator=(const StdexecTaskExecutor&) = delete;
+  StdexecTaskExecutor(StdexecTaskExecutor&&) = delete;
+  StdexecTaskExecutor& operator=(StdexecTaskExecutor&&) = delete;
+
+  void submit(std::string key, ExecutionTask task);
+  [[nodiscard]] bool request_stop(std::string_view key);
+  [[nodiscard]] std::size_t capacity() const noexcept;
+  void wait();
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
 class WorkerExecutor {
  public:
   virtual ~WorkerExecutor() = default;

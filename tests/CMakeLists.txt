@@ -25,7 +25,7 @@ add_test(
 add_executable(symphony_execution_tests test_main.cpp execution_tests.cpp)
 set_property(TARGET symphony_execution_tests PROPERTY CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(symphony_execution_tests PRIVATE
-  symphony_options ut::ut STDEXEC::stdexec)
+  symphony_execution ut::ut STDEXEC::stdexec)
 add_test(NAME symphony_execution_tests COMMAND symphony_execution_tests)
 
 add_executable(symphony_persistence_provider_tests
