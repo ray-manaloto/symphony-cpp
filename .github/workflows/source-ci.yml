@@ -42,3 +42,9 @@ jobs:
         run: cmake --build --preset gcc-sanitizers --parallel 4
       - name: Test ASan and UBSan
         run: ctest --preset gcc-sanitizers
+      - name: Configure TSan
+        run: cmake --preset gcc-tsan
+      - name: Build TSan
+        run: cmake --build --preset gcc-tsan --parallel 4
+      - name: Test TSan
+        run: ctest --preset gcc-tsan

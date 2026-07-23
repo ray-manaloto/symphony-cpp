@@ -5,6 +5,7 @@ include(CTest)
 include(cmake/Dependencies.cmake)
 option(SYMPHONY_ENABLE_REFLECTION "Compile C++26 reflection facilities" OFF)
 option(SYMPHONY_ENABLE_ASAN_UBSAN "Instrument with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(SYMPHONY_ENABLE_TSAN "Instrument with ThreadSanitizer" OFF)
 option(SYMPHONY_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -25,6 +26,20 @@ if(SYMPHONY_ENABLE_ASAN_UBSAN)
     -fno-omit-frame-pointer)
   target_link_options(symphony_options INTERFACE
     -fsanitize=address,undefined
+    -fno-omit-frame-pointer)
+endif()
+if(SYMPHONY_ENABLE_TSAN)
+  if(SYMPHONY_ENABLE_ASAN_UBSAN)
+    message(FATAL_ERROR "TSan must run separately from ASan and UBSan")
+  endif()
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(FATAL_ERROR "TSan requires GCC or Clang")
+  endif()
+  target_compile_options(symphony_options INTERFACE
+    -fsanitize=thread
+    -fno-omit-frame-pointer)
+  target_link_options(symphony_options INTERFACE
+    -fsanitize=thread
     -fno-omit-frame-pointer)
 endif()
 

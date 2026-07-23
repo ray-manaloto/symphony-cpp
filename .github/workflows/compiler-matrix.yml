@@ -53,6 +53,9 @@ jobs:
             && cmake --preset gcc-sanitizers
             && cmake --build --preset gcc-sanitizers
             && ctest --preset gcc-sanitizers
+            && cmake --preset gcc-tsan
+            && cmake --build --preset gcc-tsan
+            && ctest --preset gcc-tsan
       - name: Verify direct GCC image contract
         run: |
           image="ghcr.io/ray-manaloto/symphony-dev:${GITHUB_SHA}"
