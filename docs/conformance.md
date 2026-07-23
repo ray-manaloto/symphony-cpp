@@ -14,7 +14,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
 | Tracker normalization, pagination, profiles, and portable errors | tracker contract fixtures | Implemented for the provider-neutral fixture boundary; live Glaze HTTP adapters remain gated and disabled |
 | Candidate completeness, routability, and dispatch ordering | scheduler fixture tests | Implemented for normalized core fields, adapter `dispatchable`, priority, creation time, and identifier tie-breaks |
-| Safe per-issue workspaces | workspace tests | Implemented |
+| Safe per-issue workspaces | workspace traversal, symlink-swap, lifecycle, and hook fixtures | Implemented with canonical direct-child revalidation before hooks/removal and outside-sentinel preservation; exact GCC 16.1 Source CI run `29981194421` passed |
 | Lifecycle hooks and 60s default | workflow, scheduler, and workspace tests | Implemented in fixture and contained POSIX executors |
 | App-server framed subprocess | Codex transport and subprocess tests | Implemented; full §17.5 signal/telemetry matrix remains open |
 | Codex default command | config default test | Implemented |
@@ -44,5 +44,5 @@ the pinned compiler matrix must be green before the implementation may claim ful
 The following required evidence is not yet complete and prevents a conformance claim:
 
 - process-tree/group cancellation;
-- compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential
-  reflection evidence required by the implementation plan.
+- compiler-matrix, sanitizer, restart, reconciliation, and differential reflection evidence
+  required by the implementation plan.
