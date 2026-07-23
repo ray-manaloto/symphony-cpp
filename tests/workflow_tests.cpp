@@ -43,7 +43,8 @@ static ut::suite workflow_tests = [] {
         "$WORKSPACE_ROOT\nagent:\n  max_concurrent_agents: 3\n  max_turns: "
         "7\nhooks:\n  timeout_ms: 42\n  before_run: |\n    echo "
         "fixture\ncodex:\n  command: codex app-server "
-        "--fixture\nfuture_extension:\n  enabled: true\n---\nWork on {{ "
+        "--fixture\n  model: gpt-5.6-sol\n  reasoning_effort: high"
+        "\nfuture_extension:\n  enabled: true\n---\nWork on {{ "
         "issue.identifier }} attempt {{ attempt }}.\n");
     FakeEnvironment env;
     env.values.emplace("WORKSPACE_ROOT", "/tmp/symphony-fixtures");
@@ -56,6 +57,10 @@ static ut::suite workflow_tests = [] {
     ut::expect(document.config.hooks.timeout.count() == 42);
     ut::expect(document.config.hooks.before_run->find("echo fixture") !=
                std::string::npos);
+    ut::expect(document.config.codex.model ==
+               std::optional<std::string>{"gpt-5.6-sol"});
+    ut::expect(document.config.codex.reasoning_effort ==
+               std::optional<std::string>{"high"});
     ut::expect(document.prompt.find("issue.identifier") != std::string::npos);
     std::filesystem::remove(path);
   };

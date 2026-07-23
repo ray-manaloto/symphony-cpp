@@ -7,13 +7,15 @@ Accessed 2026-07-22. This is an operational recommendation, not part of OpenAI S
 OpenSymphony is a deterministic Rust scheduler around a coding-agent harness. It should not spend
 model tokens deciding polling, routing, retry, reconciliation, or workspace lifecycle. The pinned
 v2.10.0 Codex harness accepts one selected model for a worker and otherwise delegates selection to
-Codex CLI. Our contained configuration does not currently set `routing.model`, and it defines no
-role-specific agent pool. Upstream `.agents/skills` specialize instructions, not model instances.
+Codex CLI. The contained configuration now selects `gpt-5.6-sol` and overlays the non-secret Codex
+setting `model_reasoning_effort = "high"`; it still defines no role-specific agent pool. Upstream
+`.agents/skills` specialize instructions, not model instances.
 
-The contained image pins Codex CLI 0.145.0. Before a model is pinned, a read-only app-server probe
-must prove that the isolated ChatGPT login can select it. A public API model name alone does not
-prove subscription availability through that CLI. Keep the last known-good model available as a
-rollback value.
+The contained image pins Codex CLI 0.145.0. Its authenticated, read-only `model/list` result on
+2026-07-22 advertised Sol as the default with `low` effort and supported `low`, `medium`, `high`,
+`xhigh`, `max`, and `ultra`. Terra advertised the same range; Luna advertised through `max`. This
+probe started no model-backed turn and accessed no Linear state. Keep the image-pinned catalog and
+the prior CLI-default behavior available as rollback evidence.
 
 ## Recommended role matrix
 
@@ -49,7 +51,8 @@ then expand only after measured throughput and defect-recall evidence.
 
 ## Context and effort controls
 
-- Pin model and effort in the worker launch/session payload after the compatibility probe.
+- Pin model and effort in each supported worker launch/session path after its compatibility probe;
+  both the external OpenSymphony and standalone C++ paths now use Sol/high.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction initially; observe compaction frequency before setting a local
   threshold.

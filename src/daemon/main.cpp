@@ -38,10 +38,13 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
 
 symphony::codex::AppServerPolicy codex_policy(
     const symphony::workflow::WorkflowConfig& workflow) {
-  return {
-      workflow.codex.approval_policy,
-      workflow.codex.thread_sandbox,
-      workflow.codex.turn_sandbox_policy};
+  symphony::codex::AppServerPolicy policy;
+  policy.approval_policy = workflow.codex.approval_policy;
+  policy.thread_sandbox = workflow.codex.thread_sandbox;
+  policy.turn_sandbox_policy_json = workflow.codex.turn_sandbox_policy;
+  policy.model = workflow.codex.model;
+  policy.reasoning_effort = workflow.codex.reasoning_effort;
+  return policy;
 }
 }  // namespace
 

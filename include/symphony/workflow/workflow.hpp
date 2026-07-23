@@ -30,6 +30,8 @@ struct AgentConfig {
 
 struct CodexConfig {
   std::string command{"codex app-server"};
+  std::optional<std::string> model;
+  std::optional<std::string> reasoning_effort;
   std::optional<std::string> approval_policy;
   std::optional<std::string> thread_sandbox;
   std::optional<std::string> turn_sandbox_policy;

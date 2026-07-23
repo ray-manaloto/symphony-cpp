@@ -63,25 +63,31 @@ static ut::suite codex_tests = [] {
     ut::expect(turn.at("params").at("input")[0].at("text").get<std::string>() ==
                "Do work");
 
-    const symphony::codex::AppServerPolicy policy{
-        "never",
-        "workspace-write",
-        R"({"type":"workspaceWrite","networkAccess":false,"writableRoots":[]})"};
+    symphony::codex::AppServerPolicy configured_policy;
+    configured_policy.approval_policy = "never";
+    configured_policy.thread_sandbox = "workspace-write";
+    configured_policy.turn_sandbox_policy_json =
+        R"({"type":"workspaceWrite","networkAccess":false,"writableRoots":[]})";
+    configured_policy.model = "gpt-5.6-sol";
+    configured_policy.reasoning_effort = "high";
     const auto configured_thread = parse_json(
         symphony::codex::JsonLineCodec::parse(
             symphony::codex::AppServerProtocol::thread_start_request(
-                1, "/tmp/work", policy)));
+                1, "/tmp/work", configured_policy)));
     ut::expect(configured_thread.at("params")
                    .at("approvalPolicy")
                    .get<std::string>() == "never");
     ut::expect(configured_thread.at("params")
                    .at("sandbox")
                    .get<std::string>() == "workspace-write");
+    ut::expect(configured_thread.at("params")
+                   .at("model")
+                   .get<std::string>() == "gpt-5.6-sol");
 
     const auto configured_turn = parse_json(
         symphony::codex::JsonLineCodec::parse(
             symphony::codex::AppServerProtocol::turn_start_request(
-                2, "thr_1", "/tmp/work", "Do work", policy)));
+                2, "thr_1", "/tmp/work", "Do work", configured_policy)));
     ut::expect(configured_turn.at("params")
                    .at("approvalPolicy")
                    .get<std::string>() == "never");
@@ -89,6 +95,12 @@ static ut::suite codex_tests = [] {
                    .at("sandboxPolicy")
                    .at("type")
                    .get<std::string>() == "workspaceWrite");
+    ut::expect(configured_turn.at("params")
+                   .at("model")
+                   .get<std::string>() == "gpt-5.6-sol");
+    ut::expect(configured_turn.at("params")
+                   .at("effort")
+                   .get<std::string>() == "high");
   };
 
   ut::test(
@@ -391,8 +403,11 @@ static ut::suite codex_tests = [] {
           std::chrono::seconds{1},
           std::chrono::seconds{1},
           std::chrono::seconds{1},
-          symphony::codex::AppServerPolicy{
-              std::nullopt, std::nullopt, "[]"}});
+          [] {
+            symphony::codex::AppServerPolicy policy;
+            policy.turn_sandbox_policy_json = "[]";
+            return policy;
+          }()});
     }));
   };
 

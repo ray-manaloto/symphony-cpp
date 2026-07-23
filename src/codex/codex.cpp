@@ -31,6 +31,7 @@ struct ThreadStartParams {
   std::string cwd;
   std::optional<std::string> approvalPolicy;
   std::optional<std::string> sandbox;
+  std::optional<std::string> model;
 };
 
 struct TurnInput {
@@ -44,6 +45,8 @@ struct TurnStartParams {
   std::vector<TurnInput> input;
   std::optional<std::string> approvalPolicy;
   std::optional<glz::raw_json> sandboxPolicy;
+  std::optional<std::string> model;
+  std::optional<std::string> effort;
 };
 
 template <typename Params> struct Request {
@@ -434,7 +437,8 @@ AppServerProtocol::thread_start_request(const std::uint64_t id,
       "thread/start",
       id,
       protocol_detail::ThreadStartParams{
-          cwd.native(), policy.approval_policy, policy.thread_sandbox}});
+          cwd.native(), policy.approval_policy, policy.thread_sandbox,
+          policy.model}});
 }
 
 std::string AppServerProtocol::turn_start_request(
@@ -452,7 +456,9 @@ std::string AppServerProtocol::turn_start_request(
                                        cwd.native(),
                                        {{"text", std::string{prompt}}},
                                        policy.approval_policy,
-                                       sandbox_policy}});
+                                       sandbox_policy,
+                                       policy.model,
+                                       policy.reasoning_effort}});
 }
 
 std::string AppServerProtocol::unsupported_tool_response(

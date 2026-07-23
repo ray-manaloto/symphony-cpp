@@ -9,6 +9,8 @@ GitHub Actions so the compiler-heavy build does not consume the development Mac.
 - The target checkout is mounted read-only at `/target`.
 - Issue workspaces live in a dedicated Docker volume at `/workspaces`.
 - Codex authentication lives only in the `symphony-codex-auth` Docker volume.
+- The repository-owned `codex-config.toml` is mounted read-only over only the
+  volume's config path; it contains model policy, never authentication.
 - The host home directory, Docker socket, SSH agent, and GitHub credentials are
   not mounted.
 - `LINEAR_API_KEY` is accepted only from the exact launch command's environment;
@@ -53,3 +55,12 @@ mde-secret-add LINEAR_API_KEY
 
 If the wrapper is not found, open a fresh zsh session or source `~/.zshrc`; do
 not replace it with a repository-local secret store.
+
+## Worker model policy
+
+The contained Codex CLI 0.145.0 `model/list` method was probed through the
+isolated login without starting a model-backed turn. It advertises
+`gpt-5.6-sol` and reasoning efforts through `ultra`. OpenSymphony v2.10.0
+receives `routing.model: gpt-5.6-sol`; the read-only Codex configuration overlay
+sets `model_reasoning_effort = "high"`. Re-run the read-only catalog and
+effective-config probes whenever the pinned image or Codex CLI changes.

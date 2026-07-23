@@ -63,11 +63,17 @@ failure result and the turn continues. Workflow-configured approval and thread-s
 through as strings; turn sandbox policy passes through as a Glaze-validated raw JSON object so this
 repository does not duplicate Codex's evolving enums.
 
+The worker model and reasoning effort are also workflow pass-through strings owned by the targeted
+Codex schema. The contained 0.145.0 catalog verified `gpt-5.6-sol` with `high` effort before both
+were pinned. The model is present on thread and turn startup; effort uses Codex's turn-level
+`effort` field. Neither the standalone service nor external OpenSymphony maintains a copied model
+catalog.
+
 Codex remains responsible for the compaction mechanism. Symphony preserves the reported model
 context-window size, recognizes both the legacy `thread/compacted` notification and the current
 `contextCompaction` completed item, counts them, and emits an operator event. The repository does
-not yet pin model/effort or request proactive compaction at a local threshold; those remain explicit
-context-policy gaps.
+not yet request proactive compaction at a local threshold; that remains an explicit context-policy
+gap.
 
 One worker invocation owns one app-server process and coding-agent thread. After each successful
 turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a

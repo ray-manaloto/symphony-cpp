@@ -30,6 +30,7 @@ case "${mode}" in
       --volume "${PWD}:/target:ro" \
       --volume "${PWD}/ops/opensymphony/config.yaml:/orchestrator/config.yaml:ro" \
       --volume symphony-codex-auth:/home/orchestrator/.codex \
+      --volume "${PWD}/ops/opensymphony/codex-config.toml:/home/orchestrator/.codex/config.toml:ro" \
       --volume symphony-opensymphony-workspaces:/workspaces \
       "${image}" "${run_args[@]}"
     ;;

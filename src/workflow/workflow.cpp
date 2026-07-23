@@ -198,6 +198,8 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path, const E
   if (const auto codex = root["codex"]) {
     require_map(codex, "codex");
     if (const auto node = codex["command"]) document.config.codex.command = scalar(node, "codex.command");
+    if (const auto node = codex["model"]) document.config.codex.model = scalar(node, "codex.model");
+    if (const auto node = codex["reasoning_effort"]) document.config.codex.reasoning_effort = scalar(node, "codex.reasoning_effort");
     if (const auto node = codex["approval_policy"]) document.config.codex.approval_policy = scalar(node, "codex.approval_policy");
     if (const auto node = codex["thread_sandbox"]) document.config.codex.thread_sandbox = scalar(node, "codex.thread_sandbox");
     if (const auto node = codex["turn_sandbox_policy"]) document.config.codex.turn_sandbox_policy = scalar(node, "codex.turn_sandbox_policy");
@@ -265,5 +267,11 @@ void validate_for_dispatch(
     throw std::runtime_error("tracker active_states and terminal_states are required");
   }
   if (trim(config.codex.command).empty()) throw std::runtime_error("codex.command must not be empty");
+  if (config.codex.model && trim(*config.codex.model).empty()) {
+    throw std::runtime_error("codex.model must not be empty");
+  }
+  if (config.codex.reasoning_effort && trim(*config.codex.reasoning_effort).empty()) {
+    throw std::runtime_error("codex.reasoning_effort must not be empty");
+  }
 }
 }  // namespace symphony::workflow

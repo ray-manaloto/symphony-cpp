@@ -38,8 +38,13 @@ agent:
   max_retry_backoff_ms: 300000
   stall_timeout_ms: 300000
 
+codex:
+  model: gpt-5.6-sol
+  reasoning_effort: high
+
 routing:
   harness: codex_app_server
+  model: gpt-5.6-sol
 ---
 
 You are implementing Linear issue `{{ issue.identifier }}` in the standalone
