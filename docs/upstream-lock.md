@@ -10,6 +10,7 @@ Accessed 2026-07-22 through 2026-07-23.
 | openai/codex-universal | multi-arch digest `sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304`; AMD64 manifest `sha256:1641c7bc30b00e0c5d4858b3e4da750123e9802fdb8086e9baa5afa2bc99393c` | Container base |
 | GCC 16.1.0 tar.xz | SHA-256 `50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79`; signature key fingerprint `D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62` | Release compiler source |
 | Docker Official GCC 16.1 | AMD64 manifest `sha256:4eb18b10b4b6464ba0409fa9d6d0a3ed81c5246e086ac7b7bfe2fa5c8b01e4cb` | Fast source/reflection CI only |
+| LLVM analysis tools | `llvmorg-22.1.8`; commit `ca7933e47d3a3451d81e72ac174dcb5aa28b59d1`; `LLVM-22.1.8-Linux-X64.tar.xz` SHA-256 `df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384` | Stock reflection-disabled `clang-format`, `clang-tidy`, static analyzer, and analysis compiler in a dedicated devcontainer |
 | bloomberg/clang-p2996 | `7220baffd57ea5b0f8cf59bee494dd5b7cc2b748` | Differential reflection compiler |
 | Microsoft vcpkg registry | `4493042c759d3bdff26164695dbee500d1e696c8` | Manifest dependency graph and bootstrap tool |
 | Kitware CMake | `4.4.0` Linux x86_64 archive SHA-256 `3864eb649b4466ae126a64bbde1657adad78efbbaa068bf38201de5cf1b5349f`, acquired from the official signed release assets | Latest stable C++26-aware devcontainer/CI configure frontend and Presets schema 12 authority |
