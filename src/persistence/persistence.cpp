@@ -76,7 +76,7 @@ SqliteEventRepository::open(const std::filesystem::path &path) {
       });
   if (!initialized)
     return std::unexpected(std::move(initialized.error()));
-  return std::move(repository);
+  return repository;
 }
 
 SqliteEventRepository::~SqliteEventRepository() {
