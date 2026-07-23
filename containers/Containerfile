@@ -64,6 +64,9 @@ LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
+ && cmake_bin="$(.build/vcpkg/vcpkg fetch cmake | tail -n 1)" \
+ && test "$("${cmake_bin}" --version | head -n 1)" = "cmake version 4.3.3" \
+ && ln -sf "${cmake_bin}" /usr/local/bin/cmake \
  && .build/vcpkg/vcpkg install --clean-after-build
 WORKDIR /workspaces/symphony-cpp
 ENTRYPOINT []
@@ -78,6 +81,9 @@ LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
 COPY . .
 RUN ./scripts/bootstrap-vcpkg.sh \
+ && cmake_bin="$(.build/vcpkg/vcpkg fetch cmake | tail -n 1)" \
+ && test "$("${cmake_bin}" --version | head -n 1)" = "cmake version 4.3.3" \
+ && ln -sf "${cmake_bin}" /usr/local/bin/cmake \
  && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
       --overlay-triplets vcpkg-triplets --clean-after-build
 WORKDIR /workspaces/symphony-cpp
