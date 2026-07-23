@@ -168,18 +168,22 @@ public:
       const std::filesystem::path& cwd)
       : input_(context_),
         output_(context_),
+        error_(context_),
         child_(
             context_,
             boost::filesystem::path("/bin/bash"),
             {"-lc", command},
             boost::process::v2::process_start_dir(
                 boost::filesystem::path(cwd.string())),
-            boost::process::v2::process_stdio{input_, output_, nullptr}) {}
+            boost::process::v2::process_stdio{input_, output_, error_}) {
+    read_standard_error();
+  }
 
   ~BoostProcessProtocolChannel() override {
     boost::system::error_code ignored;
     input_.close(ignored);
     output_.close(ignored);
+    error_.close(ignored);
     ignored.clear();
     if (child_.running(ignored)) {
       ignored.clear();
@@ -187,6 +191,8 @@ public:
     }
     ignored.clear();
     static_cast<void>(child_.wait(ignored));
+    context_.restart();
+    static_cast<void>(context_.poll());
   }
 
   void request_exit() noexcept {
@@ -235,6 +241,7 @@ public:
       boost::system::error_code read_error;
       std::size_t count = 0;
       bool read_finished = false;
+      bool timer_finished = false;
       bool timed_out = false;
       boost::asio::steady_timer timer(context_, remaining);
       output_.async_read_some(
@@ -244,8 +251,9 @@ public:
             count = size;
             read_finished = true;
             static_cast<void>(timer.cancel());
-          });
+      });
       timer.async_wait([&](const boost::system::error_code& error) {
+        timer_finished = true;
         if (!error && !read_finished) {
           timed_out = true;
           boost::system::error_code ignored;
@@ -253,7 +261,9 @@ public:
         }
       });
       context_.restart();
-      context_.run();
+      while (!read_finished || !timer_finished) {
+        static_cast<void>(context_.run_one());
+      }
 
       if (timed_out) return {ReadStatus::timeout, {}};
       if (read_error == boost::asio::error::eof) {
@@ -267,12 +277,57 @@ public:
     }
   }
 
+  std::optional<ProcessDiagnostic> diagnostic() {
+    context_.restart();
+    static_cast<void>(context_.poll());
+    if (diagnostic_bytes_seen_ == 0) return std::nullopt;
+    return ProcessDiagnostic{
+        diagnostic_tail_, diagnostic_bytes_seen_, diagnostic_truncated_};
+  }
+
 private:
+  static constexpr std::size_t diagnostic_limit = 4096;
+
+  void append_diagnostic(const char* data, const std::size_t count) {
+    const auto maximum = std::numeric_limits<std::uint64_t>::max();
+    diagnostic_bytes_seen_ =
+        count > maximum - diagnostic_bytes_seen_
+            ? maximum
+            : diagnostic_bytes_seen_ + count;
+    if (count >= diagnostic_limit) {
+      diagnostic_tail_.assign(data + count - diagnostic_limit,
+                              diagnostic_limit);
+      diagnostic_truncated_ = true;
+      return;
+    }
+    if (diagnostic_tail_.size() + count > diagnostic_limit) {
+      diagnostic_tail_.erase(
+          0, diagnostic_tail_.size() + count - diagnostic_limit);
+      diagnostic_truncated_ = true;
+    }
+    diagnostic_tail_.append(data, count);
+  }
+
+  void read_standard_error() {
+    error_.async_read_some(
+        boost::asio::buffer(error_chunk_),
+        [this](const boost::system::error_code& error,
+               const std::size_t count) {
+          if (count > 0) append_diagnostic(error_chunk_.data(), count);
+          if (!error) read_standard_error();
+        });
+  }
+
   boost::asio::io_context context_;
   boost::asio::writable_pipe input_;
   boost::asio::readable_pipe output_;
+  boost::asio::readable_pipe error_;
   boost::process::v2::process child_;
   std::string buffered_;
+  std::array<char, 4096> error_chunk_{};
+  std::string diagnostic_tail_;
+  std::uint64_t diagnostic_bytes_seen_{0};
+  bool diagnostic_truncated_{false};
   bool end_of_stream_{false};
 };
 } // namespace
@@ -368,6 +423,7 @@ RunResult CodexAppServerRuntime::run(const RunRequest &request) {
         stall_timeout,
         turn_timeout,
         policy);
+    result.process_diagnostic = channel.diagnostic();
     clear_active_process();
     return result;
   } catch (...) {

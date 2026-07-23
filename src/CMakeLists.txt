@@ -19,6 +19,7 @@ symphony_library(symphony_cli cli/cli.cpp)
 target_link_libraries(symphony_cli PUBLIC CLI11::CLI11)
 symphony_library(symphony_scheduler scheduler/scheduler.cpp)
 target_link_libraries(symphony_scheduler PUBLIC symphony_domain symphony_tracker symphony_workspace symphony_codex symphony_observability)
+target_link_libraries(symphony_scheduler PRIVATE fmt::fmt)
 target_link_libraries(symphony_workflow PUBLIC symphony_domain)
 
 add_executable(symphonyd daemon/main.cpp)

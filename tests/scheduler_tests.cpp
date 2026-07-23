@@ -396,6 +396,36 @@ static ut::suite scheduler_tests = [] {
     std::filesystem::remove_all(root);
   };
 
+  ut::test("scheduler sends process diagnostics through event redaction") = [] {
+    symphony::tracker::FakeTracker tracker;
+    tracker.upsert({"1", "SYM-1", "Diagnostic", "Todo", {}});
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-diagnostic-redaction-test";
+    std::filesystem::remove_all(root);
+    symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
+    symphony::codex::FakeAgentRuntime runtime;
+    RunResult result{false, false, std::nullopt, "failed", "exit"};
+    result.process_diagnostic =
+        symphony::codex::ProcessDiagnostic{
+            std::string{"to"} + "ken=fixture-secret", 20, false};
+    runtime.enqueue(std::move(result));
+    symphony::observability::MemoryEventStore events;
+    symphony::scheduler::FakeClock clock;
+    symphony::scheduler::SchedulerConfig config;
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces,
+                                             runtime, events, clock);
+
+    scheduler.tick("{{ issue.identifier }}");
+
+    const auto recent = events.recent(20);
+    const auto diagnostic = std::ranges::find_if(recent, [](const auto& event) {
+      return event.type == "worker_process_diagnostic";
+    });
+    ut::expect(diagnostic != recent.end());
+    ut::expect(diagnostic->message == std::string{"[REDACTED]"});
+    std::filesystem::remove_all(root);
+  };
+
   ut::test("failure retry records complete one-based queue metadata") = [] {
     symphony::tracker::FakeTracker tracker;
     tracker.upsert({"1", "SYM-1", "Retry metadata", "Todo", {}});

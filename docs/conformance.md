@@ -24,7 +24,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Codex context telemetry | protocol, conversation, and scheduler fixtures | Implemented for model context-window preservation, legacy/current compaction-event counting, and fresh-session rollover after observed compaction; proactive threshold evidence remains open |
 | Bounded in-worker turn loop | app-server conversation and scheduler fixtures | Implemented with one live app-server process/thread, tracker refresh after each successful turn, continuation-only prompts, dynamic `agent.max_turns`, compaction cutoff, and normal continuation retry |
 | Adaptive worker policy | scheduler, workflow, and Codex fixtures | Implemented for configured baseline, one-failure/no-progress escalation, repeated-identical-failure ceiling, and progress-evidence recovery between bounded sessions; OpenSymphony v2.10.0 remains operator-adjusted |
-| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for launch, working directory, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, and reap; GCC 16.1 Source CI run `29969683664` passed |
+| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for launch, working directory, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, reap, and concurrent bounded stderr-tail capture; process-tree/group cancellation remains open |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
@@ -41,8 +41,7 @@ the pinned compiler matrix must be green before the implementation may claim ful
 
 The following required evidence is not yet complete and prevents a conformance claim:
 
-- bounded Codex stderr diagnostics, process-tree/group cancellation, and proactive compaction
-  thresholds;
+- process-tree/group cancellation and proactive compaction thresholds;
 - logging-sink failure isolation and repeated telemetry aggregation;
 - compiler-matrix, sanitizer, restart, reconciliation, traversal, symlink, and differential
   reflection evidence required by the implementation plan.

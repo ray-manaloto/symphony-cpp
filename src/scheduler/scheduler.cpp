@@ -5,6 +5,8 @@
 #include <limits>
 #include <stdexcept>
 
+#include <fmt/format.h>
+
 #include "symphony/workflow/workflow.hpp"
 
 namespace symphony::scheduler {
@@ -268,6 +270,18 @@ void Scheduler::execute(RunState& run, const std::string_view prompt_template) {
         result.session_id,
         "completed " + std::to_string(result.turns_completed) +
             " Codex turn(s) in one live thread"});
+  }
+  if (result.process_diagnostic) {
+    events_.append({
+        "worker_process_diagnostic",
+        run.issue.id,
+        run.issue.identifier,
+        result.session_id,
+        fmt::format(
+            "stderr_bytes={} truncated={} tail={}",
+            result.process_diagnostic->bytes_seen,
+            result.process_diagnostic->truncated,
+            result.process_diagnostic->text)});
   }
   if (result.token_usage) {
     saturating_add(codex_totals_.input_tokens, result.token_usage->input_tokens);

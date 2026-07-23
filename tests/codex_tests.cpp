@@ -427,6 +427,36 @@ static ut::suite codex_tests = [] {
     std::filesystem::remove_all(root);
   };
 
+  ut::test("Codex runtime captures only a bounded stderr tail") = [] {
+    const auto root = std::filesystem::temp_directory_path() /
+                      "symphony-codex-stderr-runtime-test";
+    std::filesystem::create_directories(root);
+    const std::string command =
+        "head -c 131072 /dev/zero | tr '\\0' x >&2; "
+        "printf 'tail-diagnostic\\n' >&2; "
+        "printf '%s\\n' "
+        "'{\"id\":0,\"result\":{}}' "
+        "'{\"id\":1,\"result\":{\"thread\":{\"id\":\"thr_fixture\"}}}' "
+        "'{\"method\":\"turn/started\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}' "
+        "'{\"method\":\"turn/completed\",\"params\":{\"turn\":{\"id\":\"turn_fixture\"}}}'; "
+        "cat >/dev/null";
+    symphony::codex::CodexAppServerRuntime runtime(command,
+                                                   std::chrono::seconds{5});
+    symphony::codex::RunRequest request;
+    request.workspace.path = std::filesystem::absolute(root);
+    request.prompt = "fixture";
+
+    const auto result = runtime.run(request);
+
+    ut::expect(result.normal_exit);
+    ut::expect(result.process_diagnostic.has_value());
+    ut::expect(result.process_diagnostic->bytes_seen >= std::uint64_t{131088});
+    ut::expect(result.process_diagnostic->truncated);
+    ut::expect(result.process_diagnostic->text.size() <= std::size_t{4096});
+    ut::expect(result.process_diagnostic->text.ends_with("tail-diagnostic\n"));
+    std::filesystem::remove_all(root);
+  };
+
   ut::test("Codex runtime rejects non-object turn sandbox policy") = [] {
     ut::expect(ut::throws([] {
       static_cast<void>(symphony::codex::CodexAppServerRuntime{

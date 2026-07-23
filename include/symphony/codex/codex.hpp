@@ -64,6 +64,12 @@ struct RunRequest {
       continuation_prompt_after_turn;
 };
 
+struct ProcessDiagnostic {
+  std::string text;
+  std::uint64_t bytes_seen{0};
+  bool truncated{false};
+};
+
 struct RunResult {
   RunResult() = default;
   RunResult(
@@ -87,6 +93,7 @@ struct RunResult {
   std::string error;
   std::optional<TokenUsage> token_usage;
   std::optional<RateLimits> rate_limits;
+  std::optional<ProcessDiagnostic> process_diagnostic;
   std::uint32_t compaction_count{0};
   std::uint32_t turns_completed{0};
 };

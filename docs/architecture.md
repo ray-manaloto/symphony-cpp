@@ -52,10 +52,12 @@ repository-owned executor serializes access and supplies cancellation at the que
 domain types and durable schema do not depend on Boost.Describe/PFR metadata.
 
 The Codex protocol channel uses Boost.Process v2 and Boost.Asio pipes for launch, working directory,
-stdin/stdout transport, EOF, exit requests, termination, wait, and reap. JSONL framing, protocol
-sequencing, and deadline policy remain product-specific. Stderr has a separate process handle and is
-currently discarded; bounded diagnostic capture and process-tree cancellation remain explicit
-conformance gaps rather than reasons to reintroduce direct POSIX lifecycle ownership.
+stdin/stdout/stderr transport, EOF, exit requests, termination, wait, and reap. JSONL framing,
+protocol sequencing, deadline policy, and the diagnostic retention limit remain product-specific.
+Stderr is drained concurrently so it cannot block the child; only its final 4 KiB plus total-byte
+and truncation metadata survive the process boundary. The scheduler emits that tail through the
+structured event-store redaction boundary. Process-tree cancellation remains an explicit
+conformance gap rather than a reason to reintroduce direct POSIX lifecycle ownership.
 
 The current unattended Codex interaction posture is fail-closed: approval requests and user-input
 requests end the run immediately, so neither can wait indefinitely for an absent operator. Because
