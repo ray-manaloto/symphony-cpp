@@ -207,8 +207,7 @@ public:
             read_error = error;
             count = size;
             read_finished = true;
-            boost::system::error_code ignored;
-            timer.cancel(ignored);
+            static_cast<void>(timer.cancel());
           });
       timer.async_wait([&](const boost::system::error_code& error) {
         if (!error && !read_finished) {
