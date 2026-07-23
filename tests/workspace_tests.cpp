@@ -1,5 +1,8 @@
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <ut/ut.hpp>
 
 #include "symphony/workspace/workspace.hpp"
@@ -10,8 +13,46 @@ static ut::suite workspace_tests = [] {
     const symphony::domain::Issue two{"id-2", "../SYM 1", "", "Todo", {}};
     const auto first = symphony::workspace::workspace_leaf(one);
     const auto second = symphony::workspace::workspace_leaf(two);
-    ut::expect(first.find("..") == std::string::npos);
-    ut::expect(first != second);
+    ut::expect(first == second);
+    ut::expect(first.starts_with(".._SYM_1-"));
+    ut::expect(first.size() == std::string{".._SYM_1-"}.size() + 16);
+    ut::expect(std::ranges::all_of(
+        first.substr(first.size() - 16), [](const unsigned char character) {
+          return std::isxdigit(character) != 0;
+        }));
+  };
+
+  ut::test("workspace leaf preserves allowed identifiers without a suffix") =
+      [] {
+        const symphony::domain::Issue issue{
+            "opaque-id", "SYM.1_release-2", "", "Todo", {}};
+        ut::expect(symphony::workspace::workspace_leaf(issue) ==
+                   std::string{"SYM.1_release-2"});
+      };
+
+  ut::test("workspace leaf hashes the original identifier with at least 64 bits") =
+      [] {
+        const symphony::domain::Issue space{
+            "same-id", "SYM 1", "", "Todo", {}};
+        const symphony::domain::Issue slash{
+            "same-id", "SYM/1", "", "Todo", {}};
+        const symphony::domain::Issue utf8{
+            "same-id", std::string{"SYM-\xC3\xA9"}, "", "Todo", {}};
+        const auto first = symphony::workspace::workspace_leaf(space);
+        const auto second = symphony::workspace::workspace_leaf(slash);
+        const auto third = symphony::workspace::workspace_leaf(utf8);
+        ut::expect(first.starts_with("SYM_1-"));
+        ut::expect(second.starts_with("SYM_1-"));
+        ut::expect(third.starts_with("SYM-__-"));
+        ut::expect(first != second);
+        ut::expect(first.size() == std::string{"SYM_1-"}.size() + 16);
+        ut::expect(second.size() == std::string{"SYM_1-"}.size() + 16);
+      };
+
+  ut::test("workspace leaf rejects a missing required identifier") = [] {
+    const symphony::domain::Issue issue{"opaque-id", "", "", "Todo", {}};
+    ut::expect(ut::throws(
+        [&] { static_cast<void>(symphony::workspace::workspace_leaf(issue)); }));
   };
 
   ut::test("fixture workspace creates hooks and removes only contained paths") =

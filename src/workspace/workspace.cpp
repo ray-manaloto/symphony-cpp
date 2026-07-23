@@ -1,6 +1,6 @@
 #include "symphony/workspace/workspace.hpp"
 
-#include <cctype>
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +12,12 @@
 
 namespace symphony::workspace {
 namespace {
+bool is_ascii_alphanumeric(const unsigned char value) {
+  return (value >= 'A' && value <= 'Z') ||
+         (value >= 'a' && value <= 'z') ||
+         (value >= '0' && value <= '9');
+}
+
 std::uint64_t fnv1a(const std::string_view value) {
   std::uint64_t hash = 14695981039346656037ULL;
   for (const unsigned char byte : value) {
@@ -23,17 +29,28 @@ std::uint64_t fnv1a(const std::string_view value) {
 }  // namespace
 
 std::string workspace_leaf(const domain::Issue& issue) {
+  if (issue.identifier.empty()) {
+    throw std::invalid_argument("workspace issue identifier is required");
+  }
   std::string safe;
+  bool changed = false;
   for (const unsigned char character : issue.identifier) {
-    if (std::isalnum(character) != 0 || character == '-' || character == '_') {
+    if (is_ascii_alphanumeric(character) || character == '.' ||
+        character == '-' || character == '_') {
       safe += static_cast<char>(character);
-    } else if (!safe.empty() && safe.back() != '-') {
-      safe += '-';
+    } else {
+      safe += '_';
+      changed = true;
     }
   }
-  if (safe.empty()) safe = "issue";
+  if (safe == "." || safe == "..") {
+    std::ranges::fill(safe, '_');
+    changed = true;
+  }
+  if (!changed) return safe;
   std::ostringstream suffix;
-  suffix << std::hex << std::setfill('0') << std::setw(12) << (fnv1a(issue.id) & 0xffffffffffffULL);
+  suffix << std::hex << std::setfill('0') << std::setw(16)
+         << fnv1a(issue.identifier);
   return safe + '-' + suffix.str();
 }
 
