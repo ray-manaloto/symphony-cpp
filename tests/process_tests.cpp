@@ -2,6 +2,7 @@
 #include <string>
 
 #include <boost/asio.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/process/v2/process.hpp>
 #include <boost/process/v2/start_dir.hpp>
 #include <boost/process/v2/stdio.hpp>
@@ -20,7 +21,8 @@ static ut::suite process_tests = [] {
         context,
         "/bin/sh",
         {"-c", "printf stdout; printf stderr >&2; pwd"},
-        boost::process::v2::process_start_dir(root),
+        boost::process::v2::process_start_dir(
+            boost::filesystem::path(root.string())),
         boost::process::v2::process_stdio{
             nullptr, standard_output, standard_error});
 
