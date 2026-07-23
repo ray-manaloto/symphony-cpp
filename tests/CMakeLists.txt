@@ -18,6 +18,9 @@ target_compile_definitions(symphony_tests PRIVATE
   SYMPHONYD_PATH="$<TARGET_FILE:symphonyd>")
 add_dependencies(symphony_tests symphonyd)
 add_test(NAME symphony_tests COMMAND symphony_tests)
+add_test(
+  NAME symphony_workflow_document
+  COMMAND $<TARGET_FILE:symphonyctl> validate ${PROJECT_SOURCE_DIR}/WORKFLOW.md)
 
 add_executable(symphony_execution_tests test_main.cpp execution_tests.cpp)
 set_property(TARGET symphony_execution_tests PROPERTY CXX_SCAN_FOR_MODULES OFF)
