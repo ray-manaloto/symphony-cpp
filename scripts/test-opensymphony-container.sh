@@ -24,6 +24,7 @@ run_launcher() {
       OPENSYMPHONY_IMAGE="example.invalid/opensymphony@sha256:test" \
       OPENSYMPHONY_CODEX_AUTH_VOLUME='' \
       OPENSYMPHONY_STATE_VOLUME='' \
+      OPENSYMPHONY_WORKSPACES_VOLUME='' \
       "$@"
   )
 }
@@ -38,6 +39,7 @@ run_launcher env LINEAR_API_KEY=fixture ./scripts/opensymphony-container.sh dry-
 run_launcher env LINEAR_API_KEY=fixture ./scripts/opensymphony-container.sh debug TEST-123
 
 grep -Fq -- "--volume symphony-opensymphony-state:/target/.opensymphony" "${docker_log}"
+grep -Fq -- "--volume symphony-opensymphony-workspaces:/workspaces" "${docker_log}"
 grep -Fq -- "memory --config /orchestrator/config.yaml status" "${docker_log}"
 grep -Fq -- "memory --config /orchestrator/config.yaml context --issue TEST-123" "${docker_log}"
 grep -Fq -- "doctor --config /orchestrator/config.yaml" "${docker_log}"
@@ -119,15 +121,18 @@ areas:\\
       ./scripts/opensymphony-container.sh memory-status
 
     doctor_output="${fixture_root}/doctor.log"
-    if LINEAR_API_KEY=fixture \
+    if ! LINEAR_API_KEY=fixture \
       OPENSYMPHONY_IMAGE="${OPENSYMPHONY_INTEGRATION_IMAGE}" \
       ./scripts/opensymphony-container.sh doctor >"${doctor_output}" 2>&1; then
-      echo "generic upstream doctor unexpectedly passed without cargo" >&2
+      cat "${doctor_output}" >&2
+      echo "contained OpenSymphony doctor failed" >&2
       exit 1
     fi
     grep -Fq "[PASS] config:" "${doctor_output}"
     grep -Fq "[PASS] workflow:" "${doctor_output}"
     grep -Fq "[PASS] workflow-prompt:" "${doctor_output}"
+    grep -Fq "[PASS] prereq-cargo:" "${doctor_output}"
+    grep -Fq "[PASS] prereq-curl:" "${doctor_output}"
 
     docker run --rm \
       --entrypoint codex \

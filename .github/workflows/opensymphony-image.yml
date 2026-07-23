@@ -66,6 +66,7 @@ jobs:
           OPENSYMPHONY_INTEGRATION_IMAGE: symphony-orchestrator:ci
           OPENSYMPHONY_CODEX_AUTH_VOLUME: symphony-codex-auth-ci-${{ github.run_id }}
           OPENSYMPHONY_STATE_VOLUME: symphony-opensymphony-state-ci-${{ github.run_id }}
+          OPENSYMPHONY_WORKSPACES_VOLUME: symphony-opensymphony-workspaces-ci-${{ github.run_id }}
           OPENSYMPHONY_SEED_FIXTURE_CODEX_LOGIN: "true"
           OPENSYMPHONY_TEST_LEGACY_MEMORY_MIGRATION: "true"
         run: ./scripts/test-opensymphony-container.sh
@@ -74,6 +75,7 @@ jobs:
           OPENSYMPHONY_INTEGRATION_IMAGE: symphony-orchestrator:ci
           OPENSYMPHONY_CODEX_AUTH_VOLUME: symphony-codex-auth-acceptance-${{ github.run_id }}
           OPENSYMPHONY_STATE_VOLUME: symphony-opensymphony-state-acceptance-${{ github.run_id }}
+          OPENSYMPHONY_WORKSPACES_VOLUME: symphony-opensymphony-workspaces-acceptance-${{ github.run_id }}
           OPENSYMPHONY_ACCEPTANCE_SUFFIX: ${{ github.run_id }}
         run: ./scripts/test-opensymphony-acceptance.sh
       - name: Publish tested image

@@ -8,6 +8,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 image="${OPENSYMPHONY_IMAGE:-ghcr.io/ray-manaloto/symphony-orchestrator@sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982}"
 state_volume="${OPENSYMPHONY_STATE_VOLUME:-symphony-opensymphony-state}"
 auth_volume="${OPENSYMPHONY_CODEX_AUTH_VOLUME:-symphony-codex-auth}"
+workspaces_volume="${OPENSYMPHONY_WORKSPACES_VOLUME:-symphony-opensymphony-workspaces}"
 
 require_linear_key() {
   if [[ -z "${LINEAR_API_KEY:-}" ]]; then
@@ -35,7 +36,7 @@ common_args=(
   --volume "${repo_root}/ops/opensymphony/config.yaml:/orchestrator/config.yaml:ro"
   --volume "${auth_volume}:/home/orchestrator/.codex"
   --volume "${repo_root}/ops/opensymphony/codex-config.toml:/home/orchestrator/.codex/config.toml:ro"
-  --volume symphony-opensymphony-workspaces:/workspaces
+  --volume "${workspaces_volume}:/workspaces"
   --volume "${state_volume}:/target/.opensymphony"
 )
 

@@ -8,7 +8,7 @@ and the evidence required before they are called working.
 | Feature | Decision | Required evidence |
 | --- | --- | --- |
 | Immutable v2.10.0 build | Adopt | Exact commit checkout, locked full Rust workspace tests, release build, image smoke tests, immutable GHCR digest |
-| Target repository `init` | Adopt through disposable fixture | Non-interactive fixture bootstrap produces `WORKFLOW.md`, config, memory policy, and memory skill without touching this checkout |
+| Target repository `init` | Adopt through disposable fixture | Non-interactive fixture bootstrap fetches the immutable template pin, produces `WORKFLOW.md`, config, memory policy, and memory skill, and asserts the selected project, branch, review provider, memory policy, and OpenHands tool path without touching this checkout |
 | Template `update` / self-update | Do not run in the canonical checkout | The immutable image is rebuilt from the reviewed pin instead; mutable template refreshes are diffed in a disposable fixture before selective adoption |
 | `doctor` | Adopt | Green static doctor in the image acceptance suite plus authenticated local preflight |
 | Codex app-server harness | Adopt | Strict config, login status, generated app-server schemas containing `thread/start` and `turn/start`, prior fixture canary |
@@ -17,7 +17,7 @@ and the evidence required before they are called working.
 | Live scheduler canary | Adopt exactly once | The completed `GUI-5` fixture remains the sole authorized canary; no second issue is activated for regression testing |
 | Project memory capture/index | Adopt privately | Deterministic fixture import creates a capsule and DuckDB index with zero warnings in an isolated volume |
 | Memory documentation sync | Adopt as private staging | Fixture sync writes only under `.opensymphony/memory/generated-docs`; tracked docs require separate review and repository gates |
-| Read-only memory MCP server | Adopt | `/health` and MCP `initialize` pass against the isolated captured-memory volume |
+| Read-only memory MCP server | Adopt | The isolated captured-memory volume is mounted read-only; `/health`, MCP `initialize`, and read-tool discovery pass, an admin call is rejected, and the state fingerprint is unchanged |
 | Control plane and TUI | Adopt | Demo control plane `/healthz` and a bounded TUI attachment pass in image acceptance |
 | Codex `debug` | Retain for operator recovery | The CLI path is exposed; a future recovery check must use an already persisted fixture thread and must not start another model turn |
 | `rehydrate` | Reject for this route | v2.10.0 implements it for OpenHands conversation manifests, not Codex threads |
@@ -25,7 +25,7 @@ and the evidence required before they are called working.
 | Hierarchy/dependency scheduling | Retain, fixture-gated | The scheduler supports it, but multi-issue Linear mutation is outside the one-canary boundary; add a deterministic GraphQL fixture before raising concurrency |
 | Concurrent workers | Keep at one | Raise only after isolated write lanes, resource leases, and multi-issue fixture evidence exist |
 | Branch push, PR landing, and AI PR review | Keep outside the worker | GitHub credentials and the host SSH agent are intentionally not mounted; publication stays in the guarded operator ceremony |
-| OpenHands runtime | Not applicable | Codex-only routing skips `uv` and managed OpenHands tooling |
+| OpenHands runtime | Evaluate as a separate local container profile | Codex remains the canonical route. Adopt OpenHands only after its pinned agent server and runtime can run locally in isolated containers, pass upstream protocol fixtures, and require no additional cloud service or production credential |
 | Desktop/web planning clients | Not required for contained CLI operation | Re-evaluate only if their operator features replace a documented repository tool rather than duplicating it |
 
 The image acceptance test is
