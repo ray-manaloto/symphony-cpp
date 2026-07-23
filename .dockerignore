@@ -1,6 +1,10 @@
 .git
 .github
 build
+.build
 .cache
 .ccache
-
+.env
+.opensymphony
+compile_commands.json
+vcpkg_installed
