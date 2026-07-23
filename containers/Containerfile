@@ -68,7 +68,11 @@ ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CXX=/opt/gcc-16.1/bin/g++
 LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
-COPY . .
+COPY vcpkg.json vcpkg-configuration.json ./
+COPY vcpkg-ports/ ./vcpkg-ports/
+COPY vcpkg-triplets/ ./vcpkg-triplets/
+COPY cmake/toolchains/clang-p2996.cmake ./cmake/toolchains/clang-p2996.cmake
+COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
 RUN ./scripts/bootstrap-vcpkg.sh \
  && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
  && .build/vcpkg/vcpkg install --clean-after-build
@@ -83,7 +87,11 @@ ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CXX=/opt/clang-p2996/bin/clang++
 LABEL devcontainer.metadata='[{"remoteUser":"root","overrideCommand":true}]'
 WORKDIR /opt/symphony-cpp-seed
-COPY . .
+COPY vcpkg.json vcpkg-configuration.json ./
+COPY vcpkg-ports/ ./vcpkg-ports/
+COPY vcpkg-triplets/ ./vcpkg-triplets/
+COPY cmake/toolchains/clang-p2996.cmake ./cmake/toolchains/clang-p2996.cmake
+COPY scripts/bootstrap-vcpkg.sh ./scripts/bootstrap-vcpkg.sh
 RUN ./scripts/bootstrap-vcpkg.sh \
  && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
  && .build/vcpkg/vcpkg install --triplet x64-linux-clang-p2996 \
