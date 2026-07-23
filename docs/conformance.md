@@ -10,7 +10,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Dynamic reload | `WorkflowWatcher` tests plus daemon reconfigure loop | Implemented; invalid changes retain last good config |
 | Positional workflow CLI and process exits | CLI11 parser fixtures plus Boost.Process-backed executable tests | Implemented for cwd default, one positional path, `--workflow` compatibility, strict conflicts/extras, help success, parse failure, and startup-validation failure |
 | Single-authority polling | deterministic scheduler tests | Implemented |
-| Bounded concurrent workers | scheduler and execution-provider fixtures | Gap: scheduler state is single-authority, but `AgentRuntime::run` still blocks the poll authority; pinned stdexec compatibility gate precedes worker migration |
+| Bounded concurrent workers | scheduler and NVIDIA stdexec execution-provider fixtures | Implemented with a startup-sized static thread pool, immutable keyed submissions, scheduler-thread completion drain, per-job cooperative cancellation, and deferred terminal cleanup; exact GCC 16.1 Source CI runs `29976334674` and `29984713767` passed |
 | Tracker state-list and ID refresh | `IssueTracker` plus `FakeTracker` | Implemented |
 | Tracker normalization, pagination, profiles, and portable errors | tracker contract fixtures | Implemented for the provider-neutral fixture boundary; live Glaze HTTP adapters remain gated and disabled |
 | Candidate completeness, routability, and dispatch ordering | scheduler fixture tests | Implemented for normalized core fields, adapter `dispatchable`, priority, creation time, and identifier tie-breaks |
@@ -26,7 +26,7 @@ Normative revision: `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`.
 | Bounded in-worker turn loop | app-server conversation and scheduler fixtures | Implemented with one live app-server process/thread, tracker refresh after each successful turn, continuation-only prompts, dynamic `agent.max_turns`, compaction cutoff, and normal continuation retry |
 | Adaptive worker policy | scheduler, workflow, and Codex fixtures | Implemented for configured baseline, one-failure/no-progress escalation, repeated-identical-failure ceiling, and progress-evidence recovery between bounded sessions; OpenSymphony v2.10.0 remains operator-adjusted |
 | Concurrent worker execution | stdexec provider, scheduler overlap, completion-drain, and cancellation fixtures | Implemented with the pinned NVIDIA stdexec static thread pool, keyed cooperative cancellation, scheduler-thread-only state mutation, and deferred terminal cleanup; exact GCC 16.1 Source CI run `29976334674` passed |
-| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for the Draft v1 launch and stop contract: working directory, tracker-secret-free child environment, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, reap, and concurrent bounded stderr-tail capture. Process-tree/group cancellation remains an owner-gated hardening extension. |
+| Child-process lifecycle | Boost.Process v2 fixtures and production Codex adapter | Implemented for the Draft v1 launch and stop contract: working directory, tracker-secret-free child environment, separate stdio handles, explicit EOF, graceful-exit request, termination, wait, reap, and concurrent bounded stderr-tail capture; exact GCC 16.1 debug and sanitizer targets passed in Source CI run `29984713767`. Process-tree/group cancellation remains an owner-gated hardening extension. |
 | Strict issue/attempt prompt | workflow renderer tests | Implemented |
 | Exponential continuation retry | scheduler tests | Implemented |
 | 5m retry cap | config/scheduler tests | Implemented |
@@ -45,12 +45,24 @@ The pinned Draft v1 core profile does not require a status snapshot or process-g
 §§13.3–13.4 make snapshots and human-readable status optional, while §§10.1, 17.5, and 18.1
 require the app-server launch/stop behavior without prescribing descendant-process groups.
 
+The deterministic restart and reconciliation evidence is explicit in the registered
+`symphony_tests` suite:
+
+- `scheduler overlaps workers and drains completion on its own thread`;
+- `terminal reconciliation stops worker before removing workspace`;
+- `reconciliation cleans terminal issue workspace`; and
+- `startup cleanup removes preserved terminal workspaces without creating new ones`.
+
+That aggregate target passed both GCC 16.1 debug and ASan/UBSan configurations in exact Source CI
+run `29984713767`. CTest's default output names the aggregate executable rather than individual
+`ut` cases, so this evidence deliberately combines the registered fixture source with the exact
+target result.
+
 The following implementation-plan evidence is still required before this repository claims the
 planned validation profile:
 
 - a green exact-SHA compiler matrix covering GCC 16.1, sanitizers, and clang-p2996 differential
-  reflection;
-- explicit restart and reconciliation evidence from the covered deterministic fixtures.
+  reflection.
 
 Process-tree/group cancellation remains a separately tracked hardening extension. Boost.Process
 1.91 v2 exposes no maintained process-group abstraction, so the repository will not add an
