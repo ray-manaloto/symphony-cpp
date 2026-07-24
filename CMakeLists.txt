@@ -28,7 +28,8 @@ target_compile_options(symphony_options INTERFACE
     -Wundef>
   $<$<AND:$<BOOL:${SYMPHONY_WARNINGS_AS_ERRORS}>,$<CXX_COMPILER_ID:GNU,Clang>>:-Werror>)
 target_compile_definitions(symphony_options INTERFACE
-  $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:_GLIBCXX_ASSERTIONS>)
+  $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:_GLIBCXX_ASSERTIONS>
+  $<$<PLATFORM_ID:Linux>:BOOST_PROCESS_V2_DISABLE_PIDFD_OPEN>)
 if(SYMPHONY_ENABLE_ASAN_UBSAN)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(FATAL_ERROR "ASan+UBSan requires GCC or Clang")

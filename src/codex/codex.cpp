@@ -132,7 +132,7 @@ struct ProtocolMessage {
   std::optional<ErrorBody> error;
 };
 
-template <typename T> std::string encode_frame(const T &value) {
+template <typename T> std::string encode_frame(const T& value) {
   auto json = glz::write_json(value);
   if (!json) {
     throw std::runtime_error("cannot encode app-server message: " +
@@ -155,8 +155,7 @@ void merge_rate_limits(RateLimits& current, const RateLimits& update) {
 }
 
 namespace {
-std::vector<std::string> child_process_environment(
-    const std::vector<std::string>& excluded_names) {
+std::vector<std::string> child_process_environment(const std::vector<std::string>& excluded_names) {
   for (const auto& name : excluded_names) {
     if (name.empty() || name.find('=') != std::string::npos) {
       throw std::invalid_argument("invalid excluded environment variable");
@@ -175,19 +174,17 @@ std::vector<std::string> child_process_environment(
 
 AppServerPolicy normalized_policy(AppServerPolicy policy) {
   if (policy.turn_sandbox_policy_json) {
-    policy.turn_sandbox_policy_json = JsonLineCodec::parse(
-        *policy.turn_sandbox_policy_json, 1024U * 1024U);
+    policy.turn_sandbox_policy_json =
+        JsonLineCodec::parse(*policy.turn_sandbox_policy_json, 1024U * 1024U);
   }
   return policy;
 }
 
-bool context_pressure_reached(const TokenUsage& usage,
-                              const std::uint32_t percent) {
+bool context_pressure_reached(const TokenUsage& usage, const std::uint32_t percent) {
   if (!usage.model_context_window || *usage.model_context_window <= 0) {
     return false;
   }
-  const auto window =
-      static_cast<std::uint64_t>(*usage.model_context_window);
+  const auto window = static_cast<std::uint64_t>(*usage.model_context_window);
   const auto whole = (window / 100U) * percent;
   const auto remainder = ((window % 100U) * percent + 99U) / 100U;
   return usage.total_tokens >= whole + remainder;
@@ -195,21 +192,13 @@ bool context_pressure_reached(const TokenUsage& usage,
 
 class BoostProcessProtocolChannel final : public ProtocolChannel {
 public:
-  BoostProcessProtocolChannel(
-      const std::string& command,
-      const std::filesystem::path& cwd,
-      const std::vector<std::string>& environment)
-      : input_(context_),
-        output_(context_),
-        error_(context_),
-        child_(
-            context_,
-            boost::filesystem::path("/bin/bash"),
-            {"-lc", command},
-            boost::process::v2::process_start_dir(
-                boost::filesystem::path(cwd.string())),
-            boost::process::v2::process_stdio{input_, output_, error_},
-            boost::process::v2::process_environment{environment}) {
+  BoostProcessProtocolChannel(const std::string& command, const std::filesystem::path& cwd,
+                              const std::vector<std::string>& environment)
+      : input_(context_), output_(context_), error_(context_),
+        child_(context_, boost::filesystem::path("/bin/bash"), {"-lc", command},
+               boost::process::v2::process_start_dir(boost::filesystem::path(cwd.string())),
+               boost::process::v2::process_stdio{input_, output_, error_},
+               boost::process::v2::process_environment{environment}) {
     read_standard_error();
   }
 
@@ -245,13 +234,11 @@ public:
     }
   }
 
-  ReadResult
-  read(const std::chrono::milliseconds timeout) override {
+  ReadResult read(const std::chrono::milliseconds timeout) override {
     constexpr std::size_t max_line_bytes = 10U * 1024U * 1024U;
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (true) {
-      if (const auto newline = buffered_.find('\n');
-          newline != std::string::npos) {
+      if (const auto newline = buffered_.find('\n'); newline != std::string::npos) {
         auto line = buffered_.substr(0, newline + 1);
         buffered_.erase(0, newline + 1);
         return {ReadStatus::message, std::move(line)};
@@ -260,16 +247,13 @@ public:
         throw std::runtime_error("app-server line exceeds 10 MB");
       if (end_of_stream_) {
         if (!buffered_.empty()) {
-          throw std::runtime_error(
-              "app-server stdout closed with incomplete frame");
+          throw std::runtime_error("app-server stdout closed with incomplete frame");
         }
         return {ReadStatus::end_of_stream, {}};
       }
-      const auto remaining =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              deadline - std::chrono::steady_clock::now());
-      if (remaining <= std::chrono::milliseconds::zero())
-        return {ReadStatus::timeout, {}};
+      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+          deadline - std::chrono::steady_clock::now());
+      if (remaining <= std::chrono::milliseconds::zero()) return {ReadStatus::timeout, {}};
 
       std::array<char, 8192> chunk{};
       boost::system::error_code read_error;
@@ -278,14 +262,13 @@ public:
       bool timer_finished = false;
       bool timed_out = false;
       boost::asio::steady_timer timer(context_, remaining);
-      output_.async_read_some(
-          boost::asio::buffer(chunk),
-          [&](const boost::system::error_code& error, const std::size_t size) {
-            read_error = error;
-            count = size;
-            read_finished = true;
-            static_cast<void>(timer.cancel());
-      });
+      output_.async_read_some(boost::asio::buffer(chunk),
+                              [&](const boost::system::error_code& error, const std::size_t size) {
+                                read_error = error;
+                                count = size;
+                                read_finished = true;
+                                static_cast<void>(timer.cancel());
+                              });
       timer.async_wait([&](const boost::system::error_code& error) {
         timer_finished = true;
         if (!error && !read_finished) {
@@ -315,8 +298,7 @@ public:
     context_.restart();
     static_cast<void>(context_.poll());
     if (diagnostic_bytes_seen_ == 0) return std::nullopt;
-    return ProcessDiagnostic{
-        diagnostic_tail_, diagnostic_bytes_seen_, diagnostic_truncated_};
+    return ProcessDiagnostic{diagnostic_tail_, diagnostic_bytes_seen_, diagnostic_truncated_};
   }
 
 private:
@@ -325,31 +307,25 @@ private:
   void append_diagnostic(const char* data, const std::size_t count) {
     const auto maximum = std::numeric_limits<std::uint64_t>::max();
     diagnostic_bytes_seen_ =
-        count > maximum - diagnostic_bytes_seen_
-            ? maximum
-            : diagnostic_bytes_seen_ + count;
+        count > maximum - diagnostic_bytes_seen_ ? maximum : diagnostic_bytes_seen_ + count;
     if (count >= diagnostic_limit) {
-      diagnostic_tail_.assign(data + count - diagnostic_limit,
-                              diagnostic_limit);
+      diagnostic_tail_.assign(data + count - diagnostic_limit, diagnostic_limit);
       diagnostic_truncated_ = true;
       return;
     }
     if (diagnostic_tail_.size() + count > diagnostic_limit) {
-      diagnostic_tail_.erase(
-          0, diagnostic_tail_.size() + count - diagnostic_limit);
+      diagnostic_tail_.erase(0, diagnostic_tail_.size() + count - diagnostic_limit);
       diagnostic_truncated_ = true;
     }
     diagnostic_tail_.append(data, count);
   }
 
   void read_standard_error() {
-    error_.async_read_some(
-        boost::asio::buffer(error_chunk_),
-        [this](const boost::system::error_code& error,
-               const std::size_t count) {
-          if (count > 0) append_diagnostic(error_chunk_.data(), count);
-          if (!error) read_standard_error();
-        });
+    error_.async_read_some(boost::asio::buffer(error_chunk_),
+                           [this](const boost::system::error_code& error, const std::size_t count) {
+                             if (count > 0) append_diagnostic(error_chunk_.data(), count);
+                             if (!error) read_standard_error();
+                           });
   }
 
   boost::asio::io_context context_;
@@ -371,9 +347,7 @@ void FakeAgentRuntime::enqueue(RunResult result) {
   results_.push_back(std::move(result));
 }
 
-RunResult FakeAgentRuntime::run(
-    const RunRequest &request,
-    const std::stop_token stop_token) {
+RunResult FakeAgentRuntime::run(const RunRequest& request, const std::stop_token stop_token) {
   const std::scoped_lock lock(mutex_);
   ++run_count_;
   last_model_ = request.model;
@@ -402,51 +376,37 @@ std::optional<std::string> FakeAgentRuntime::last_model() const {
   const std::scoped_lock lock(mutex_);
   return last_model_;
 }
-std::optional<std::string>
-FakeAgentRuntime::last_reasoning_effort() const {
+std::optional<std::string> FakeAgentRuntime::last_reasoning_effort() const {
   const std::scoped_lock lock(mutex_);
   return last_reasoning_effort_;
 }
-std::optional<std::uint32_t>
-FakeAgentRuntime::last_context_rollover_percent() const {
+std::optional<std::uint32_t> FakeAgentRuntime::last_context_rollover_percent() const {
   const std::scoped_lock lock(mutex_);
   return last_context_rollover_percent_;
 }
 
 CodexAppServerRuntime::CodexAppServerRuntime(
-    std::string command,
-    const std::chrono::milliseconds read_timeout,
-    const std::chrono::milliseconds stall_timeout,
-    const std::chrono::milliseconds turn_timeout,
-    AppServerPolicy policy,
-    std::vector<std::string> excluded_environment_variables)
-    : command_(std::move(command)),
-      read_timeout_(read_timeout),
-      stall_timeout_(stall_timeout),
-      turn_timeout_(turn_timeout),
-      policy_(normalized_policy(std::move(policy))),
-      child_environment_(
-          child_process_environment(excluded_environment_variables)) {
-  if (command_.empty())
-    throw std::invalid_argument("Codex command must not be empty");
+    std::string command, const std::chrono::milliseconds read_timeout,
+    const std::chrono::milliseconds stall_timeout, const std::chrono::milliseconds turn_timeout,
+    AppServerPolicy policy, std::vector<std::string> excluded_environment_variables)
+    : command_(std::move(command)), read_timeout_(read_timeout), stall_timeout_(stall_timeout),
+      turn_timeout_(turn_timeout), policy_(normalized_policy(std::move(policy))),
+      child_environment_(child_process_environment(excluded_environment_variables)) {
+  if (command_.empty()) throw std::invalid_argument("Codex command must not be empty");
   if (read_timeout_ <= std::chrono::milliseconds::zero()) {
     throw std::invalid_argument("Codex read timeout must be positive");
   }
 }
 
-RunResult CodexAppServerRuntime::run(
-    const RunRequest &request,
-    const std::stop_token stop_token) {
+RunResult CodexAppServerRuntime::run(const RunRequest& request, const std::stop_token stop_token) {
   if (stop_token.stop_requested()) {
     RunResult result;
     result.cancelled = true;
     return result;
   }
-  if (request.workspace.path.empty() ||
-      !std::filesystem::is_directory(request.workspace.path) ||
+  if (request.workspace.path.empty() || !std::filesystem::is_directory(request.workspace.path) ||
       !request.workspace.path.is_absolute()) {
-    return RunResult{
-        false, false, std::nullopt, {}, "invalid app-server workspace"};
+    return RunResult{false, false, std::nullopt, {}, "invalid app-server workspace"};
   }
   std::string command;
   std::chrono::milliseconds read_timeout;
@@ -467,27 +427,18 @@ RunResult CodexAppServerRuntime::run(
   if (request.reasoning_effort) {
     policy.reasoning_effort = request.reasoning_effort;
   }
-  BoostProcessProtocolChannel channel(
-      command, request.workspace.path, environment);
-  auto result = AppServerConversation::run(
-      channel,
-      request,
-      read_timeout,
-      10000,
-      stall_timeout,
-      turn_timeout,
-      policy,
-      stop_token);
+  BoostProcessProtocolChannel channel(command, request.workspace.path, environment);
+  auto result = AppServerConversation::run(channel, request, read_timeout, 10000, stall_timeout,
+                                           turn_timeout, policy, stop_token);
   result.process_diagnostic = channel.diagnostic();
   return result;
 }
 
-void CodexAppServerRuntime::reconfigure(
-    std::string command,
-    const std::chrono::milliseconds read_timeout,
-    const std::chrono::milliseconds stall_timeout,
-    const std::chrono::milliseconds turn_timeout,
-    AppServerPolicy policy) {
+void CodexAppServerRuntime::reconfigure(std::string command,
+                                        const std::chrono::milliseconds read_timeout,
+                                        const std::chrono::milliseconds stall_timeout,
+                                        const std::chrono::milliseconds turn_timeout,
+                                        AppServerPolicy policy) {
   auto validated_policy = normalized_policy(std::move(policy));
   const std::scoped_lock lock(config_mutex_);
   if (command.empty() || read_timeout <= std::chrono::milliseconds::zero()) {
@@ -507,81 +458,67 @@ std::string JsonLineCodec::frame(const std::string_view json) {
   return std::string{json} + '\n';
 }
 
-std::string JsonLineCodec::parse(std::string_view line,
-                                 const std::size_t max_bytes) {
-  if (line.size() > max_bytes)
-    throw std::runtime_error("JSON frame exceeds limit");
-  if (!line.empty() && line.back() == '\n')
-    line.remove_suffix(1);
-  if (line.find('\n') != std::string_view::npos ||
-      line.find('\r') != std::string_view::npos) {
+std::string JsonLineCodec::parse(std::string_view line, const std::size_t max_bytes) {
+  if (line.size() > max_bytes) throw std::runtime_error("JSON frame exceeds limit");
+  if (!line.empty() && line.back() == '\n') line.remove_suffix(1);
+  if (line.find('\n') != std::string_view::npos || line.find('\r') != std::string_view::npos) {
     throw std::runtime_error("JSON-RPC frame contains multiple lines");
   }
   glz::generic_u64 parsed;
   const std::string buffer{line};
-  if (const auto error = glz::read_json(parsed, buffer);
-      error || !parsed.is_object()) {
+  if (const auto error = glz::read_json(parsed, buffer); error || !parsed.is_object()) {
     throw std::runtime_error("JSON-RPC frame must be one valid object");
   }
   auto normalized = glz::write_json(parsed);
-  if (!normalized)
-    throw std::runtime_error("JSON-RPC frame cannot be normalized");
+  if (!normalized) throw std::runtime_error("JSON-RPC frame cannot be normalized");
   return std::move(*normalized);
 }
 
 std::string AppServerProtocol::initialize_request(const std::uint64_t id) {
-  return protocol_detail::encode_frame(protocol_detail::Request{
-      "initialize", id,
-      protocol_detail::InitializeParams{protocol_detail::ClientInfo{
-          "symphony_cpp", "Symphony C++", "0.1.0"}}});
+  return protocol_detail::encode_frame(
+      protocol_detail::Request{"initialize", id,
+                               protocol_detail::InitializeParams{protocol_detail::ClientInfo{
+                                   "symphony_cpp", "Symphony C++", "0.1.0"}}});
 }
 
 std::string AppServerProtocol::initialized_notification() {
-  return protocol_detail::encode_frame(protocol_detail::Notification{
-      "initialized", protocol_detail::EmptyParams{}});
+  return protocol_detail::encode_frame(
+      protocol_detail::Notification{"initialized", protocol_detail::EmptyParams{}});
 }
 
-std::string
-AppServerProtocol::thread_start_request(const std::uint64_t id,
-                                        const std::filesystem::path &cwd,
-                                        const AppServerPolicy& policy) {
+std::string AppServerProtocol::thread_start_request(const std::uint64_t id,
+                                                    const std::filesystem::path& cwd,
+                                                    const AppServerPolicy& policy) {
   return protocol_detail::encode_frame(protocol_detail::Request{
-      "thread/start",
-      id,
-      protocol_detail::ThreadStartParams{
-          cwd.native(), policy.approval_policy, policy.thread_sandbox,
-          policy.model}});
+      "thread/start", id,
+      protocol_detail::ThreadStartParams{cwd.native(), policy.approval_policy,
+                                         policy.thread_sandbox, policy.model}});
 }
 
-std::string AppServerProtocol::turn_start_request(
-    const std::uint64_t id, const std::string_view thread_id,
-    const std::filesystem::path &cwd,
-    const std::string_view prompt,
-    const AppServerPolicy& policy) {
+std::string AppServerProtocol::turn_start_request(const std::uint64_t id,
+                                                  const std::string_view thread_id,
+                                                  const std::filesystem::path& cwd,
+                                                  const std::string_view prompt,
+                                                  const AppServerPolicy& policy) {
   const auto sandbox_policy = policy.turn_sandbox_policy_json
-                                  ? std::optional<glz::raw_json>{
-                                        *policy.turn_sandbox_policy_json}
+                                  ? std::optional<glz::raw_json>{*policy.turn_sandbox_policy_json}
                                   : std::nullopt;
-  return protocol_detail::encode_frame(protocol_detail::Request{
-      "turn/start", id,
-      protocol_detail::TurnStartParams{std::string{thread_id},
-                                       cwd.native(),
-                                       {{"text", std::string{prompt}}},
-                                       policy.approval_policy,
-                                       sandbox_policy,
-                                       policy.model,
-                                       policy.reasoning_effort}});
+  return protocol_detail::encode_frame(
+      protocol_detail::Request{"turn/start", id,
+                               protocol_detail::TurnStartParams{std::string{thread_id},
+                                                                cwd.native(),
+                                                                {{"text", std::string{prompt}}},
+                                                                policy.approval_policy,
+                                                                sandbox_policy,
+                                                                policy.model,
+                                                                policy.reasoning_effort}});
 }
 
-std::string AppServerProtocol::unsupported_tool_response(
-    const std::uint64_t id) {
+std::string AppServerProtocol::unsupported_tool_response(const std::uint64_t id) {
   constexpr std::string_view message = "Unsupported dynamic tool";
   return protocol_detail::encode_frame(protocol_detail::Response{
-      id,
-      protocol_detail::ToolFailureResult{
-          false,
-          std::string{message},
-          {{"inputText", std::string{message}}}}});
+      id, protocol_detail::ToolFailureResult{
+              false, std::string{message}, {{"inputText", std::string{message}}}}});
 }
 
 ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
@@ -590,8 +527,7 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
   protocol_detail::ProtocolMessage message;
   constexpr auto options = glz::opts{.error_on_unknown_keys = false};
   if (const auto error = glz::read<options>(message, normalized)) {
-    throw std::runtime_error("invalid app-server message: " +
-                             glz::format_error(error));
+    throw std::runtime_error("invalid app-server message: " + glz::format_error(error));
   }
   if (message.error) {
     update.event = ProtocolEvent::turn_failed;
@@ -602,10 +538,8 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
     update.event = ProtocolEvent::response;
     update.response_id = message.id;
     if (message.result) {
-      if (message.result->thread)
-        update.thread_id = message.result->thread->id;
-      if (message.result->turn)
-        update.turn_id = message.result->turn->id;
+      if (message.result->thread) update.thread_id = message.result->thread->id;
+      if (message.result->turn) update.turn_id = message.result->turn->id;
     }
     return update;
   }
@@ -617,30 +551,22 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
   }
   update.response_id = message.id;
   if (message.params) {
-    if (message.params->thread)
-      update.thread_id = message.params->thread->id;
-    if (message.params->turn)
-      update.turn_id = message.params->turn->id;
+    if (message.params->thread) update.thread_id = message.params->thread->id;
+    if (message.params->turn) update.turn_id = message.params->turn->id;
     if (message.params->tokenUsage) {
       const auto& total = message.params->tokenUsage->total;
-      update.token_usage = TokenUsage{
-          total.inputTokens,
-          total.cachedInputTokens,
-          total.outputTokens,
-          total.reasoningOutputTokens,
-          total.totalTokens,
-          message.params->tokenUsage->modelContextWindow};
+      update.token_usage =
+          TokenUsage{total.inputTokens,  total.cachedInputTokens,
+                     total.outputTokens, total.reasoningOutputTokens,
+                     total.totalTokens,  message.params->tokenUsage->modelContextWindow};
     }
     if (message.params->rateLimits) {
-      const auto map_window = [](const auto& source)
-          -> std::optional<RateLimitWindow> {
+      const auto map_window = [](const auto& source) -> std::optional<RateLimitWindow> {
         if (!source) return std::nullopt;
-        return RateLimitWindow{
-            source->usedPercent, source->windowDurationMins, source->resetsAt};
+        return RateLimitWindow{source->usedPercent, source->windowDurationMins, source->resetsAt};
       };
       const auto& source = *message.params->rateLimits;
-      RateLimits limits{source.limitId, map_window(source.primary),
-                        map_window(source.secondary)};
+      RateLimits limits{source.limitId, map_window(source.primary), map_window(source.secondary)};
       limits.limit_name = source.limitName;
       limits.plan_type = source.planType;
       limits.reached_type = source.rateLimitReachedType;
@@ -648,28 +574,21 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
       update.rate_limits = std::move(limits);
     }
   }
-  if (update.method == "turn/completed")
-    update.event = ProtocolEvent::turn_completed;
-  else if (update.method == "turn/failed")
-    update.event = ProtocolEvent::turn_failed;
-  else if (update.method == "turn/cancelled")
-    update.event = ProtocolEvent::turn_cancelled;
+  if (update.method == "turn/completed") update.event = ProtocolEvent::turn_completed;
+  else if (update.method == "turn/failed") update.event = ProtocolEvent::turn_failed;
+  else if (update.method == "turn/cancelled") update.event = ProtocolEvent::turn_cancelled;
   else if (update.method == "item/commandExecution/requestApproval" ||
            update.method == "item/fileChange/requestApproval" ||
-           update.method == "execCommandApproval" ||
-           update.method == "applyPatchApproval")
+           update.method == "execCommandApproval" || update.method == "applyPatchApproval")
     update.event = ProtocolEvent::approval_required;
   else if (update.method == "item/tool/requestUserInput")
     update.event = ProtocolEvent::user_input_required;
-  else if (update.method == "item/tool/call")
-    update.event = ProtocolEvent::unsupported_tool_call;
+  else if (update.method == "item/tool/call") update.event = ProtocolEvent::unsupported_tool_call;
   else if (update.method == "thread/compacted" ||
-           (update.method == "item/completed" && message.params &&
-            message.params->item &&
+           (update.method == "item/completed" && message.params && message.params->item &&
             message.params->item->type == "contextCompaction"))
     update.event = ProtocolEvent::context_compacted;
-  else
-    update.event = ProtocolEvent::notification;
+  else update.event = ProtocolEvent::notification;
   return update;
 }
 
@@ -679,9 +598,10 @@ void FakeProtocolChannel::enqueue(std::string line) {
 void FakeProtocolChannel::write(const std::string_view frame) {
   writes_.emplace_back(frame);
 }
-void FakeProtocolChannel::close() { closed_ = true; }
-ProtocolChannel::ReadResult
-FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
+void FakeProtocolChannel::close() {
+  closed_ = true;
+}
+ProtocolChannel::ReadResult FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
   if (reads_.empty()) {
     if (closed_) return {ReadStatus::end_of_stream, {}};
     std::this_thread::sleep_for(timeout);
@@ -691,19 +611,20 @@ FakeProtocolChannel::read(const std::chrono::milliseconds timeout) {
   reads_.pop_front();
   return {ReadStatus::message, std::move(line)};
 }
-const std::vector<std::string> &FakeProtocolChannel::writes() const noexcept {
+const std::vector<std::string>& FakeProtocolChannel::writes() const noexcept {
   return writes_;
 }
-void FakeProtocolChannel::request_stop() noexcept { closed_ = true; }
+void FakeProtocolChannel::request_stop() noexcept {
+  closed_ = true;
+}
 
-RunResult
-AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
-                           const std::chrono::milliseconds read_timeout,
-                           const std::size_t max_messages,
-                           const std::chrono::milliseconds stall_timeout,
-                           const std::chrono::milliseconds turn_timeout,
-                           const AppServerPolicy& policy,
-                           const std::stop_token stop_token) {
+RunResult AppServerConversation::run(ProtocolChannel& channel, const RunRequest& request,
+                                     const std::chrono::milliseconds read_timeout,
+                                     const std::size_t max_messages,
+                                     const std::chrono::milliseconds stall_timeout,
+                                     const std::chrono::milliseconds turn_timeout,
+                                     const AppServerPolicy& policy,
+                                     const std::stop_token stop_token) {
   RunResult result;
   channel.write(AppServerProtocol::initialize_request(0));
   std::string thread_id;
@@ -719,8 +640,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     return result;
   }
   if (request.context_rollover_percent &&
-      (*request.context_rollover_percent == 0 ||
-       *request.context_rollover_percent >= 100)) {
+      (*request.context_rollover_percent == 0 || *request.context_rollover_percent >= 100)) {
     result.error = "context_rollover_percent must be between 1 and 99";
     return result;
   }
@@ -728,37 +648,29 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     if (stop_token.stop_requested()) {
       channel.request_stop();
       result.cancelled = true;
-      result.session_id = thread_id.empty() || turn_id.empty()
-                              ? ""
-                              : thread_id + '-' + turn_id;
+      result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
       return result;
     }
     const auto read = channel.read(read_timeout);
     if (read.status == ProtocolChannel::ReadStatus::end_of_stream) {
       result.error = "app-server stdout closed";
-      result.session_id = thread_id.empty() || turn_id.empty()
-                              ? ""
-                              : thread_id + '-' + turn_id;
+      result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
       return result;
     }
     if (read.status == ProtocolChannel::ReadStatus::timeout) {
       const auto now = std::chrono::steady_clock::now();
-      if (turn_timeout > std::chrono::milliseconds::zero() &&
+      if (turn_started && turn_timeout > std::chrono::milliseconds::zero() &&
           now - turn_started_at > turn_timeout) {
         result.timed_out = true;
         result.error = "app-server turn timeout";
-        result.session_id = thread_id.empty() || turn_id.empty()
-                                ? ""
-                                : thread_id + '-' + turn_id;
+        result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
         return result;
       }
       if (stall_timeout > std::chrono::milliseconds::zero()) {
         if (now - last_event > stall_timeout) {
           result.stalled = true;
           result.error = "app-server stalled";
-          result.session_id = thread_id.empty() || turn_id.empty()
-                                  ? ""
-                                  : thread_id + '-' + turn_id;
+          result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
           return result;
         }
         continue;
@@ -771,37 +683,29 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
     ProtocolUpdate update;
     try {
       update = AppServerProtocol::decode(read.message);
-    } catch (const std::exception &error) {
-      result.error =
-          std::string{"malformed app-server message: "} + error.what();
+    } catch (const std::exception& error) {
+      result.error = std::string{"malformed app-server message: "} + error.what();
       return result;
     }
-    if (!update.thread_id.empty())
-      thread_id = update.thread_id;
-    if (!update.turn_id.empty())
-      turn_id = update.turn_id;
+    if (!update.thread_id.empty()) thread_id = update.thread_id;
+    if (!update.turn_id.empty()) turn_id = update.turn_id;
     if (update.token_usage) result.token_usage = update.token_usage;
     if (update.rate_limits) {
       if (!result.rate_limits) result.rate_limits.emplace();
       merge_rate_limits(*result.rate_limits, *update.rate_limits);
     }
     if (update.event == ProtocolEvent::malformed) {
-      result.error =
-          update.error.empty() ? "malformed app-server message" : update.error;
+      result.error = update.error.empty() ? "malformed app-server message" : update.error;
       return result;
     }
     if (update.event == ProtocolEvent::approval_required) {
       result.error = "app-server approval required";
-      result.session_id = thread_id.empty() || turn_id.empty()
-                              ? ""
-                              : thread_id + '-' + turn_id;
+      result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
       return result;
     }
     if (update.event == ProtocolEvent::user_input_required) {
       result.error = "app-server user input required";
-      result.session_id = thread_id.empty() || turn_id.empty()
-                              ? ""
-                              : thread_id + '-' + turn_id;
+      result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
       return result;
     }
     if (update.event == ProtocolEvent::unsupported_tool_call) {
@@ -809,22 +713,18 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         result.error = "unsupported tool call has no request id";
         return result;
       }
-      channel.write(AppServerProtocol::unsupported_tool_response(
-          *update.response_id));
+      channel.write(AppServerProtocol::unsupported_tool_response(*update.response_id));
       continue;
     }
     if (update.event == ProtocolEvent::context_compacted) {
-      if (result.compaction_count <
-          std::numeric_limits<std::uint32_t>::max()) {
+      if (result.compaction_count < std::numeric_limits<std::uint32_t>::max()) {
         ++result.compaction_count;
       }
       continue;
     }
     if (update.response_id == 0 && !initialized) {
       channel.write(AppServerProtocol::initialized_notification());
-      channel.write(
-          AppServerProtocol::thread_start_request(
-              1, request.workspace.path, policy));
+      channel.write(AppServerProtocol::thread_start_request(1, request.workspace.path, policy));
       initialized = true;
       thread_requested = true;
       continue;
@@ -834,9 +734,11 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         result.error = "thread/start response has no thread identity";
         return result;
       }
-      channel.write(AppServerProtocol::turn_start_request(
-          2, thread_id, request.workspace.path, request.prompt, policy));
+      channel.write(AppServerProtocol::turn_start_request(2, thread_id, request.workspace.path,
+                                                          request.prompt, policy));
       turn_started = true;
+      turn_started_at = std::chrono::steady_clock::now();
+      last_event = turn_started_at;
       continue;
     }
     if (update.event == ProtocolEvent::turn_completed) {
@@ -845,8 +747,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         return result;
       }
       result.session_id = thread_id + '-' + turn_id;
-      if (result.turns_completed <
-          std::numeric_limits<std::uint32_t>::max()) {
+      if (result.turns_completed < std::numeric_limits<std::uint32_t>::max()) {
         ++result.turns_completed;
       }
       if (result.compaction_count > 0) {
@@ -854,8 +755,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         return result;
       }
       if (request.context_rollover_percent && result.token_usage &&
-          context_pressure_reached(
-              *result.token_usage, *request.context_rollover_percent)) {
+          context_pressure_reached(*result.token_usage, *request.context_rollover_percent)) {
         result.context_pressure_rollover = true;
         result.normal_exit = true;
         return result;
@@ -863,11 +763,9 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       std::optional<std::string> continuation;
       if (request.continuation_prompt_after_turn) {
         try {
-          continuation = request.continuation_prompt_after_turn(
-              result.turns_completed);
+          continuation = request.continuation_prompt_after_turn(result.turns_completed);
         } catch (const std::exception& error) {
-          result.error =
-              std::string{"continuation decision failed: "} + error.what();
+          result.error = std::string{"continuation decision failed: "} + error.what();
           return result;
         }
       }
@@ -877,8 +775,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
       }
       turn_id.clear();
       channel.write(AppServerProtocol::turn_start_request(
-          next_request_id++, thread_id, request.workspace.path,
-          *continuation, policy));
+          next_request_id++, thread_id, request.workspace.path, *continuation, policy));
       turn_started_at = std::chrono::steady_clock::now();
       last_event = turn_started_at;
       continue;
@@ -887,8 +784,7 @@ AppServerConversation::run(ProtocolChannel &channel, const RunRequest &request,
         update.event == ProtocolEvent::turn_cancelled) {
       result.cancelled = update.event == ProtocolEvent::turn_cancelled;
       result.error = update.error.empty() ? update.method : update.error;
-      result.session_id =
-          thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
+      result.session_id = thread_id.empty() || turn_id.empty() ? "" : thread_id + '-' + turn_id;
       return result;
     }
   }
