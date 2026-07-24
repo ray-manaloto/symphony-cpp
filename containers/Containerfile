@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.10
-ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:1641c7bc30b00e0c5d4858b3e4da750123e9802fdb8086e9baa5afa2bc99393c
+ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304
 
 FROM ${CODEX_BASE} AS compiler-build-base
 USER root
@@ -44,15 +44,21 @@ COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1
 
 FROM compiler-build-base AS clang-builder
 ARG CLANG_P2996_COMMIT=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
+ARG TARGETARCH
 WORKDIR /tmp
 RUN git clone --filter=blob:none https://github.com/bloomberg/clang-p2996.git llvm-project \
  && cd llvm-project \
  && git checkout --detach "${CLANG_P2996_COMMIT}" \
  && test "$(git rev-parse HEAD)" = "${CLANG_P2996_COMMIT}"
-RUN cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
+RUN case "${TARGETARCH}" in \
+      amd64) llvm_target=X86 ;; \
+      arm64) llvm_target=AArch64 ;; \
+      *) echo "unsupported clang-p2996 target architecture: ${TARGETARCH}" >&2; exit 64 ;; \
+    esac \
+ && cmake -S /tmp/llvm-project/llvm -B /tmp/llvm-build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/clang-p2996 \
       -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind' \
-      -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_ASSERTIONS=ON \
+      -DLLVM_TARGETS_TO_BUILD="${llvm_target}" -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
       -DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;runtimes' \
       -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF \
@@ -68,19 +74,24 @@ COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
 
 FROM compiler-build-base AS llvm-analysis-tools
 ARG LLVM_VERSION=22.1.8
-ARG LLVM_SHA256=df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384
 ARG LLVM_SIGNER=FFB3368980F3E6BB5737145A316C56D064CACBA5
 ARG LLVM_RELEASE_KEYS_SHA256=f38bd19b7f2d22cafa755841e6ce9375b9a2e6d41f7b974e4953d6b084839001
+ARG TARGETARCH
 COPY scripts/check-clang-format-version.sh /usr/local/bin/check-clang-format-version
 WORKDIR /tmp/llvm
 RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) llvm_platform=X64; llvm_sha256=df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384 ;; \
+      arm64) llvm_platform=ARM64; llvm_sha256=805efad2bb91cb4967fa569e0881d10c0f69c04461cf671cccbae19f547acc34 ;; \
+      *) echo "unsupported LLVM analysis target architecture: ${TARGETARCH}" >&2; exit 64 ;; \
+    esac; \
     curl --fail --location --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz \
-      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"; \
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-${llvm_platform}.tar.xz"; \
     curl --fail --location --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz.sig \
-      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz.sig"; \
-    echo "${LLVM_SHA256}  llvm.tar.xz" | sha256sum --check -; \
+      "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-${llvm_platform}.tar.xz.sig"; \
+    echo "${llvm_sha256}  llvm.tar.xz" | sha256sum --check -; \
     curl --fail --location --proto '=https' --tlsv1.2 \
       -o signer.asc "https://releases.llvm.org/release-keys.asc"; \
     echo "${LLVM_RELEASE_KEYS_SHA256}  signer.asc" | sha256sum --check -; \
@@ -110,7 +121,7 @@ ARG SOURCE_REVISION=unknown
 COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
 RUN printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
  && ldconfig \
- && ldconfig -p | grep -F 'libstdc++.so.6 (libc6,x86-64) => /opt/gcc-16.1/lib64/libstdc++.so.6'
+ && ldconfig -p | grep -F 'libstdc++.so.6' | grep -F '=> /opt/gcc-16.1/lib64/libstdc++.so.6'
 ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/gcc-16.1/bin/gcc \
     CXX=/opt/gcc-16.1/bin/g++

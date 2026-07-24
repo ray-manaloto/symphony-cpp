@@ -50,6 +50,8 @@ jobs:
           ccache --zero-stats
       - name: Enforce dependency-first policy
         run: node scripts/check-dependency-policy.mjs
+      - name: Validate native toolchain platform selection
+        run: ./scripts/test-toolchain-platform-contract.sh
       - name: Validate contained OpenSymphony launcher
         run: ./scripts/test-opensymphony-container.sh
       - name: Bootstrap pinned vcpkg
