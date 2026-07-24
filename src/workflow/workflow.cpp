@@ -9,6 +9,7 @@
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <glaze/yaml.hpp>
@@ -158,6 +159,13 @@ std::uint64_t unsigned_value(const std::string& text, const std::string_view key
   return result;
 }
 
+std::uint32_t uint32_value(const std::uint64_t value, const std::string_view key) {
+  if (!std::in_range<std::uint32_t>(value)) {
+    throw std::runtime_error(std::string{key} + " exceeds the supported range");
+  }
+  return static_cast<std::uint32_t>(value);
+}
+
 std::string normalized_state(std::string value) {
   value = trim(std::move(value));
   std::ranges::transform(value, value.begin(), [](const unsigned char character) {
@@ -255,10 +263,10 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path,
   if (raw.agent) {
     if (raw.agent->max_concurrent_agents) {
       document.config.agent.max_concurrent_agents =
-          static_cast<std::uint32_t>(*raw.agent->max_concurrent_agents);
+          uint32_value(*raw.agent->max_concurrent_agents, "agent.max_concurrent_agents");
     }
     if (raw.agent->max_turns) {
-      document.config.agent.max_turns = static_cast<std::uint32_t>(*raw.agent->max_turns);
+      document.config.agent.max_turns = uint32_value(*raw.agent->max_turns, "agent.max_turns");
     }
     if (raw.agent->max_retry_backoff_ms) {
       document.config.agent.max_retry_backoff =
@@ -278,7 +286,8 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path,
         }
         if (limit && *limit > 0) {
           document.config.agent.max_concurrent_agents_by_state.emplace(
-              normalized_state(state), static_cast<std::uint32_t>(*limit));
+              normalized_state(state),
+              uint32_value(*limit, "agent.max_concurrent_agents_by_state"));
         }
       }
     }

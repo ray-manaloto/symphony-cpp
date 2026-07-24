@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <map>
 
 #include <ut/ut.hpp>
@@ -93,6 +94,38 @@ static ut::suite workflow_tests = [] {
     ut::expect(document.config.agent.max_concurrent_agents_by_state.at("in progress") == 2U);
     ut::expect(!document.config.agent.max_concurrent_agents_by_state.contains("bad"));
     symphony::workflow::validate_for_dispatch(document.config, {"fake"});
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow rejects agent limits that exceed domain width") = [] {
+    FakeEnvironment env;
+    constexpr auto too_large =
+        static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1;
+    for (const auto& front_matter : {
+             "agent:\n  max_concurrent_agents: " + std::to_string(too_large),
+             "agent:\n  max_turns: " + std::to_string(too_large),
+             "agent:\n  max_concurrent_agents_by_state:\n    Todo: " +
+                 std::to_string(too_large),
+         }) {
+      const auto path = temp_workflow("---\n" + front_matter + "\n---\nprompt\n");
+      ut::expect(ut::throws(
+          [&] { static_cast<void>(symphony::workflow::WorkflowLoader{}.load(path, env)); }));
+      std::filesystem::remove(path);
+    }
+  };
+
+  ut::test("workflow accepts the upper agent limit domain bound") = [] {
+    FakeEnvironment env;
+    constexpr auto maximum = std::numeric_limits<std::uint32_t>::max();
+    const auto path =
+        temp_workflow("---\nagent:\n  max_concurrent_agents: " + std::to_string(maximum) +
+                      "\n  max_turns: " + std::to_string(maximum) +
+                      "\n  max_concurrent_agents_by_state:\n    Todo: " +
+                      std::to_string(maximum) + "\n---\nprompt\n");
+    const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(document.config.agent.max_concurrent_agents == maximum);
+    ut::expect(document.config.agent.max_turns == maximum);
+    ut::expect(document.config.agent.max_concurrent_agents_by_state.at("todo") == maximum);
     std::filesystem::remove(path);
   };
 
