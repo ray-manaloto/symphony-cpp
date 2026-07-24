@@ -11,22 +11,23 @@
 
 namespace symphony::domain {
 
-enum class ContextState { fresh, active, corrective_continuation, stalled_no_progress, completed, failed };
+enum class ContextState {
+  fresh,
+  active,
+  corrective_continuation,
+  stalled_no_progress,
+  completed,
+  failed
+};
 enum class ProgressDecision { progressed, corrective_continuation, stalled_no_progress };
 enum class IssueActivity { active, terminal, inactive };
 
 struct Issue {
   Issue() = default;
-  Issue(
-      std::string issue_id,
-      std::string issue_identifier,
-      std::string issue_title,
-      std::string issue_state,
-      std::vector<std::string> issue_labels)
-      : id(std::move(issue_id)),
-        identifier(std::move(issue_identifier)),
-        title(std::move(issue_title)),
-        state(std::move(issue_state)),
+  Issue(std::string issue_id, std::string issue_identifier, std::string issue_title,
+        std::string issue_state, std::vector<std::string> issue_labels)
+      : id(std::move(issue_id)), identifier(std::move(issue_identifier)),
+        title(std::move(issue_title)), state(std::move(issue_state)),
         labels(std::move(issue_labels)) {}
 
   std::string id;
@@ -80,11 +81,10 @@ struct RetryState {
 };
 
 [[nodiscard]] ProgressFingerprint fingerprint(const ProgressSnapshot& snapshot);
-[[nodiscard]] ProgressDecision observe_progress(Attempt& attempt, const ProgressFingerprint& current);
-[[nodiscard]] std::chrono::milliseconds retry_delay(
-    std::uint32_t ordinal,
-    std::chrono::milliseconds base,
-    std::chrono::milliseconds cap);
+[[nodiscard]] ProgressDecision observe_progress(Attempt& attempt,
+                                                const ProgressFingerprint& current);
+[[nodiscard]] std::chrono::milliseconds
+retry_delay(std::uint32_t ordinal, std::chrono::milliseconds base, std::chrono::milliseconds cap);
 [[nodiscard]] std::string_view to_string(ContextState state) noexcept;
 
-}  // namespace symphony::domain
+} // namespace symphony::domain

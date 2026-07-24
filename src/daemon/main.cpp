@@ -1,6 +1,6 @@
-#include <filesystem>
 #include <atomic>
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <thread>
@@ -17,9 +17,12 @@
 namespace {
 std::atomic_bool stop_requested{false};
 
-void stop_handler(int) { stop_requested.store(true); }
+void stop_handler(int) {
+  stop_requested.store(true);
+}
 
-symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::WorkflowConfig& workflow) {
+symphony::scheduler::SchedulerConfig
+scheduler_config(const symphony::workflow::WorkflowConfig& workflow) {
   symphony::scheduler::SchedulerConfig config;
   config.active_states = workflow.tracker.active_states;
   config.terminal_states = workflow.tracker.terminal_states;
@@ -29,12 +32,9 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
   config.model = workflow.codex.model;
   config.reasoning_effort = workflow.codex.reasoning_effort;
   config.escalation_model = workflow.codex.escalation_model;
-  config.escalation_reasoning_effort =
-      workflow.codex.escalation_reasoning_effort;
-  config.repeated_failure_reasoning_effort =
-      workflow.codex.repeated_failure_reasoning_effort;
-  config.context_rollover_percent =
-      workflow.codex.context_rollover_percent;
+  config.escalation_reasoning_effort = workflow.codex.escalation_reasoning_effort;
+  config.repeated_failure_reasoning_effort = workflow.codex.repeated_failure_reasoning_effort;
+  config.context_rollover_percent = workflow.codex.context_rollover_percent;
   for (const auto& [state, limit] : workflow.agent.max_concurrent_agents_by_state) {
     config.max_concurrent_by_state.emplace(state, limit);
   }
@@ -47,8 +47,7 @@ symphony::scheduler::SchedulerConfig scheduler_config(const symphony::workflow::
   return config;
 }
 
-symphony::codex::AppServerPolicy codex_policy(
-    const symphony::workflow::WorkflowConfig& workflow) {
+symphony::codex::AppServerPolicy codex_policy(const symphony::workflow::WorkflowConfig& workflow) {
   symphony::codex::AppServerPolicy policy;
   policy.approval_policy = workflow.codex.approval_policy;
   policy.thread_sandbox = workflow.codex.thread_sandbox;
@@ -57,7 +56,7 @@ symphony::codex::AppServerPolicy codex_policy(
   policy.reasoning_effort = workflow.codex.reasoning_effort;
   return policy;
 }
-}  // namespace
+} // namespace
 
 int main(int argc, char** argv) {
   try {
@@ -75,19 +74,15 @@ int main(int argc, char** argv) {
     symphony::tracker::FakeTracker tracker;
     symphony::workspace::FixtureWorkspaceExecutor workspaces(workflow.config.workspace.root);
     symphony::codex::CodexAppServerRuntime runtime(
-        workflow.config.codex.command,
-        workflow.config.codex.read_timeout,
-        workflow.config.codex.stall_timeout,
-        workflow.config.codex.turn_timeout,
-        codex_policy(workflow.config),
-        symphony::tracker::all_tracker_secret_environment_names());
+        workflow.config.codex.command, workflow.config.codex.read_timeout,
+        workflow.config.codex.stall_timeout, workflow.config.codex.turn_timeout,
+        codex_policy(workflow.config), symphony::tracker::all_tracker_secret_environment_names());
     symphony::observability::SpdlogEventStore events;
     symphony::scheduler::SystemClock clock;
     auto config = scheduler_config(workflow.config);
-    symphony::execution::StdexecWorkerExecutor executor(
-        config.max_concurrent);
-    symphony::scheduler::Scheduler scheduler(
-        config, tracker, workspaces, runtime, executor, events, clock);
+    symphony::execution::StdexecWorkerExecutor executor(config.max_concurrent);
+    symphony::scheduler::Scheduler scheduler(config, tracker, workspaces, runtime, executor, events,
+                                             clock);
     scheduler.startup_cleanup();
     symphony::workflow::WorkflowWatcher watcher;
     if (const auto initial = watcher.reload_if_changed(path, environment)) watcher.accept(*initial);
@@ -97,24 +92,20 @@ int main(int argc, char** argv) {
       try {
         if (auto changed = watcher.reload_if_changed(path, environment)) {
           symphony::workflow::validate_for_dispatch(changed->config, {"fake", "github", "linear"});
-          const auto next_scheduler_config =
-              scheduler_config(changed->config);
+          const auto next_scheduler_config = scheduler_config(changed->config);
           if (next_scheduler_config.max_concurrent > executor.capacity()) {
-            throw std::runtime_error(
-                "max_concurrent increase requires daemon restart");
+            throw std::runtime_error("max_concurrent increase requires daemon restart");
           }
           if (changed->config.workspace.root != workflow.config.workspace.root) {
             if (!scheduler.runs().empty()) {
               throw std::runtime_error("workspace.root reload deferred while issue runs exist");
             }
-            workspaces = symphony::workspace::FixtureWorkspaceExecutor(changed->config.workspace.root);
+            workspaces =
+                symphony::workspace::FixtureWorkspaceExecutor(changed->config.workspace.root);
           }
-          runtime.reconfigure(
-              changed->config.codex.command,
-              changed->config.codex.read_timeout,
-              changed->config.codex.stall_timeout,
-              changed->config.codex.turn_timeout,
-              codex_policy(changed->config));
+          runtime.reconfigure(changed->config.codex.command, changed->config.codex.read_timeout,
+                              changed->config.codex.stall_timeout,
+                              changed->config.codex.turn_timeout, codex_policy(changed->config));
           scheduler.reconfigure(next_scheduler_config);
           watcher.accept(*changed);
           workflow = std::move(*changed);

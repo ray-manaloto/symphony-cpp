@@ -13,8 +13,7 @@
 
 namespace symphony::meta {
 
-template <typename T>
-[[nodiscard]] std::string reflected_json(const T &object) {
+template <typename T> [[nodiscard]] std::string reflected_json(const T& object) {
   auto result = glz::write_json(object);
   if (!result) {
     throw std::runtime_error("Glaze could not serialize reflected object: " +

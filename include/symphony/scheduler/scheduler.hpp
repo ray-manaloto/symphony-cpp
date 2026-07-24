@@ -18,23 +18,23 @@
 namespace symphony::scheduler {
 
 class Clock {
- public:
+public:
   using time_point = std::chrono::steady_clock::time_point;
   virtual ~Clock() = default;
   [[nodiscard]] virtual time_point now() const = 0;
 };
 
 class FakeClock final : public Clock {
- public:
+public:
   [[nodiscard]] time_point now() const override;
   void advance(std::chrono::milliseconds delta);
 
- private:
+private:
   time_point now_{};
 };
 
 class SystemClock final : public Clock {
- public:
+public:
   [[nodiscard]] time_point now() const override;
 };
 
@@ -82,15 +82,10 @@ struct RunState {
 };
 
 class Scheduler {
- public:
-  Scheduler(
-      SchedulerConfig config,
-      tracker::IssueTracker& tracker,
-      workspace::WorkspaceExecutor& workspaces,
-      codex::AgentRuntime& runtime,
-      execution::WorkerExecutor& executor,
-      observability::EventStore& events,
-      Clock& clock);
+public:
+  Scheduler(SchedulerConfig config, tracker::IssueTracker& tracker,
+            workspace::WorkspaceExecutor& workspaces, codex::AgentRuntime& runtime,
+            execution::WorkerExecutor& executor, observability::EventStore& events, Clock& clock);
   ~Scheduler();
 
   void tick(std::string_view prompt_template);
@@ -102,19 +97,14 @@ class Scheduler {
   [[nodiscard]] std::uint64_t codex_compactions() const noexcept;
   [[nodiscard]] const std::optional<codex::RateLimits>& latest_rate_limits() const noexcept;
 
- private:
+private:
   void dispatch(const domain::Issue& issue, std::string_view prompt_template);
   void execute(RunState& run, std::string_view prompt_template);
   void drain_completions();
-  void apply_completion(
-      RunState& run,
-      execution::WorkerOutcome outcome);
+  void apply_completion(RunState& run, execution::WorkerOutcome outcome);
   void remove_workspace(RunState& run);
-  void queue_retry(
-      RunState& run,
-      std::uint32_t attempt,
-      std::chrono::milliseconds delay,
-      std::optional<std::string> error);
+  void queue_retry(RunState& run, std::uint32_t attempt, std::chrono::milliseconds delay,
+                   std::optional<std::string> error);
   [[nodiscard]] bool active_state(std::string_view state) const;
   [[nodiscard]] bool terminal_state(std::string_view state) const;
   [[nodiscard]] bool routable(const domain::Issue& issue) const;
@@ -137,4 +127,4 @@ class Scheduler {
   mutable std::mutex tracker_mutex_;
 };
 
-}  // namespace symphony::scheduler
+} // namespace symphony::scheduler

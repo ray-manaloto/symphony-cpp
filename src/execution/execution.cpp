@@ -2,8 +2,8 @@
 
 #include <condition_variable>
 #include <exception>
-#include <map>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
@@ -34,14 +34,15 @@ WorkerOutcome invoke(WorkerTask& task, const std::stop_token stop_token) noexcep
     return outcome;
   }
 }
-}  // namespace
+} // namespace
 
 void InlineWorkerExecutor::submit(std::string key, WorkerTask task) {
-  ready_.push_back(
-      WorkerCompletion{std::move(key), invoke(task, std::stop_token{})});
+  ready_.push_back(WorkerCompletion{std::move(key), invoke(task, std::stop_token{})});
 }
 
-bool InlineWorkerExecutor::request_stop(std::string_view) { return false; }
+bool InlineWorkerExecutor::request_stop(std::string_view) {
+  return false;
+}
 
 std::vector<WorkerCompletion> InlineWorkerExecutor::take_ready() {
   return std::exchange(ready_, std::vector<WorkerCompletion>{});
@@ -97,8 +98,7 @@ void StdexecTaskExecutor::submit(std::string key, ExecutionTask task) {
   std::stop_token stop_token;
   {
     const std::scoped_lock lock(impl_->mutex);
-    auto [position, inserted] =
-        impl_->stop_sources.emplace(key, std::stop_source{});
+    auto [position, inserted] = impl_->stop_sources.emplace(key, std::stop_source{});
     if (!inserted) {
       throw std::invalid_argument("execution key is already active");
     }
@@ -108,13 +108,11 @@ void StdexecTaskExecutor::submit(std::string key, ExecutionTask task) {
   try {
     auto sender = stdexec::starts_on(
         impl_->pool.get_scheduler(),
-        stdexec::just() |
-            stdexec::then([impl = impl_.get(), key = std::move(key),
-                           task = std::move(task),
-                           stop_token]() mutable noexcept {
-              task(stop_token);
-              impl->finish(key);
-            }));
+        stdexec::just() | stdexec::then([impl = impl_.get(), key = std::move(key),
+                                         task = std::move(task), stop_token]() mutable noexcept {
+          task(stop_token);
+          impl->finish(key);
+        }));
     exec::start_detached(std::move(sender));
   } catch (...) {
     impl_->finish(registered_key);
@@ -157,12 +155,10 @@ StdexecWorkerExecutor::~StdexecWorkerExecutor() {
 
 void StdexecWorkerExecutor::submit(std::string key, WorkerTask task) {
   const auto task_key = key;
-  impl_->tasks.submit(
-      task_key,
-      [impl = impl_.get(), key = std::move(key), task = std::move(task)](
-          const std::stop_token stop_token) mutable noexcept {
-        impl->complete(std::move(key), invoke(task, stop_token));
-      });
+  impl_->tasks.submit(task_key, [impl = impl_.get(), key = std::move(key), task = std::move(task)](
+                                    const std::stop_token stop_token) mutable noexcept {
+    impl->complete(std::move(key), invoke(task, stop_token));
+  });
 }
 
 bool StdexecWorkerExecutor::request_stop(const std::string_view key) {
@@ -178,6 +174,8 @@ std::size_t StdexecWorkerExecutor::capacity() const noexcept {
   return impl_->tasks.capacity();
 }
 
-void StdexecWorkerExecutor::wait() { impl_->tasks.wait(); }
+void StdexecWorkerExecutor::wait() {
+  impl_->tasks.wait();
+}
 
-}  // namespace symphony::execution
+} // namespace symphony::execution

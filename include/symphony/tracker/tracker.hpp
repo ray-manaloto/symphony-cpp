@@ -57,8 +57,7 @@ struct IssuePage {
 using IssueResult = std::expected<domain::Issue, TrackerError>;
 using IssuePageResult = std::expected<IssuePage, TrackerError>;
 using IssueListResult = std::expected<std::vector<domain::Issue>, TrackerError>;
-using PageFetcher =
-    std::function<IssuePageResult(const std::optional<std::string>& cursor)>;
+using PageFetcher = std::function<IssuePageResult(const std::optional<std::string>& cursor)>;
 
 struct AdapterProfile {
   std::string kind;
@@ -69,53 +68,52 @@ struct AdapterProfile {
 };
 
 [[nodiscard]] IssueResult normalize_issue(const IssueRecord& record);
-[[nodiscard]] IssueListResult collect_issue_pages(
-    const PageFetcher& fetch_page,
-    std::size_t max_pages = 1000);
+[[nodiscard]] IssueListResult collect_issue_pages(const PageFetcher& fetch_page,
+                                                  std::size_t max_pages = 1000);
 [[nodiscard]] std::optional<AdapterProfile> adapter_profile(std::string_view kind);
 [[nodiscard]] std::vector<std::string> all_tracker_secret_environment_names();
 [[nodiscard]] TrackerError map_http_error(int status_code);
 
 class IssueTracker {
- public:
+public:
   virtual ~IssueTracker() = default;
-  [[nodiscard]] virtual std::vector<domain::Issue> list_by_states(
-      const std::vector<std::string>& states) = 0;
+  [[nodiscard]] virtual std::vector<domain::Issue>
+  list_by_states(const std::vector<std::string>& states) = 0;
   [[nodiscard]] virtual std::optional<domain::Issue> refresh_by_id(std::string_view id) = 0;
 };
 
 class FakeTracker final : public IssueTracker {
- public:
+public:
   void upsert(domain::Issue issue);
-  [[nodiscard]] std::vector<domain::Issue> list_by_states(
-      const std::vector<std::string>& states) override;
+  [[nodiscard]] std::vector<domain::Issue>
+  list_by_states(const std::vector<std::string>& states) override;
   [[nodiscard]] std::optional<domain::Issue> refresh_by_id(std::string_view id) override;
 
- private:
+private:
   std::unordered_map<std::string, domain::Issue> issues_;
 };
 
 class GitHubIssuesAdapter final : public IssueTracker {
- public:
+public:
   explicit GitHubIssuesAdapter(bool mutation_enabled = false);
-  [[nodiscard]] std::vector<domain::Issue> list_by_states(
-      const std::vector<std::string>& states) override;
+  [[nodiscard]] std::vector<domain::Issue>
+  list_by_states(const std::vector<std::string>& states) override;
   [[nodiscard]] std::optional<domain::Issue> refresh_by_id(std::string_view id) override;
   [[nodiscard]] bool mutation_enabled() const noexcept;
 
- private:
+private:
   bool mutation_enabled_;
 };
 
 class LinearAdapter final : public IssueTracker {
- public:
+public:
   explicit LinearAdapter(bool mutation_enabled = false);
-  [[nodiscard]] std::vector<domain::Issue> list_by_states(
-      const std::vector<std::string>& states) override;
+  [[nodiscard]] std::vector<domain::Issue>
+  list_by_states(const std::vector<std::string>& states) override;
   [[nodiscard]] std::optional<domain::Issue> refresh_by_id(std::string_view id) override;
 
- private:
+private:
   bool mutation_enabled_;
 };
 
-}  // namespace symphony::tracker
+} // namespace symphony::tracker

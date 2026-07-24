@@ -12,11 +12,10 @@
 namespace symphony::workspace {
 namespace {
 bool is_ascii_alphanumeric(const unsigned char value) {
-  return (value >= 'A' && value <= 'Z') ||
-         (value >= 'a' && value <= 'z') ||
+  return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
          (value >= '0' && value <= '9');
 }
-}  // namespace
+} // namespace
 
 std::string workspace_leaf(const domain::Issue& issue) {
   if (issue.identifier.empty()) {
@@ -25,8 +24,8 @@ std::string workspace_leaf(const domain::Issue& issue) {
   std::string safe;
   bool changed = false;
   for (const unsigned char character : issue.identifier) {
-    if (is_ascii_alphanumeric(character) || character == '.' ||
-        character == '-' || character == '_') {
+    if (is_ascii_alphanumeric(character) || character == '.' || character == '-' ||
+        character == '_') {
       safe += static_cast<char>(character);
     } else {
       safe += '_';
@@ -38,8 +37,8 @@ std::string workspace_leaf(const domain::Issue& issue) {
     changed = true;
   }
   if (!changed) return safe;
-  const auto digest = picosha2::hash256_hex_string(
-      issue.identifier.begin(), issue.identifier.end());
+  const auto digest =
+      picosha2::hash256_hex_string(issue.identifier.begin(), issue.identifier.end());
   return safe + '-' + digest.substr(0, 32);
 }
 
@@ -60,7 +59,8 @@ std::filesystem::path FixtureWorkspaceExecutor::contained(const std::string_view
 
 std::optional<Workspace> FixtureWorkspaceExecutor::find(const domain::Issue& issue) const {
   const auto path = contained(workspace_leaf(issue));
-  if (!std::filesystem::is_directory(path) || std::filesystem::is_symlink(path)) return std::nullopt;
+  if (!std::filesystem::is_directory(path) || std::filesystem::is_symlink(path))
+    return std::nullopt;
   return Workspace{path, issue.id, false};
 }
 
@@ -72,30 +72,34 @@ Workspace FixtureWorkspaceExecutor::create(const domain::Issue& issue) {
   return {path, issue.id, newly_created};
 }
 
-void FixtureWorkspaceExecutor::run_hook(
-    const Workspace& workspace,
-    const std::string_view hook_name,
-    const std::vector<std::string>& command,
-    const std::chrono::milliseconds timeout) {
+void FixtureWorkspaceExecutor::run_hook(const Workspace& workspace,
+                                        const std::string_view hook_name,
+                                        const std::vector<std::string>& command,
+                                        const std::chrono::milliseconds timeout) {
   const auto verified = contained(workspace.path.filename().native());
-  if (verified != workspace.path.lexically_normal()) throw std::runtime_error("uncontained hook workspace");
-  if (std::filesystem::is_symlink(verified) ||
-      std::filesystem::canonical(verified) != verified) {
+  if (verified != workspace.path.lexically_normal())
+    throw std::runtime_error("uncontained hook workspace");
+  if (std::filesystem::is_symlink(verified) || std::filesystem::canonical(verified) != verified) {
     throw std::runtime_error("hook workspace is not canonical and contained");
   }
-  if (timeout <= std::chrono::milliseconds::zero()) throw std::runtime_error("hook timeout must be positive");
+  if (timeout <= std::chrono::milliseconds::zero())
+    throw std::runtime_error("hook timeout must be positive");
   if (command.empty()) return;
   hook_history_.push_back(std::string{hook_name});
 }
 
 void FixtureWorkspaceExecutor::remove(const Workspace& workspace) {
   const auto verified = contained(workspace.path.filename().native());
-  if (verified != workspace.path.lexically_normal()) throw std::runtime_error("uncontained workspace removal");
-  if (std::filesystem::is_symlink(verified)) throw std::runtime_error("refusing symlink workspace removal");
+  if (verified != workspace.path.lexically_normal())
+    throw std::runtime_error("uncontained workspace removal");
+  if (std::filesystem::is_symlink(verified))
+    throw std::runtime_error("refusing symlink workspace removal");
   std::filesystem::remove_all(verified);
 }
 
-const std::vector<std::string>& FixtureWorkspaceExecutor::hook_history() const noexcept { return hook_history_; }
+const std::vector<std::string>& FixtureWorkspaceExecutor::hook_history() const noexcept {
+  return hook_history_;
+}
 
 LocalWorkspaceExecutor::LocalWorkspaceExecutor(std::filesystem::path root)
     : root_(std::filesystem::absolute(std::move(root)).lexically_normal()) {
@@ -103,8 +107,10 @@ LocalWorkspaceExecutor::LocalWorkspaceExecutor(std::filesystem::path root)
   root_ = std::filesystem::canonical(root_);
 }
 
-std::filesystem::path LocalWorkspaceExecutor::contained(const std::filesystem::path& candidate) const {
-  const auto absolute = candidate.is_absolute() ? candidate.lexically_normal() : (root_ / candidate).lexically_normal();
+std::filesystem::path
+LocalWorkspaceExecutor::contained(const std::filesystem::path& candidate) const {
+  const auto absolute = candidate.is_absolute() ? candidate.lexically_normal()
+                                                : (root_ / candidate).lexically_normal();
   const auto relative = absolute.lexically_relative(root_);
   if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") {
     throw std::runtime_error("workspace path escapes configured root");
@@ -114,7 +120,8 @@ std::filesystem::path LocalWorkspaceExecutor::contained(const std::filesystem::p
 
 std::optional<Workspace> LocalWorkspaceExecutor::find(const domain::Issue& issue) const {
   const auto path = contained(workspace_leaf(issue));
-  if (!std::filesystem::is_directory(path) || std::filesystem::is_symlink(path)) return std::nullopt;
+  if (!std::filesystem::is_directory(path) || std::filesystem::is_symlink(path))
+    return std::nullopt;
   if (std::filesystem::canonical(path) != path) return std::nullopt;
   return Workspace{path, issue.id, false};
 }
@@ -124,21 +131,18 @@ Workspace LocalWorkspaceExecutor::create(const domain::Issue& issue) {
   if (std::filesystem::is_symlink(path)) throw std::runtime_error("workspace path is a symlink");
   const auto newly_created = !std::filesystem::exists(path);
   std::filesystem::create_directories(path);
-  std::filesystem::permissions(
-      path,
-      std::filesystem::perms::owner_all,
-      std::filesystem::perm_options::replace);
+  std::filesystem::permissions(path, std::filesystem::perms::owner_all,
+                               std::filesystem::perm_options::replace);
   return {path, issue.id, newly_created};
 }
 
-void LocalWorkspaceExecutor::run_hook(
-    const Workspace& workspace,
-    const std::string_view hook_name,
-    const std::vector<std::string>& command,
-    const std::chrono::milliseconds timeout) {
+void LocalWorkspaceExecutor::run_hook(const Workspace& workspace, const std::string_view hook_name,
+                                      const std::vector<std::string>& command,
+                                      const std::chrono::milliseconds timeout) {
   static_cast<void>(hook_name);
   if (command.empty()) return;
-  if (timeout <= std::chrono::milliseconds::zero()) throw std::runtime_error("hook timeout must be positive");
+  if (timeout <= std::chrono::milliseconds::zero())
+    throw std::runtime_error("hook timeout must be positive");
   const auto path = contained(workspace.path);
   if (std::filesystem::is_symlink(path) || std::filesystem::canonical(path) != path) {
     throw std::runtime_error("hook workspace is not canonical and contained");
@@ -173,10 +177,11 @@ void LocalWorkspaceExecutor::run_hook(
 
 void LocalWorkspaceExecutor::remove(const Workspace& workspace) {
   const auto path = contained(workspace.path);
-  if (std::filesystem::is_symlink(path)) throw std::runtime_error("refusing symlink workspace removal");
+  if (std::filesystem::is_symlink(path))
+    throw std::runtime_error("refusing symlink workspace removal");
   if (std::filesystem::exists(path) && std::filesystem::canonical(path) != path) {
     throw std::runtime_error("refusing non-canonical workspace removal");
   }
   std::filesystem::remove_all(path);
 }
-}  // namespace symphony::workspace
+} // namespace symphony::workspace

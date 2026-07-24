@@ -2,8 +2,8 @@
 
 #include <chrono>
 #include <filesystem>
-#include <optional>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -77,43 +77,40 @@ struct WorkflowDocument {
 };
 
 class Environment {
- public:
+public:
   virtual ~Environment() = default;
   [[nodiscard]] virtual std::optional<std::string> get(std::string_view name) const = 0;
 };
 
 class ProcessEnvironment final : public Environment {
- public:
+public:
   [[nodiscard]] std::optional<std::string> get(std::string_view name) const override;
 };
 
 class WorkflowLoader {
- public:
-  [[nodiscard]] static std::filesystem::path resolve_path(
-      const std::optional<std::filesystem::path>& explicit_path,
-      const std::filesystem::path& cwd);
-  [[nodiscard]] WorkflowDocument load(const std::filesystem::path& path, const Environment& env) const;
+public:
+  [[nodiscard]] static std::filesystem::path
+  resolve_path(const std::optional<std::filesystem::path>& explicit_path,
+               const std::filesystem::path& cwd);
+  [[nodiscard]] WorkflowDocument load(const std::filesystem::path& path,
+                                      const Environment& env) const;
 };
 
 class WorkflowWatcher {
- public:
+public:
   explicit WorkflowWatcher(WorkflowLoader loader = {});
-  [[nodiscard]] std::optional<WorkflowDocument> reload_if_changed(
-      const std::filesystem::path& path,
-      const Environment& env);
+  [[nodiscard]] std::optional<WorkflowDocument> reload_if_changed(const std::filesystem::path& path,
+                                                                  const Environment& env);
   void accept(const WorkflowDocument& document);
 
- private:
+private:
   WorkflowLoader loader_;
   std::string last_fingerprint_;
 };
 
-[[nodiscard]] std::string render_prompt(
-    std::string_view prompt,
-    const domain::Issue& issue,
-    const domain::Attempt& attempt);
-void validate_for_dispatch(
-    const WorkflowConfig& config,
-    const std::vector<std::string>& supported_tracker_kinds);
+[[nodiscard]] std::string render_prompt(std::string_view prompt, const domain::Issue& issue,
+                                        const domain::Attempt& attempt);
+void validate_for_dispatch(const WorkflowConfig& config,
+                           const std::vector<std::string>& supported_tracker_kinds);
 
-}  // namespace symphony::workflow
+} // namespace symphony::workflow

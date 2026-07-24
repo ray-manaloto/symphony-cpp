@@ -16,7 +16,7 @@ void hash_bytes(std::uint64_t& hash, std::string_view value) {
   hash ^= 0xffU;
   hash *= prime;
 }
-}  // namespace
+} // namespace
 
 ProgressFingerprint fingerprint(const ProgressSnapshot& snapshot) {
   auto paths = snapshot.changed_paths;
@@ -52,10 +52,9 @@ ProgressDecision observe_progress(Attempt& attempt, const ProgressFingerprint& c
   return ProgressDecision::stalled_no_progress;
 }
 
-std::chrono::milliseconds retry_delay(
-    const std::uint32_t ordinal,
-    const std::chrono::milliseconds base,
-    const std::chrono::milliseconds cap) {
+std::chrono::milliseconds retry_delay(const std::uint32_t ordinal,
+                                      const std::chrono::milliseconds base,
+                                      const std::chrono::milliseconds cap) {
   if (base <= std::chrono::milliseconds::zero() || cap <= std::chrono::milliseconds::zero()) {
     return std::chrono::milliseconds::zero();
   }
@@ -69,13 +68,19 @@ std::chrono::milliseconds retry_delay(
 
 std::string_view to_string(const ContextState state) noexcept {
   switch (state) {
-    case ContextState::fresh: return "fresh";
-    case ContextState::active: return "active";
-    case ContextState::corrective_continuation: return "corrective_continuation";
-    case ContextState::stalled_no_progress: return "stalled_no_progress";
-    case ContextState::completed: return "completed";
-    case ContextState::failed: return "failed";
+  case ContextState::fresh:
+    return "fresh";
+  case ContextState::active:
+    return "active";
+  case ContextState::corrective_continuation:
+    return "corrective_continuation";
+  case ContextState::stalled_no_progress:
+    return "stalled_no_progress";
+  case ContextState::completed:
+    return "completed";
+  case ContextState::failed:
+    return "failed";
   }
   return "unknown";
 }
-}  // namespace symphony::domain
+} // namespace symphony::domain

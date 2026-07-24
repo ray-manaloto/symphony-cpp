@@ -5,9 +5,8 @@
 
 namespace symphony::persistence {
 
-DurableEventStore::DurableEventStore(
-    observability::EventStore& downstream,
-    EventRepository& repository)
+DurableEventStore::DurableEventStore(observability::EventStore& downstream,
+                                     EventRepository& repository)
     : downstream_(downstream), repository_(repository) {}
 
 DurableEventStore::~DurableEventStore() {
@@ -23,22 +22,17 @@ void DurableEventStore::append(observability::Event event) {
   auto safe = observability::redact(std::move(event));
   downstream_.append(safe);
 
-  const auto key =
-      "durable-event-" + std::to_string(next_operation_++);
-  auto submitted = repository_.submit_append(
-      key,
-      {
-          .schema_version = 1,
-          .type = safe.type,
-          .issue_id = safe.issue_id,
-          .payload = observability::to_json(safe),
-      });
-  if (!submitted)
-    ++persistence_failures_;
+  const auto key = "durable-event-" + std::to_string(next_operation_++);
+  auto submitted = repository_.submit_append(key, {
+                                                      .schema_version = 1,
+                                                      .type = safe.type,
+                                                      .issue_id = safe.issue_id,
+                                                      .payload = observability::to_json(safe),
+                                                  });
+  if (!submitted) ++persistence_failures_;
 }
 
-std::vector<observability::Event>
-DurableEventStore::recent(const std::size_t limit) const {
+std::vector<observability::Event> DurableEventStore::recent(const std::size_t limit) const {
   return downstream_.recent(limit);
 }
 
@@ -53,8 +47,7 @@ std::uint64_t DurableEventStore::persistence_failures() const noexcept {
 
 void DurableEventStore::reap() {
   for (auto& completion : repository_.take_ready_appends()) {
-    if (!completion.result)
-      ++persistence_failures_;
+    if (!completion.result) ++persistence_failures_;
   }
 }
 

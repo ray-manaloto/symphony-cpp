@@ -34,12 +34,9 @@ struct RateLimitWindow {
 
 struct RateLimits {
   RateLimits() = default;
-  RateLimits(
-      std::optional<std::string> id,
-      std::optional<RateLimitWindow> primary_window,
-      std::optional<RateLimitWindow> secondary_window)
-      : limit_id(std::move(id)),
-        primary(std::move(primary_window)),
+  RateLimits(std::optional<std::string> id, std::optional<RateLimitWindow> primary_window,
+             std::optional<RateLimitWindow> secondary_window)
+      : limit_id(std::move(id)), primary(std::move(primary_window)),
         secondary(std::move(secondary_window)) {}
 
   std::optional<std::string> limit_id;
@@ -74,16 +71,11 @@ struct ProcessDiagnostic {
 
 struct RunResult {
   RunResult() = default;
-  RunResult(
-      bool exited_normally,
-      bool was_cancelled,
-      std::optional<domain::ProgressSnapshot> progress_snapshot,
-      std::string session,
-      std::string error_message)
-      : normal_exit(exited_normally),
-        cancelled(was_cancelled),
-        progress(std::move(progress_snapshot)),
-        session_id(std::move(session)),
+  RunResult(bool exited_normally, bool was_cancelled,
+            std::optional<domain::ProgressSnapshot> progress_snapshot, std::string session,
+            std::string error_message)
+      : normal_exit(exited_normally), cancelled(was_cancelled),
+        progress(std::move(progress_snapshot)), session_id(std::move(session)),
         error(std::move(error_message)) {}
 
   bool normal_exit{false};
@@ -110,26 +102,22 @@ struct AppServerPolicy {
 };
 
 class AgentRuntime {
- public:
+public:
   virtual ~AgentRuntime() = default;
-  [[nodiscard]] virtual RunResult run(
-      const RunRequest& request,
-      std::stop_token stop_token = {}) = 0;
+  [[nodiscard]] virtual RunResult run(const RunRequest& request,
+                                      std::stop_token stop_token = {}) = 0;
 };
 
 class FakeAgentRuntime final : public AgentRuntime {
- public:
+public:
   void enqueue(RunResult result);
-  [[nodiscard]] RunResult run(
-      const RunRequest& request,
-      std::stop_token stop_token = {}) override;
+  [[nodiscard]] RunResult run(const RunRequest& request, std::stop_token stop_token = {}) override;
   [[nodiscard]] std::size_t run_count() const;
   [[nodiscard]] std::optional<std::string> last_model() const;
   [[nodiscard]] std::optional<std::string> last_reasoning_effort() const;
-  [[nodiscard]] std::optional<std::uint32_t>
-  last_context_rollover_percent() const;
+  [[nodiscard]] std::optional<std::uint32_t> last_context_rollover_percent() const;
 
- private:
+private:
   mutable std::mutex mutex_;
   std::deque<RunResult> results_;
   std::size_t run_count_{0};
@@ -139,25 +127,19 @@ class FakeAgentRuntime final : public AgentRuntime {
 };
 
 class CodexAppServerRuntime final : public AgentRuntime {
- public:
+public:
   explicit CodexAppServerRuntime(
       std::string command = "codex app-server",
       std::chrono::milliseconds read_timeout = std::chrono::milliseconds{5000},
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds{300000},
       std::chrono::milliseconds turn_timeout = std::chrono::milliseconds{3600000},
-      AppServerPolicy policy = {},
-      std::vector<std::string> excluded_environment_variables = {});
-  [[nodiscard]] RunResult run(
-      const RunRequest& request,
-      std::stop_token stop_token = {}) override;
-  void reconfigure(
-      std::string command,
-      std::chrono::milliseconds read_timeout,
-      std::chrono::milliseconds stall_timeout,
-      std::chrono::milliseconds turn_timeout,
-      AppServerPolicy policy);
+      AppServerPolicy policy = {}, std::vector<std::string> excluded_environment_variables = {});
+  [[nodiscard]] RunResult run(const RunRequest& request, std::stop_token stop_token = {}) override;
+  void reconfigure(std::string command, std::chrono::milliseconds read_timeout,
+                   std::chrono::milliseconds stall_timeout, std::chrono::milliseconds turn_timeout,
+                   AppServerPolicy policy);
 
- private:
+private:
   std::string command_;
   std::chrono::milliseconds read_timeout_;
   std::chrono::milliseconds stall_timeout_;
@@ -168,9 +150,10 @@ class CodexAppServerRuntime final : public AgentRuntime {
 };
 
 class JsonLineCodec {
- public:
+public:
   [[nodiscard]] static std::string frame(std::string_view json);
-  [[nodiscard]] static std::string parse(std::string_view line, std::size_t max_bytes = 1024 * 1024);
+  [[nodiscard]] static std::string parse(std::string_view line,
+                                         std::size_t max_bytes = 1024 * 1024);
 };
 
 enum class ProtocolEvent {
@@ -198,25 +181,22 @@ struct ProtocolUpdate {
 };
 
 class AppServerProtocol {
- public:
+public:
   [[nodiscard]] static std::string initialize_request(std::uint64_t id = 0);
   [[nodiscard]] static std::string initialized_notification();
-  [[nodiscard]] static std::string thread_start_request(
-      std::uint64_t id,
-      const std::filesystem::path& cwd,
-      const AppServerPolicy& policy = {});
-  [[nodiscard]] static std::string turn_start_request(
-      std::uint64_t id,
-      std::string_view thread_id,
-      const std::filesystem::path& cwd,
-      std::string_view prompt,
-      const AppServerPolicy& policy = {});
+  [[nodiscard]] static std::string thread_start_request(std::uint64_t id,
+                                                        const std::filesystem::path& cwd,
+                                                        const AppServerPolicy& policy = {});
+  [[nodiscard]] static std::string turn_start_request(std::uint64_t id, std::string_view thread_id,
+                                                      const std::filesystem::path& cwd,
+                                                      std::string_view prompt,
+                                                      const AppServerPolicy& policy = {});
   [[nodiscard]] static std::string unsupported_tool_response(std::uint64_t id);
   [[nodiscard]] static ProtocolUpdate decode(std::string_view line);
 };
 
 class ProtocolChannel {
- public:
+public:
   enum class ReadStatus { message, timeout, end_of_stream };
   struct ReadResult {
     ReadStatus status{ReadStatus::timeout};
@@ -230,7 +210,7 @@ class ProtocolChannel {
 };
 
 class FakeProtocolChannel final : public ProtocolChannel {
- public:
+public:
   void enqueue(std::string line);
   void close();
   void write(std::string_view frame) override;
@@ -238,23 +218,20 @@ class FakeProtocolChannel final : public ProtocolChannel {
   void request_stop() noexcept override;
   [[nodiscard]] const std::vector<std::string>& writes() const noexcept;
 
- private:
+private:
   std::deque<std::string> reads_;
   std::vector<std::string> writes_;
   bool closed_{false};
 };
 
 class AppServerConversation {
- public:
-  [[nodiscard]] static RunResult run(
-      ProtocolChannel& channel,
-      const RunRequest& request,
-      std::chrono::milliseconds read_timeout,
+public:
+  [[nodiscard]] static RunResult
+  run(ProtocolChannel& channel, const RunRequest& request, std::chrono::milliseconds read_timeout,
       std::size_t max_messages = 10000,
       std::chrono::milliseconds stall_timeout = std::chrono::milliseconds::zero(),
       std::chrono::milliseconds turn_timeout = std::chrono::milliseconds::zero(),
-      const AppServerPolicy& policy = {},
-      std::stop_token stop_token = {});
+      const AppServerPolicy& policy = {}, std::stop_token stop_token = {});
 };
 
-}  // namespace symphony::codex
+} // namespace symphony::codex

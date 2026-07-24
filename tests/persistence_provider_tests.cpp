@@ -15,36 +15,32 @@ namespace {
 
 sqlite3_int64 row_count(sqlite::connection_ref connection) {
   for (const auto& [count] :
-       sqlite::query<std::tuple<sqlite3_int64>>(
-           connection, "SELECT count(*) FROM events")) {
+       sqlite::query<std::tuple<sqlite3_int64>>(connection, "SELECT count(*) FROM events")) {
     return count;
   }
   return -1;
 }
 
-}  // namespace
+} // namespace
 
 static ut::suite persistence_provider_tests = [] {
   ut::test("boost sqlite provides transactional typed fixture access") = [] {
     sqlite::connection connection{sqlite::in_memory};
-    connection.execute(
-        "PRAGMA journal_mode = WAL;"
-        "CREATE TABLE events("
-        "  id INTEGER PRIMARY KEY,"
-        "  payload TEXT NOT NULL"
-        ");");
+    connection.execute("PRAGMA journal_mode = WAL;"
+                       "CREATE TABLE events("
+                       "  id INTEGER PRIMARY KEY,"
+                       "  payload TEXT NOT NULL"
+                       ");");
 
     {
       sqlite::transaction transaction{connection};
-      connection.prepare("INSERT INTO events(payload) VALUES (?1)")
-          .execute({"rolled back"});
+      connection.prepare("INSERT INTO events(payload) VALUES (?1)").execute({"rolled back"});
     }
     ut::expect(row_count(connection) == 0);
 
     {
       sqlite::transaction transaction{connection};
-      connection.prepare("INSERT INTO events(payload) VALUES (?1)")
-          .execute({"committed"});
+      connection.prepare("INSERT INTO events(payload) VALUES (?1)").execute({"committed"});
       transaction.commit();
     }
     ut::expect(row_count(connection) == 1);

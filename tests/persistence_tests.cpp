@@ -24,12 +24,10 @@ namespace {
 class FixtureDatabase {
 public:
   explicit FixtureDatabase(std::string_view name)
-      : path_(
-            std::filesystem::temp_directory_path() /
-            ("symphony-" + std::string{name} + "-" +
-             std::to_string(
-                 std::chrono::steady_clock::now().time_since_epoch().count()) +
-             ".sqlite3")) {}
+      : path_(std::filesystem::temp_directory_path() /
+              ("symphony-" + std::string{name} + "-" +
+               std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+               ".sqlite3")) {}
 
   ~FixtureDatabase() {
     std::error_code ignored;
@@ -38,7 +36,7 @@ public:
     std::filesystem::remove(path_.string() + "-wal", ignored);
   }
 
-  [[nodiscard]] const std::filesystem::path &path() const noexcept {
+  [[nodiscard]] const std::filesystem::path& path() const noexcept {
     return path_;
   }
 
@@ -49,15 +47,12 @@ private:
 } // namespace
 
 static ut::suite persistence_tests = [] {
-  ut::test(
-      "sqlite event repository survives restart with explicit envelopes") = [] {
+  ut::test("sqlite event repository survives restart with explicit envelopes") = [] {
     FixtureDatabase fixture{"restart"};
     {
-      auto opened =
-          symphony::persistence::SqliteEventRepository::open(fixture.path());
+      auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path());
       ut::expect(opened.has_value());
-      if (!opened)
-        return;
+      if (!opened) return;
 
       auto rejected = (*opened)->append({
           .schema_version = 0,
@@ -66,8 +61,7 @@ static ut::suite persistence_tests = [] {
           .payload = "{}",
       });
       ut::expect(!rejected.has_value());
-      if (!rejected)
-        ut::expect(!rejected.error().message.empty());
+      if (!rejected) ut::expect(!rejected.error().message.empty());
 
       auto sequence = (*opened)->append({
           .schema_version = 1,
@@ -76,23 +70,18 @@ static ut::suite persistence_tests = [] {
           .payload = R"({"attempt":1})",
       });
       ut::expect(sequence.has_value());
-      if (sequence)
-        ut::expect(*sequence == 1);
+      if (sequence) ut::expect(*sequence == 1);
     }
 
-    auto reopened =
-        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    auto reopened = symphony::persistence::SqliteEventRepository::open(fixture.path());
     ut::expect(reopened.has_value());
-    if (!reopened)
-      return;
+    if (!reopened) return;
 
     auto events = (*reopened)->load_after(0);
     ut::expect(events.has_value());
-    if (!events)
-      return;
+    if (!events) return;
     ut::expect(events->size() == std::size_t{1});
-    if (events->size() != 1)
-      return;
+    if (events->size() != 1) return;
     ut::expect(events->front().sequence == 1);
     ut::expect(events->front().schema_version == std::uint32_t{1});
     ut::expect(events->front().type == "attempt_started");
@@ -102,11 +91,9 @@ static ut::suite persistence_tests = [] {
 
   ut::test("sqlite event repository serializes concurrent appends") = [] {
     FixtureDatabase fixture{"serialized"};
-    auto opened =
-        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path());
     ut::expect(opened.has_value());
-    if (!opened)
-      return;
+    if (!opened) return;
 
     constexpr std::size_t append_count = 12;
     std::mutex result_mutex;
@@ -142,37 +129,31 @@ static ut::suite persistence_tests = [] {
 
     auto events = (*opened)->load_after(0);
     ut::expect(events.has_value());
-    if (events)
-      ut::expect(events->size() == append_count);
+    if (events) ut::expect(events->size() == append_count);
   };
 
   ut::test("sqlite event repository cancels a queued append while busy") = [] {
     FixtureDatabase fixture{"cancelled"};
-    auto opened =
-        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path());
     ut::expect(opened.has_value());
-    if (!opened)
-      return;
+    if (!opened) return;
 
     boost::sqlite::connection blocker{fixture.path().string()};
     blocker.execute("BEGIN IMMEDIATE");
 
-    auto first_submission = (*opened)->submit_append(
-        "first",
-        {
-            .schema_version = 1,
-            .type = "fixture",
-            .issue_id = "fixture-first",
-            .payload = "{}",
-        });
-    auto cancelled_submission = (*opened)->submit_append(
-        "cancelled",
-        {
-            .schema_version = 1,
-            .type = "fixture",
-            .issue_id = "fixture-cancelled",
-            .payload = "{}",
-        });
+    auto first_submission = (*opened)->submit_append("first", {
+                                                                  .schema_version = 1,
+                                                                  .type = "fixture",
+                                                                  .issue_id = "fixture-first",
+                                                                  .payload = "{}",
+                                                              });
+    auto cancelled_submission =
+        (*opened)->submit_append("cancelled", {
+                                                  .schema_version = 1,
+                                                  .type = "fixture",
+                                                  .issue_id = "fixture-cancelled",
+                                                  .payload = "{}",
+                                              });
     ut::expect(first_submission.has_value());
     ut::expect(cancelled_submission.has_value());
     ut::expect((*opened)->request_stop("cancelled"));
@@ -181,23 +162,17 @@ static ut::suite persistence_tests = [] {
     (*opened)->drain();
     auto completions = (*opened)->take_ready_appends();
     ut::expect(completions.size() == std::size_t{2});
-    const auto first =
-        std::ranges::find_if(completions, [](const auto &completion) {
-          return completion.key == "first";
-        });
-    const auto cancelled =
-        std::ranges::find_if(completions, [](const auto &completion) {
-          return completion.key == "cancelled";
-        });
+    const auto first = std::ranges::find_if(
+        completions, [](const auto& completion) { return completion.key == "first"; });
+    const auto cancelled = std::ranges::find_if(
+        completions, [](const auto& completion) { return completion.key == "cancelled"; });
     ut::expect(first != completions.end());
     ut::expect(cancelled != completions.end());
-    if (first != completions.end())
-      ut::expect(first->result.has_value());
+    if (first != completions.end()) ut::expect(first->result.has_value());
     if (cancelled != completions.end()) {
       ut::expect(!cancelled->result.has_value());
       if (!cancelled->result) {
-        ut::expect(cancelled->result.error().kind ==
-                   symphony::persistence::ErrorKind::cancelled);
+        ut::expect(cancelled->result.error().kind == symphony::persistence::ErrorKind::cancelled);
         ut::expect(cancelled->result.error().code ==
                    std::make_error_code(std::errc::operation_canceled).value());
       }
@@ -207,86 +182,73 @@ static ut::suite persistence_tests = [] {
     ut::expect(events.has_value());
     if (events) {
       ut::expect(events->size() == std::size_t{1});
-      if (events->size() == 1)
-        ut::expect(events->front().issue_id == "fixture-first");
+      if (events->size() == 1) ut::expect(events->front().issue_id == "fixture-first");
     }
   };
 
   ut::test("sqlite event repository rejects work above its queue bound") = [] {
     FixtureDatabase fixture{"bounded"};
-    auto opened = symphony::persistence::SqliteEventRepository::open(
-        fixture.path(), {.max_pending_appends = 1});
+    auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path(),
+                                                                     {.max_pending_appends = 1});
     ut::expect(opened.has_value());
-    if (!opened)
-      return;
+    if (!opened) return;
 
     boost::sqlite::connection blocker{fixture.path().string()};
     blocker.execute("BEGIN IMMEDIATE");
 
-    auto accepted = (*opened)->submit_append(
-        "accepted",
-        {
-            .schema_version = 1,
-            .type = "fixture",
-            .issue_id = "fixture-accepted",
-            .payload = "{}",
-        });
-    auto overloaded = (*opened)->submit_append(
-        "overloaded",
-        {
-            .schema_version = 1,
-            .type = "fixture",
-            .issue_id = "fixture-overloaded",
-            .payload = "{}",
-        });
+    auto accepted = (*opened)->submit_append("accepted", {
+                                                             .schema_version = 1,
+                                                             .type = "fixture",
+                                                             .issue_id = "fixture-accepted",
+                                                             .payload = "{}",
+                                                         });
+    auto overloaded = (*opened)->submit_append("overloaded", {
+                                                                 .schema_version = 1,
+                                                                 .type = "fixture",
+                                                                 .issue_id = "fixture-overloaded",
+                                                                 .payload = "{}",
+                                                             });
 
     ut::expect(accepted.has_value());
     ut::expect(!overloaded.has_value());
     if (!overloaded)
-      ut::expect(overloaded.error().kind ==
-                 symphony::persistence::ErrorKind::overloaded);
+      ut::expect(overloaded.error().kind == symphony::persistence::ErrorKind::overloaded);
 
     blocker.execute("ROLLBACK");
     (*opened)->drain();
     auto completions = (*opened)->take_ready_appends();
     ut::expect(completions.size() == std::size_t{1});
-    if (completions.size() == 1)
-      ut::expect(completions.front().key == "accepted");
+    if (completions.size() == 1) ut::expect(completions.front().key == "accepted");
 
-    auto after_drain = (*opened)->submit_append(
-        "after-drain",
-        {
-            .schema_version = 1,
-            .type = "fixture",
-            .issue_id = "fixture-after-drain",
-            .payload = "{}",
-        });
+    auto after_drain =
+        (*opened)->submit_append("after-drain", {
+                                                    .schema_version = 1,
+                                                    .type = "fixture",
+                                                    .issue_id = "fixture-after-drain",
+                                                    .payload = "{}",
+                                                });
     ut::expect(after_drain.has_value());
     (*opened)->drain();
     completions = (*opened)->take_ready_appends();
     ut::expect(completions.size() == std::size_t{1});
-    if (completions.size() == 1)
-      ut::expect(completions.front().key == "after-drain");
+    if (completions.size() == 1) ut::expect(completions.front().key == "after-drain");
 
     auto events = (*opened)->load_after(0);
     ut::expect(events.has_value());
-    if (events)
-      ut::expect(events->size() == std::size_t{2});
+    if (events) ut::expect(events->size() == std::size_t{2});
   };
 
   ut::test("sqlite event repository owns an explicit schema version") = [] {
     FixtureDatabase fresh_fixture{"schema-version"};
     {
-      auto opened = symphony::persistence::SqliteEventRepository::open(
-          fresh_fixture.path());
+      auto opened = symphony::persistence::SqliteEventRepository::open(fresh_fixture.path());
       ut::expect(opened.has_value());
     }
 
     boost::sqlite::connection inspected{fresh_fixture.path().string()};
     sqlite3_int64 schema_version = 0;
-    for (const auto &[version] :
-         boost::sqlite::query<std::tuple<sqlite3_int64>>(
-             inspected, "PRAGMA user_version")) {
+    for (const auto& [version] :
+         boost::sqlite::query<std::tuple<sqlite3_int64>>(inspected, "PRAGMA user_version")) {
       schema_version = version;
     }
     ut::expect(schema_version == sqlite3_int64{1});
@@ -297,54 +259,45 @@ static ut::suite persistence_tests = [] {
       boost::sqlite::connection future{future_fixture.path().string()};
       future.execute("PRAGMA user_version=2");
     }
-    auto rejected = symphony::persistence::SqliteEventRepository::open(
-        future_fixture.path());
+    auto rejected = symphony::persistence::SqliteEventRepository::open(future_fixture.path());
     ut::expect(!rejected.has_value());
-    if (!rejected)
-      ut::expect(rejected.error().message.find("schema version") !=
-                 std::string::npos);
+    if (!rejected) ut::expect(rejected.error().message.find("schema version") != std::string::npos);
 
     FixtureDatabase legacy_fixture{"legacy-schema"};
     {
       boost::sqlite::connection legacy{legacy_fixture.path().string()};
-      legacy.execute(
-          "CREATE TABLE symphony_events("
-          "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
-          "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
-          "  type TEXT NOT NULL,"
-          "  issue_id TEXT NOT NULL,"
-          "  payload TEXT NOT NULL"
-          ");"
-          "INSERT INTO symphony_events("
-          "  schema_version, type, issue_id, payload"
-          ") VALUES (1, 'legacy', 'fixture-legacy', '{}')");
+      legacy.execute("CREATE TABLE symphony_events("
+                     "  sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
+                     "  schema_version INTEGER NOT NULL CHECK(schema_version > 0),"
+                     "  type TEXT NOT NULL,"
+                     "  issue_id TEXT NOT NULL,"
+                     "  payload TEXT NOT NULL"
+                     ");"
+                     "INSERT INTO symphony_events("
+                     "  schema_version, type, issue_id, payload"
+                     ") VALUES (1, 'legacy', 'fixture-legacy', '{}')");
     }
-    auto migrated = symphony::persistence::SqliteEventRepository::open(
-        legacy_fixture.path());
+    auto migrated = symphony::persistence::SqliteEventRepository::open(legacy_fixture.path());
     ut::expect(migrated.has_value());
     if (migrated) {
       auto events = (*migrated)->load_after(0);
       ut::expect(events.has_value());
       if (events) {
         ut::expect(events->size() == std::size_t{1});
-        if (events->size() == 1)
-          ut::expect(events->front().issue_id == "fixture-legacy");
+        if (events->size() == 1) ut::expect(events->front().issue_id == "fixture-legacy");
       }
     }
   };
 
   ut::test("durable event store persists only the redacted event") = [] {
     FixtureDatabase fixture{"durable-events"};
-    auto opened =
-        symphony::persistence::SqliteEventRepository::open(fixture.path());
+    auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path());
     ut::expect(opened.has_value());
-    if (!opened)
-      return;
+    if (!opened) return;
 
     symphony::observability::MemoryEventStore memory;
     symphony::persistence::DurableEventStore events{memory, **opened};
-    const auto sensitive_value =
-        std::string{"fixture-"} + "sensitive-value";
+    const auto sensitive_value = std::string{"fixture-"} + "sensitive-value";
     events.append({
         .type = "worker_process_diagnostic",
         .issue_id = "fixture-1",
@@ -356,8 +309,7 @@ static ut::suite persistence_tests = [] {
 
     const auto recent = events.recent(1);
     ut::expect(recent.size() == std::size_t{1});
-    if (recent.size() == 1)
-      ut::expect(recent.front().message == "[REDACTED]");
+    if (recent.size() == 1) ut::expect(recent.front().message == "[REDACTED]");
     ut::expect(events.persistence_failures() == std::uint64_t{0});
 
     auto durable = (*opened)->load_after(0);
@@ -367,39 +319,34 @@ static ut::suite persistence_tests = [] {
       if (durable->size() == 1) {
         ut::expect(durable->front().type == "worker_process_diagnostic");
         ut::expect(durable->front().issue_id == "fixture-1");
-        ut::expect(durable->front().payload.find("[REDACTED]") !=
-                   std::string::npos);
-        ut::expect(durable->front().payload.find(sensitive_value) ==
-                   std::string::npos);
+        ut::expect(durable->front().payload.find("[REDACTED]") != std::string::npos);
+        ut::expect(durable->front().payload.find(sensitive_value) == std::string::npos);
       }
     }
   };
 
-  ut::test("durable event store retains events when persistence overloads") =
-      [] {
-        FixtureDatabase fixture{"durable-overload"};
-        auto opened = symphony::persistence::SqliteEventRepository::open(
-            fixture.path(), {.max_pending_appends = 0});
-        ut::expect(opened.has_value());
-        if (!opened)
-          return;
+  ut::test("durable event store retains events when persistence overloads") = [] {
+    FixtureDatabase fixture{"durable-overload"};
+    auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path(),
+                                                                     {.max_pending_appends = 0});
+    ut::expect(opened.has_value());
+    if (!opened) return;
 
-        symphony::observability::MemoryEventStore memory;
-        symphony::persistence::DurableEventStore events{memory, **opened};
-        events.append({
-            .type = "dispatch",
-            .issue_id = "fixture-1",
-            .issue_identifier = "SYM-1",
-            .session_id = "",
-            .message = "retained",
-        });
-        events.drain();
+    symphony::observability::MemoryEventStore memory;
+    symphony::persistence::DurableEventStore events{memory, **opened};
+    events.append({
+        .type = "dispatch",
+        .issue_id = "fixture-1",
+        .issue_identifier = "SYM-1",
+        .session_id = "",
+        .message = "retained",
+    });
+    events.drain();
 
-        ut::expect(events.recent(1).size() == std::size_t{1});
-        ut::expect(events.persistence_failures() == std::uint64_t{1});
-        auto durable = (*opened)->load_after(0);
-        ut::expect(durable.has_value());
-        if (durable)
-          ut::expect(durable->empty());
-      };
+    ut::expect(events.recent(1).size() == std::size_t{1});
+    ut::expect(events.persistence_failures() == std::uint64_t{1});
+    auto durable = (*opened)->load_after(0);
+    ut::expect(durable.has_value());
+    if (durable) ut::expect(durable->empty());
+  };
 };

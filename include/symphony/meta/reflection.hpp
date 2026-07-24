@@ -17,9 +17,8 @@ struct FieldDescriptor {
 
 template <typename T> [[nodiscard]] consteval auto fields() {
 #if defined(SYMPHONY_ENABLE_REFLECTION)
-  static constexpr auto members =
-      std::define_static_array(std::meta::nonstatic_data_members_of(
-          ^^T, std::meta::access_context::current()));
+  static constexpr auto members = std::define_static_array(
+      std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current()));
   std::array<FieldDescriptor, members.size()> result{};
   std::size_t index = 0;
   template for (constexpr auto member : members) {
@@ -30,8 +29,7 @@ template <typename T> [[nodiscard]] consteval auto fields() {
   }
   return result;
 #else
-  static_assert(sizeof(T) == 0,
-                "symphony_meta reflection requires SYMPHONY_ENABLE_REFLECTION");
+  static_assert(sizeof(T) == 0, "symphony_meta reflection requires SYMPHONY_ENABLE_REFLECTION");
   return std::array<FieldDescriptor, 0>{};
 #endif
 }

@@ -8,13 +8,11 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
-template <>
-struct glz::meta<symphony::observability::Event> {
+template <> struct glz::meta<symphony::observability::Event> {
   using T = symphony::observability::Event;
   static constexpr auto value =
-      object("type", &T::type, "issue_id", &T::issue_id, "issue_identifier",
-             &T::issue_identifier, "session_id", &T::session_id, "message",
-             &T::message);
+      object("type", &T::type, "issue_id", &T::issue_id, "issue_identifier", &T::issue_identifier,
+             "session_id", &T::session_id, "message", &T::message);
 };
 
 namespace symphony::observability {
@@ -26,12 +24,13 @@ struct EventJsonOptions : glz::opts {
 inline constexpr EventJsonOptions event_json_options{};
 
 std::shared_ptr<spdlog::logger> make_stderr_logger() {
-  return std::make_shared<spdlog::logger>(
-      "symphony", std::make_shared<spdlog::sinks::stderr_sink_mt>());
+  return std::make_shared<spdlog::logger>("symphony",
+                                          std::make_shared<spdlog::sinks::stderr_sink_mt>());
 }
-}  // namespace
+} // namespace
 
-MemoryEventStore::MemoryEventStore(const std::size_t capacity) : capacity_(std::max<std::size_t>(1, capacity)) {}
+MemoryEventStore::MemoryEventStore(const std::size_t capacity)
+    : capacity_(std::max<std::size_t>(1, capacity)) {}
 
 void MemoryEventStore::append(Event event) {
   events_.push_back(redact(std::move(event)));
@@ -48,8 +47,7 @@ SpdlogEventStore::SpdlogEventStore(const std::size_t capacity)
 
 SpdlogEventStore::SpdlogEventStore(std::shared_ptr<spdlog::logger> logger,
                                    const std::size_t capacity)
-    : logger_(std::move(logger)),
-      history_(capacity),
+    : logger_(std::move(logger)), history_(capacity),
       sink_failures_(std::make_shared<std::atomic<std::uint64_t>>(0)) {
   if (!logger_) throw std::invalid_argument("structured logger is required");
   logger_->set_pattern("%v");
@@ -94,4 +92,4 @@ std::string to_json(const Event& event) {
   }
   return std::move(*result);
 }
-}  // namespace symphony::observability
+} // namespace symphony::observability

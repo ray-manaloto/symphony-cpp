@@ -18,38 +18,20 @@ struct HttpErrorProfile {
   std::string_view message;
 };
 
-constexpr auto http_error_profiles = lookup::make(CX_VALUE(
-    lookup::input<int, HttpErrorProfile, 4>{
-        {TrackerErrorCode::malformed_response,
-         false,
-         "unexpected tracker response"},
-        std::array{
-            lookup::entry{
-                401,
-                HttpErrorProfile{TrackerErrorCode::authentication,
-                                 false,
-                                 "tracker authentication failed"}},
-            lookup::entry{
-                403,
-                HttpErrorProfile{TrackerErrorCode::permission,
-                                 false,
-                                 "tracker permission denied"}},
-            lookup::entry{
-                404,
-                HttpErrorProfile{TrackerErrorCode::not_found,
-                                 false,
-                                 "tracker resource was not found"}},
-            lookup::entry{
-                429,
-                HttpErrorProfile{TrackerErrorCode::rate_limited,
-                                 true,
-                                 "tracker rate limit exceeded"}}}}));
+constexpr auto http_error_profiles = lookup::make(CX_VALUE(lookup::input<int, HttpErrorProfile, 4>{
+    {TrackerErrorCode::malformed_response, false, "unexpected tracker response"},
+    std::array{lookup::entry{401, HttpErrorProfile{TrackerErrorCode::authentication, false,
+                                                   "tracker authentication failed"}},
+               lookup::entry{403, HttpErrorProfile{TrackerErrorCode::permission, false,
+                                                   "tracker permission denied"}},
+               lookup::entry{404, HttpErrorProfile{TrackerErrorCode::not_found, false,
+                                                   "tracker resource was not found"}},
+               lookup::entry{429, HttpErrorProfile{TrackerErrorCode::rate_limited, true,
+                                                   "tracker rate limit exceeded"}}}}));
 
-static_assert(http_error_profiles[401].code ==
-              TrackerErrorCode::authentication);
+static_assert(http_error_profiles[401].code == TrackerErrorCode::authentication);
 static_assert(http_error_profiles[429].retryable);
-static_assert(http_error_profiles[418].code ==
-              TrackerErrorCode::malformed_response);
+static_assert(http_error_profiles[418].code == TrackerErrorCode::malformed_response);
 
 std::string normalized(const std::string_view value) {
   const auto first = value.find_first_not_of(" \t\r\n");
@@ -71,34 +53,25 @@ std::string trimmed(const std::string_view value) {
 
 const std::array<AdapterProfile, 2>& adapter_profiles() {
   static const std::array profiles{
-      AdapterProfile{
-          "linear",
-          {"Todo", "In Progress"},
-          {"Done", "Cancelled"},
-          {"project_slug"},
-          {"LINEAR_API_KEY"}},
-      AdapterProfile{
-          "github",
-          {"open"},
-          {"closed"},
-          {"owner", "repository"},
-          {"GITHUB_TOKEN"}}};
+      AdapterProfile{"linear",
+                     {"Todo", "In Progress"},
+                     {"Done", "Cancelled"},
+                     {"project_slug"},
+                     {"LINEAR_API_KEY"}},
+      AdapterProfile{"github", {"open"}, {"closed"}, {"owner", "repository"}, {"GITHUB_TOKEN"}}};
   return profiles;
 }
-}  // namespace
+} // namespace
 
 IssueResult normalize_issue(const IssueRecord& record) {
   if (trimmed(record.id).empty() || trimmed(record.identifier).empty() ||
       trimmed(record.title).empty() || trimmed(record.state).empty() ||
       !record.dispatchable.has_value()) {
-    return std::unexpected(TrackerError{
-        TrackerErrorCode::malformed_response,
-        false,
-        "tracker record is missing a required scheduling field"});
+    return std::unexpected(TrackerError{TrackerErrorCode::malformed_response, false,
+                                        "tracker record is missing a required scheduling field"});
   }
 
-  domain::Issue issue{
-      record.id, record.identifier, record.title, record.state, {}};
+  domain::Issue issue{record.id, record.identifier, record.title, record.state, {}};
   issue.description = record.description;
   issue.native_ref = record.native_ref;
   issue.branch_name = record.branch_name;
@@ -112,8 +85,7 @@ IssueResult normalize_issue(const IssueRecord& record) {
 
   for (const auto& label : record.labels) {
     auto canonical = normalized(label);
-    if (canonical.empty() ||
-        std::ranges::find(issue.labels, canonical) != issue.labels.end()) {
+    if (canonical.empty() || std::ranges::find(issue.labels, canonical) != issue.labels.end()) {
       continue;
     }
     issue.labels.push_back(std::move(canonical));
@@ -121,22 +93,18 @@ IssueResult normalize_issue(const IssueRecord& record) {
   return issue;
 }
 
-IssueListResult collect_issue_pages(
-    const PageFetcher& fetch_page,
-    const std::size_t max_pages) {
+IssueListResult collect_issue_pages(const PageFetcher& fetch_page, const std::size_t max_pages) {
   if (!fetch_page || max_pages == 0) {
-    return std::unexpected(TrackerError{
-        TrackerErrorCode::configuration, false, "invalid tracker page source"});
+    return std::unexpected(
+        TrackerError{TrackerErrorCode::configuration, false, "invalid tracker page source"});
   }
   std::vector<domain::Issue> issues;
   std::optional<std::string> cursor;
   std::set<std::string> visited_cursors;
   for (std::size_t page_number = 0; page_number < max_pages; ++page_number) {
     if (cursor && !visited_cursors.insert(*cursor).second) {
-      return std::unexpected(TrackerError{
-          TrackerErrorCode::malformed_response,
-          false,
-          "tracker pagination cursor repeated"});
+      return std::unexpected(TrackerError{TrackerErrorCode::malformed_response, false,
+                                          "tracker pagination cursor repeated"});
     }
     auto page = fetch_page(cursor);
     if (!page) return std::unexpected(std::move(page.error()));
@@ -147,23 +115,18 @@ IssueListResult collect_issue_pages(
     }
     if (!page->next_cursor) return issues;
     if (page->next_cursor->empty()) {
-      return std::unexpected(TrackerError{
-          TrackerErrorCode::malformed_response,
-          false,
-          "tracker pagination cursor is blank"});
+      return std::unexpected(TrackerError{TrackerErrorCode::malformed_response, false,
+                                          "tracker pagination cursor is blank"});
     }
     cursor = std::move(page->next_cursor);
   }
-  return std::unexpected(TrackerError{
-      TrackerErrorCode::malformed_response,
-      false,
-      "tracker pagination exceeded the page limit"});
+  return std::unexpected(TrackerError{TrackerErrorCode::malformed_response, false,
+                                      "tracker pagination exceeded the page limit"});
 }
 
 std::optional<AdapterProfile> adapter_profile(const std::string_view kind) {
   const auto canonical = normalized(kind);
-  const auto found = std::ranges::find(
-      adapter_profiles(), canonical, &AdapterProfile::kind);
+  const auto found = std::ranges::find(adapter_profiles(), canonical, &AdapterProfile::kind);
   if (found == adapter_profiles().end()) {
     return std::nullopt;
   }
@@ -190,7 +153,9 @@ TrackerError map_http_error(const int status_code) {
   return {profile.code, profile.retryable, std::string{profile.message}};
 }
 
-void FakeTracker::upsert(domain::Issue issue) { issues_.insert_or_assign(issue.id, std::move(issue)); }
+void FakeTracker::upsert(domain::Issue issue) {
+  issues_.insert_or_assign(issue.id, std::move(issue));
+}
 
 std::vector<domain::Issue> FakeTracker::list_by_states(const std::vector<std::string>& states) {
   std::vector<domain::Issue> result;
@@ -211,12 +176,23 @@ std::optional<domain::Issue> FakeTracker::refresh_by_id(const std::string_view i
   return found == issues_.end() ? std::nullopt : std::optional{found->second};
 }
 
-GitHubIssuesAdapter::GitHubIssuesAdapter(const bool mutation_enabled) : mutation_enabled_(mutation_enabled) {}
-std::vector<domain::Issue> GitHubIssuesAdapter::list_by_states(const std::vector<std::string>&) { return {}; }
-std::optional<domain::Issue> GitHubIssuesAdapter::refresh_by_id(std::string_view) { return std::nullopt; }
-bool GitHubIssuesAdapter::mutation_enabled() const noexcept { return mutation_enabled_; }
+GitHubIssuesAdapter::GitHubIssuesAdapter(const bool mutation_enabled)
+    : mutation_enabled_(mutation_enabled) {}
+std::vector<domain::Issue> GitHubIssuesAdapter::list_by_states(const std::vector<std::string>&) {
+  return {};
+}
+std::optional<domain::Issue> GitHubIssuesAdapter::refresh_by_id(std::string_view) {
+  return std::nullopt;
+}
+bool GitHubIssuesAdapter::mutation_enabled() const noexcept {
+  return mutation_enabled_;
+}
 
 LinearAdapter::LinearAdapter(const bool mutation_enabled) : mutation_enabled_(mutation_enabled) {}
-std::vector<domain::Issue> LinearAdapter::list_by_states(const std::vector<std::string>&) { return {}; }
-std::optional<domain::Issue> LinearAdapter::refresh_by_id(std::string_view) { return std::nullopt; }
-}  // namespace symphony::tracker
+std::vector<domain::Issue> LinearAdapter::list_by_states(const std::vector<std::string>&) {
+  return {};
+}
+std::optional<domain::Issue> LinearAdapter::refresh_by_id(std::string_view) {
+  return std::nullopt;
+}
+} // namespace symphony::tracker

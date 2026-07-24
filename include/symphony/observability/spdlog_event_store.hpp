@@ -13,19 +13,18 @@ class logger;
 namespace symphony::observability {
 
 class SpdlogEventStore final : public EventStore {
- public:
+public:
   explicit SpdlogEventStore(std::size_t capacity = 512);
-  SpdlogEventStore(std::shared_ptr<spdlog::logger> logger,
-                   std::size_t capacity = 512);
+  SpdlogEventStore(std::shared_ptr<spdlog::logger> logger, std::size_t capacity = 512);
 
   void append(Event event) override;
   [[nodiscard]] std::vector<Event> recent(std::size_t limit) const override;
   [[nodiscard]] std::uint64_t sink_failures() const noexcept;
 
- private:
+private:
   std::shared_ptr<spdlog::logger> logger_;
   MemoryEventStore history_;
   std::shared_ptr<std::atomic<std::uint64_t>> sink_failures_;
 };
 
-}  // namespace symphony::observability
+} // namespace symphony::observability

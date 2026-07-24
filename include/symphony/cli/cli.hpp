@@ -22,4 +22,4 @@ using DaemonParseResult = std::expected<DaemonOptions, ParseExit>;
 
 [[nodiscard]] DaemonParseResult parse_daemon_arguments(int argc, char** argv);
 
-}  // namespace symphony::cli
+} // namespace symphony::cli

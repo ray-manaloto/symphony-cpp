@@ -6,7 +6,8 @@
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 2) throw std::runtime_error("usage: symphonyctl validate PATH | conformance | status");
+    if (argc < 2)
+      throw std::runtime_error("usage: symphonyctl validate PATH | conformance | status");
     const std::string_view command{argv[1]};
     if (command == "validate") {
       if (argc != 3) throw std::runtime_error("usage: symphonyctl validate PATH");

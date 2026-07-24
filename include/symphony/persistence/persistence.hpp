@@ -18,7 +18,7 @@ struct Error {
   std::string message;
   ErrorKind kind{ErrorKind::provider};
 
-  friend bool operator==(const Error &, const Error &) = default;
+  friend bool operator==(const Error&, const Error&) = default;
 };
 
 struct NewEvent {
@@ -48,12 +48,11 @@ struct RepositoryOptions {
 class EventRepository {
 public:
   virtual ~EventRepository() = default;
-  [[nodiscard]] virtual std::expected<std::int64_t, Error>
-  append(NewEvent event) = 0;
+  [[nodiscard]] virtual std::expected<std::int64_t, Error> append(NewEvent event) = 0;
   [[nodiscard]] virtual std::expected<std::vector<Event>, Error>
   load_after(std::int64_t sequence) = 0;
-  [[nodiscard]] virtual std::expected<void, Error>
-  submit_append(std::string key, NewEvent event) = 0;
+  [[nodiscard]] virtual std::expected<void, Error> submit_append(std::string key,
+                                                                 NewEvent event) = 0;
   [[nodiscard]] virtual bool request_stop(std::string_view key) = 0;
   [[nodiscard]] virtual std::vector<AppendCompletion> take_ready_appends() = 0;
   virtual void drain() = 0;
@@ -61,24 +60,19 @@ public:
 
 class SqliteEventRepository final : public EventRepository {
 public:
-  [[nodiscard]] static std::expected<std::unique_ptr<SqliteEventRepository>,
-                                     Error>
-  open(const std::filesystem::path &path,
-       RepositoryOptions options = {});
+  [[nodiscard]] static std::expected<std::unique_ptr<SqliteEventRepository>, Error>
+  open(const std::filesystem::path& path, RepositoryOptions options = {});
 
   ~SqliteEventRepository() override;
 
-  SqliteEventRepository(const SqliteEventRepository &) = delete;
-  SqliteEventRepository &operator=(const SqliteEventRepository &) = delete;
-  SqliteEventRepository(SqliteEventRepository &&) = delete;
-  SqliteEventRepository &operator=(SqliteEventRepository &&) = delete;
+  SqliteEventRepository(const SqliteEventRepository&) = delete;
+  SqliteEventRepository& operator=(const SqliteEventRepository&) = delete;
+  SqliteEventRepository(SqliteEventRepository&&) = delete;
+  SqliteEventRepository& operator=(SqliteEventRepository&&) = delete;
 
-  [[nodiscard]] std::expected<std::int64_t, Error>
-  append(NewEvent event) override;
-  [[nodiscard]] std::expected<std::vector<Event>, Error>
-  load_after(std::int64_t sequence) override;
-  [[nodiscard]] std::expected<void, Error>
-  submit_append(std::string key, NewEvent event) override;
+  [[nodiscard]] std::expected<std::int64_t, Error> append(NewEvent event) override;
+  [[nodiscard]] std::expected<std::vector<Event>, Error> load_after(std::int64_t sequence) override;
+  [[nodiscard]] std::expected<void, Error> submit_append(std::string key, NewEvent event) override;
   [[nodiscard]] bool request_stop(std::string_view key) override;
   [[nodiscard]] std::vector<AppendCompletion> take_ready_appends() override;
   void drain() override;

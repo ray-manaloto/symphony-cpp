@@ -8,12 +8,10 @@
 namespace symphony::persistence {
 
 class DurableEventStore final : public observability::EventStore {
- public:
+public:
   // The repository's asynchronous append-completion channel must be dedicated
   // to this adapter for its lifetime.
-  DurableEventStore(
-      observability::EventStore& downstream,
-      EventRepository& repository);
+  DurableEventStore(observability::EventStore& downstream, EventRepository& repository);
   ~DurableEventStore() override;
 
   DurableEventStore(const DurableEventStore&) = delete;
@@ -22,12 +20,11 @@ class DurableEventStore final : public observability::EventStore {
   DurableEventStore& operator=(DurableEventStore&&) = delete;
 
   void append(observability::Event event) override;
-  [[nodiscard]] std::vector<observability::Event>
-  recent(std::size_t limit) const override;
+  [[nodiscard]] std::vector<observability::Event> recent(std::size_t limit) const override;
   void drain();
   [[nodiscard]] std::uint64_t persistence_failures() const noexcept;
 
- private:
+private:
   void reap();
 
   observability::EventStore& downstream_;

@@ -32,7 +32,7 @@ using WorkerTask = std::function<WorkerOutcome(std::stop_token)>;
 using ExecutionTask = std::move_only_function<void(std::stop_token) noexcept>;
 
 class StdexecTaskExecutor final {
- public:
+public:
   explicit StdexecTaskExecutor(std::size_t worker_count);
   ~StdexecTaskExecutor();
 
@@ -49,13 +49,13 @@ class StdexecTaskExecutor final {
   // Request cancellation for every active task, then wait for completion.
   void wait();
 
- private:
+private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
 
 class WorkerExecutor {
- public:
+public:
   virtual ~WorkerExecutor() = default;
   virtual void submit(std::string key, WorkerTask task) = 0;
   [[nodiscard]] virtual bool request_stop(std::string_view key) = 0;
@@ -65,19 +65,19 @@ class WorkerExecutor {
 };
 
 class InlineWorkerExecutor final : public WorkerExecutor {
- public:
+public:
   void submit(std::string key, WorkerTask task) override;
   [[nodiscard]] bool request_stop(std::string_view key) override;
   [[nodiscard]] std::vector<WorkerCompletion> take_ready() override;
   [[nodiscard]] std::size_t capacity() const noexcept override;
   void wait() override;
 
- private:
+private:
   std::vector<WorkerCompletion> ready_;
 };
 
 class StdexecWorkerExecutor final : public WorkerExecutor {
- public:
+public:
   explicit StdexecWorkerExecutor(std::size_t worker_count);
   ~StdexecWorkerExecutor() override;
 
@@ -92,10 +92,10 @@ class StdexecWorkerExecutor final : public WorkerExecutor {
   [[nodiscard]] std::size_t capacity() const noexcept override;
   void wait() override;
 
- private:
+private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace symphony::execution
+} // namespace symphony::execution
 #include <chrono>
