@@ -31,6 +31,7 @@ jobs:
 
   gcc16:
     name: GCC 16.1 source and reflection tests
+    needs: metadata
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:

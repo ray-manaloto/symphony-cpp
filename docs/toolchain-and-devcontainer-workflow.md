@@ -44,7 +44,7 @@ flowchart LR
         V["Ephemeral validation descendant<br/>never published"]
         C["Build-time contracts<br/>version, C++26/reflection,<br/>runtime linkage + source workflows"]
         K["Cache-only exporter<br/>no Docker Engine import"]
-        G["Future guarded publication<br/>direct child digests + multi-arch index"]
+        G["Planned guarded publication<br/>candidate child digests,<br/>exact validation + multi-arch index"]
         P --> B --> V --> C --> K --> G
     end
 
@@ -61,7 +61,7 @@ flowchart LR
     G -. "reviewed digest update" .-> L
 ```
 
-The published bases contain only stable, reusable CI tools:
+The planned published bases contain only stable, reusable CI tools:
 
 | Lineage | Published base contents |
 | --- | --- |
@@ -121,13 +121,15 @@ sequenceDiagram
     V->>V: Verify compiler, CMake, C++26/reflection, and runtime
     V->>V: Bind the checkout and run required CMake workflows
     V-->>B: Cache-only result; do not import into Docker Engine
-    alt every contract is green and a future ceremony is separately enabled
-        B->>R: Push matching base targets directly by immutable child digest
-        A->>R: Assemble the reviewed multi-platform index
+    alt planned ceremony after every prerequisite contract is green
+        B->>R: Push architecture-qualified candidate
+        R-->>A: Return candidate child digest
+        A->>V: Validate the candidate by exact digest
+        A->>R: Assemble the index from validated child digests
         R-->>A: Return index and child manifest digests
         A-->>P: Record digest for a separate reviewed update
-    else any contract fails
-        A-->>O: Fail without publishing candidate
+    else candidate validation or promotion prerequisite fails
+        A-->>O: Leave candidate quarantined; fail without index or accepted-tag promotion
     end
 ```
 
@@ -140,23 +142,29 @@ through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installe
 and build trees remain local to one builder. Cross-run compiler-cache reuse remains provisional
 until a two-runner sentinel and nonzero ccache-hit fixture pass.
 
-The LLVM-analysis job first solves the stable `symphony-analysis` ancestor with cache-only output
-and exports the existing `mode=min` scope before binding source or running validation. The source
-validation solve uses the same named Buildx builder and imports that scope. This boundary ensures a
-later formatter, dependency, compiler, or clang-tidy failure cannot prevent the expensive GCC 16.1
-and LLVM 22.1.8 ancestry from reaching the cache. It does not load or publish an image, and the
-first cold solve remains intentionally expensive; the following exact run must prove the GCC build
-step is cached before the optimization is considered effective.
+Every qualification job now completes a stable-base solve and attempts its cache export before
+binding source or running validation. This prevents a later source failure from suppressing that
+same-job export attempt, but does not prove cross-run preservation. It is a failure-ordering
+boundary, not the final supply chain:
+run `30094944459` proved the preceding 11 GB LLVM/GCC GHA result was not reusable and then failed
+while downloading GCC again. GitHub's default 10 GB cache allowance makes that combined result
+subject to eviction and cache thrashing. Routine validation therefore must consume reviewed GHCR
+digests; it must not reconstruct compilers or depend on compiler-source mirrors.
 
 The obsolete publication job was removed because its older cache scopes and local image-loading
-ceremony could not identify the new cache-only validation result. Publication must be redesigned
-to push architecture-matched base targets directly, record their child digests, and assemble the
-index without loading large images. Publication never updates the local devcontainer digest
-automatically. A separate reviewed commit
-records the resolved manifest and wires the thin local Dockerfiles to it, so a developer cannot
-silently move to a new compiler image through a mutable tag. During the one-time migration, the
-existing local profiles remain on their previous images until that digest-update commit lands; they
-are not evidence for the new base lineages.
+ceremony could not identify the validated result. Its replacement must push one
+architecture-qualified candidate, capture the returned child digest, validate that exact digest,
+and promote only those validated AMD64 and ARM64 children into the reviewed index without
+rebuilding. Publication never updates a local devcontainer automatically. A separate reviewed
+commit records the resolved manifest and wires the thin local Dockerfiles to it, so a developer
+cannot silently move through a mutable tag. During migration, the existing local profiles remain
+untrusted inputs until that digest-update commit lands.
+
+Exact-digest validation necessarily happens after the candidate is uploaded. A failed candidate
+therefore remains quarantined under its unique source-SHA-and-architecture identity for forensic
+evidence; it is never added to an accepted tag or multi-platform index and is never a devcontainer
+input. No workflow automatically deletes candidates. A later cleanup may remove only unpromoted,
+unreferenced candidates after an explicit package-reference and age audit.
 
 Native qualification is intentionally phased before the end-state fan-out above is enabled. One
 typed dispatch selects exactly one architecture, defaulting to AMD64. The first ARM64 dispatch is

@@ -17,12 +17,18 @@ ARG GCC_VERSION=16.1.0
 ARG GCC_SHA256=50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79
 ARG GCC_SIGNER=D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62
 WORKDIR /tmp/gcc
-RUN curl --fail --location --proto '=https' --tlsv1.2 \
-      -o gcc.tar.xz "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
- && curl --fail --location --proto '=https' --tlsv1.2 \
-      -o gcc.tar.xz.sig "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz.sig" \
+RUN curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
+      -o gcc.tar.xz "https://ftpmirror.gnu.org/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
+ && curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
+      -o gcc.tar.xz.sig "https://ftpmirror.gnu.org/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz.sig" \
  && echo "${GCC_SHA256}  gcc.tar.xz" | sha256sum --check - \
- && curl --fail --location --proto '=https' --tlsv1.2 \
+ && curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
       -o signer.asc "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${GCC_SIGNER}" \
  && gpg --batch --import signer.asc \
  && test "$(gpg --batch --with-colons --fingerprint "${GCC_SIGNER}" | awk -F: '$1=="fpr" {print $10; exit}')" = "${GCC_SIGNER}" \
@@ -50,7 +56,9 @@ RUN git clone --filter=blob:none https://github.com/bloomberg/clang-p2996.git ll
  && cd llvm-project \
  && git checkout --detach "${CLANG_P2996_COMMIT}" \
  && test "$(git rev-parse HEAD)" = "${CLANG_P2996_COMMIT}"
-RUN case "${TARGETARCH}" in \
+RUN compile_jobs="$(nproc)" \
+ && if ((compile_jobs > 4)); then compile_jobs=4; fi \
+ && case "${TARGETARCH}" in \
       amd64) llvm_target=X86 ;; \
       arm64) llvm_target=AArch64 ;; \
       *) echo "unsupported clang-p2996 target architecture: ${TARGETARCH}" >&2; exit 64 ;; \
@@ -59,11 +67,12 @@ RUN case "${TARGETARCH}" in \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/clang-p2996 \
       -DLLVM_ENABLE_PROJECTS='clang;lld' -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind' \
       -DLLVM_TARGETS_TO_BUILD="${llvm_target}" -DLLVM_ENABLE_ASSERTIONS=ON \
+      -DLLVM_PARALLEL_COMPILE_JOBS="${compile_jobs}" -DLLVM_PARALLEL_LINK_JOBS=1 \
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
       -DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;runtimes' \
       -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF \
       -DLLVM_INCLUDE_TESTS=OFF -DCLANG_INCLUDE_DOCS=OFF -DCLANG_INCLUDE_TESTS=OFF \
- && cmake --build /tmp/llvm-build --target install-distribution-stripped -j 2 \
+ && cmake --build /tmp/llvm-build --target install-distribution-stripped -j "${compile_jobs}" \
  && test -x /opt/clang-p2996/bin/clang++ \
  && test -x /opt/clang-p2996/bin/ld.lld \
  && test -f /opt/clang-p2996/include/c++/v1/meta \
@@ -85,14 +94,20 @@ RUN set -eux; \
       arm64) llvm_platform=ARM64; llvm_sha256=805efad2bb91cb4967fa569e0881d10c0f69c04461cf671cccbae19f547acc34 ;; \
       *) echo "unsupported LLVM analysis target architecture: ${TARGETARCH}" >&2; exit 64 ;; \
     esac; \
-    curl --fail --location --proto '=https' --tlsv1.2 \
+    curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz \
       "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-${llvm_platform}.tar.xz"; \
-    curl --fail --location --proto '=https' --tlsv1.2 \
+    curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
       -o llvm.tar.xz.sig \
       "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-${llvm_platform}.tar.xz.sig"; \
     echo "${llvm_sha256}  llvm.tar.xz" | sha256sum --check -; \
-    curl --fail --location --proto '=https' --tlsv1.2 \
+    curl --fail --location --retry 5 --retry-all-errors --retry-max-time 3600 \
+      --connect-timeout 30 --max-time 1800 --speed-limit 1024 --speed-time 120 \
+      --proto '=https' --tlsv1.2 \
       -o signer.asc "https://releases.llvm.org/release-keys.asc"; \
     echo "${LLVM_RELEASE_KEYS_SHA256}  signer.asc" | sha256sum --check -; \
     gpg --batch --import signer.asc; \
@@ -101,9 +116,7 @@ RUN set -eux; \
     echo "LLVM archive verification complete"; \
     df -h / /opt /tmp; \
     df -i / /opt /tmp; \
-    xz --test llvm.tar.xz; \
     xz --robot --list llvm.tar.xz; \
-    tar -tf llvm.tar.xz | sed -n '1,5p'; \
     mkdir -p "/opt/llvm-${LLVM_VERSION}"; \
     echo "LLVM archive extraction starting"; \
     tar -xJf llvm.tar.xz --strip-components=1 -C "/opt/llvm-${LLVM_VERSION}"; \

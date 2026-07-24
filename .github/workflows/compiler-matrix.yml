@@ -85,6 +85,19 @@ jobs:
         id: buildx
         with:
           version: v0.35.0
+      - name: Persist stable GCC 16.1 base before source validation
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: containers/Containerfile
+          target: symphony-gcc-runtime
+          platforms: ${{ env.TOOLCHAIN_PLATFORM }}
+          outputs: type=cacheonly
+          load: false
+          push: false
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
+          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m,ignore-error=true
       - name: Restore bounded GCC compiler cache
         id: gcc-ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -118,9 +131,9 @@ jobs:
           outputs: type=cacheonly
           load: false
           push: false
+          builder: ${{ steps.buildx.outputs.name }}
           build-args: SOURCE_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
-          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m
   clang-p2996:
     name: clang-p2996 base and differential contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'clang-p2996' }}
@@ -141,6 +154,19 @@ jobs:
         id: buildx
         with:
           version: v0.35.0
+      - name: Persist stable clang-p2996 base before source validation
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: containers/Containerfile
+          target: symphony-ci-clang
+          platforms: linux/amd64
+          outputs: type=cacheonly
+          load: false
+          push: false
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-from: type=gha,scope=symphony-clang-p2996-min-v2
+          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v2,timeout=30m,ignore-error=true
       - name: Restore bounded clang-p2996 compiler cache
         id: clang-ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -174,9 +200,9 @@ jobs:
           outputs: type=cacheonly
           load: false
           push: false
+          builder: ${{ steps.buildx.outputs.name }}
           build-args: SOURCE_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=symphony-clang-p2996-min-v2
-          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v2,timeout=30m
   llvm-analysis:
     name: LLVM 22.1.8 analysis base and source-quality contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}
@@ -211,7 +237,7 @@ jobs:
           push: false
           builder: ${{ steps.buildx.outputs.name }}
           cache-from: type=gha,scope=symphony-llvm-analysis-min-v2
-          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v2,timeout=30m
+          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v2,timeout=30m,ignore-error=true
       - name: Restore bounded analysis compiler cache
         id: analysis-ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -248,4 +274,3 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           build-args: SOURCE_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=symphony-llvm-analysis-min-v2
-          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v2,timeout=30m
