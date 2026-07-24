@@ -64,6 +64,7 @@
         "CMAKE_CXX_COMPILER": "/opt/clang-p2996/bin/clang++",
         "CMAKE_VERIFY_INTERFACE_HEADER_SETS": "OFF",
         "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/clang-p2996.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-p2996"
       }
     },

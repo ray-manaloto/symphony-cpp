@@ -164,6 +164,10 @@ COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996
 ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CC=/opt/clang-p2996/bin/clang \
     CXX=/opt/clang-p2996/bin/clang++
+RUN find /opt/clang-p2996/lib -type f -name 'libc++.so.1*' -printf '%h\n' \
+      | sort -u >/etc/ld.so.conf.d/clang-p2996.conf \
+ && test -s /etc/ld.so.conf.d/clang-p2996.conf \
+ && ldconfig
 LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.description="Bloomberg clang-p2996 C++26 reflection toolchain base for symphony-cpp CI and local devcontainers"
@@ -222,8 +226,29 @@ RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
            VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
  && ccache --max-size=750M \
  && ccache --zero-stats \
+ && /opt/clang-p2996/bin/clang++ \
+      -std=c++26 -stdlib=libc++ -freflection -fexpansion-statements \
+      -fuse-ld=lld tests/fixtures/p2996_reflection_probe.cpp \
+      -Wl,-rpath,/opt/clang-p2996/lib/x86_64-unknown-linux-gnu \
+      -Wl,-rpath,/opt/clang-p2996/lib \
+      -o /tmp/p2996-reflection-probe \
+ && /opt/clang-p2996/bin/clang++ \
+      -std=c++26 -stdlib=libc++ -freflection -fexpansion-statements \
+      -fuse-ld=lld tests/fixtures/p2996_reflection_probe.cpp \
+      -Wl,-rpath,/opt/clang-p2996/lib/x86_64-unknown-linux-gnu \
+      -Wl,-rpath,/opt/clang-p2996/lib \
+      -o /tmp/p2996-link-probe -### 2>&1 \
+      | tee /tmp/p2996-linker-trace \
+      | grep -Fq '"/opt/clang-p2996/bin/ld.lld"' \
+ && ldd /tmp/p2996-reflection-probe \
+      | tee /tmp/p2996-runtime-links \
+      | grep -Eq 'libc\+\+\.so\.1 => /opt/clang-p2996/' \
+ && grep -Eq 'libc\+\+abi\.so\.1 => /opt/clang-p2996/' /tmp/p2996-runtime-links \
+ && grep -Eq 'libunwind\.so\.1 => /opt/clang-p2996/' /tmp/p2996-runtime-links \
+ && /tmp/p2996-reflection-probe \
+ && rm /tmp/p2996-reflection-probe /tmp/p2996-linker-trace /tmp/p2996-runtime-links \
  && ./scripts/devcontainer-setup.sh clang-p2996 \
- && cmake --workflow --preset clang-reflection \
+ && ./scripts/run-clang-reflection-workflow.sh \
  && ccache --show-stats
 
 FROM symphony-analysis AS symphony-analysis-validation

@@ -13,33 +13,19 @@ endif()
 set(_symphony_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
 string(APPEND CMAKE_REQUIRED_FLAGS
   " ${_symphony_reflection_probe_flags}")
+set(_symphony_reflection_probe_path
+  "${PROJECT_SOURCE_DIR}/tests/fixtures/p2996_reflection_probe.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${_symphony_reflection_probe_path}")
+file(READ "${_symphony_reflection_probe_path}"
+  _symphony_reflection_probe_source)
+unset(SYMPHONY_CXX26_REFLECTION_SUPPORTED CACHE)
 check_cxx_source_compiles(
-  [=[
-    #include <meta>
-    #include <string_view>
-
-    struct reflection_probe {
-      int value;
-    };
-
-    consteval bool reflection_works() {
-      static constexpr auto members =
-          std::define_static_array(std::meta::nonstatic_data_members_of(
-              ^^reflection_probe, std::meta::access_context::current()));
-      static_assert(members.size() == 1);
-      template for (constexpr auto member : members) {
-        static_assert(
-            std::meta::identifier_of(member) == std::string_view{"value"});
-      }
-      return true;
-    }
-
-    static_assert(reflection_works());
-
-    int main() {}
-  ]=]
+  "${_symphony_reflection_probe_source}"
   SYMPHONY_CXX26_REFLECTION_SUPPORTED)
 set(CMAKE_REQUIRED_FLAGS "${_symphony_saved_required_flags}")
+unset(_symphony_reflection_probe_source)
+unset(_symphony_reflection_probe_path)
 unset(_symphony_saved_required_flags)
 unset(_symphony_reflection_probe_flags)
 

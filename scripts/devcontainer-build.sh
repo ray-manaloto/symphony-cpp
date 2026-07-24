@@ -70,6 +70,11 @@ elif [[ "${profile}" == "analysis-rtsan" ]]; then
     bash -lc "cmake --workflow --fresh --preset ${preset} \
       && python3 ./scripts/check-analysis-compile-commands.py \
         build/clang-rtsan/compile_commands.json --require-rtsan-fixtures"
+elif [[ "${profile}" == "clang-p2996" ]]; then
+  devcontainer exec \
+    --workspace-folder "${repository_root}" \
+    --config "${config}" \
+    bash -lc "./scripts/run-clang-reflection-workflow.sh"
 else
   devcontainer exec \
     --workspace-folder "${repository_root}" \

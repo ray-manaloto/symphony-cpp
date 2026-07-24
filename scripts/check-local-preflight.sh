@@ -62,6 +62,7 @@ done < <(git ls-files -z --cached --others --exclude-standard -- '*.mjs')
 
 node scripts/check-dependency-policy.mjs
 ./scripts/test-analysis-toolchain-contract.sh
+./scripts/test-p2996-compile-commands.sh
 ./scripts/test-toolchain-platform-contract.sh
 
 while IFS= read -r json_file; do

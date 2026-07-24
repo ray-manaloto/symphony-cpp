@@ -13,8 +13,10 @@ still needs one release definition and an independent compatibility signal.
 
 Use GCC 16.1 with `-std=c++26 -freflection` for development, tests, and executable artifacts. Compile
 the reflection fixture suite with Bloomberg clang-p2996 commit `7220baff` using
-`-std=c++26 -freflection-latest`. Keep reflection behind `symphony_meta`; use headers, not modules or
-PCH. A Clang difference is evidence, never production semantics.
+`-std=c++26 -stdlib=libc++ -freflection -fexpansion-statements`. The p2996 CMake preset must
+chainload the pinned compiler toolchain for the outer project as well as vcpkg dependency builds.
+Keep reflection behind `symphony_meta`; use headers, not modules or PCH. A Clang difference is
+evidence, never production semantics.
 
 ## Consequences
 
@@ -24,4 +26,3 @@ reproducible but slow. ARM64 waits for native compiler and conformance evidence.
 ## Revisit when
 
 The standardized reflection surface ships consistently in two release compilers.
-

@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+devcontainer_setup_directory="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+  pwd
+)"
+readonly devcontainer_setup_directory
+
 redact_and_bound_vcpkg_log() {
-  awk '
-    {
-      lower = tolower($0)
-      if (lower ~ /[[:alnum:]_]*(api[_-]?key|token|secret|password|passwd)[[:alnum:]_-]*[[:space:]]*[:=]/ ||
-          lower ~ /authorization[[:space:]]*[:=]/ ||
-          lower ~ /bearer[[:space:]]+[^[:space:]]/) {
-        print "[redacted secret-bearing build log line]"
-      } else if (length($0) > 300) {
-        print substr($0, 1, 300) "..."
-      } else {
-        print
-      }
-    }
-  '
+  awk -f "${devcontainer_setup_directory}/redact-build-log.awk"
 }
 
 show_vcpkg_failure_logs() {

@@ -4,7 +4,12 @@ set -euo pipefail
 
 readonly containerfile=containers/Containerfile
 readonly cmake_installer=scripts/install-cmake.sh
+readonly cmake_presets=CMakePresets.json
+readonly p2996_toolchain=cmake/toolchains/clang-p2996.cmake
+readonly p2996_probe=tests/fixtures/p2996_reflection_probe.cpp
 readonly devcontainer_setup=scripts/devcontainer-setup.sh
+readonly p2996_workflow_runner=scripts/run-clang-reflection-workflow.sh
+readonly build_log_redactor=scripts/redact-build-log.awk
 readonly p2996_test=tests/p2996_tests.cpp
 readonly upstream_lock=docs/upstream-lock.md
 readonly ut_manifest=vcpkg-ports/ut/vcpkg.json
@@ -19,6 +24,48 @@ readonly devcontainer_configs=(
 
 bash -n "${cmake_installer}"
 bash -n "${devcontainer_setup}"
+bash -n "${p2996_workflow_runner}"
+node - "${cmake_presets}" <<'JS'
+const fs = require("node:fs");
+const document = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const presets = new Map(
+  document.configurePresets.map((preset) => [preset.name, preset]),
+);
+const reflection = presets.get("clang-reflection");
+const inherited = presets.get(reflection?.inherits);
+if (
+  reflection?.cacheVariables?.CMAKE_CXX_COMPILER !==
+    "/opt/clang-p2996/bin/clang++" ||
+  reflection?.cacheVariables?.VCPKG_TARGET_TRIPLET !==
+    "x64-linux-clang-p2996" ||
+  reflection?.cacheVariables?.VCPKG_CHAINLOAD_TOOLCHAIN_FILE !==
+    "${sourceDir}/cmake/toolchains/clang-p2996.cmake" ||
+  inherited?.cacheVariables?.SYMPHONY_ENABLE_REFLECTION !== "ON"
+) {
+  process.exit(1);
+}
+JS
+grep -Fq 'set(CMAKE_CXX_FLAGS_INIT "-stdlib=libc++")' "${p2996_toolchain}"
+grep -Fq 'set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld ${_symphony_p2996_rpaths}")' \
+  "${p2996_toolchain}"
+grep -Fq '"${PROJECT_SOURCE_DIR}/tests/fixtures/p2996_reflection_probe.cpp"' \
+  cmake/CheckReflection.cmake
+grep -Fq 'CMAKE_CONFIGURE_DEPENDS' cmake/CheckReflection.cmake
+grep -Fq 'unset(SYMPHONY_CXX26_REFLECTION_SUPPORTED CACHE)' \
+  cmake/CheckReflection.cmake
+grep -Fq 'std::meta::nonstatic_data_members_of(' "${p2996_probe}"
+grep -Fq 'template for (constexpr auto member : members)' "${p2996_probe}"
+grep -Fq "find /opt/clang-p2996/lib -type f -name 'libc++.so.1*'" \
+  "${containerfile}"
+grep -Fq 'ldconfig' "${containerfile}"
+grep -Fq -- '-fuse-ld=lld tests/fixtures/p2996_reflection_probe.cpp' \
+  "${containerfile}"
+grep -Fq '"/opt/clang-p2996/bin/ld.lld"' "${containerfile}"
+grep -Fq 'libc\+\+\.so\.1 => /opt/clang-p2996/' "${containerfile}"
+test -x "${p2996_workflow_runner}"
+grep -Fq './scripts/run-clang-reflection-workflow.sh' "${containerfile}"
+grep -Fq 'bash -lc "./scripts/run-clang-reflection-workflow.sh"' \
+  scripts/devcontainer-build.sh
 test "$(grep -Fc -- '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF' "${ut_port}")" -eq 1
 test "$(grep -Fc -- '-DUT_ENABLE_MODULES=OFF' "${ut_port}")" -eq 1
 node -e '
@@ -40,6 +87,108 @@ test "$(grep -Fc 'run_vcpkg_install ' "${devcontainer_setup}")" -eq 3
 setup_fixture="$(mktemp -d)"
 readonly setup_fixture
 trap 'rm -rf "${setup_fixture}"' EXIT
+mkdir -p "${setup_fixture}/bin"
+cat >"${setup_fixture}/bin/cmake" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" != "--workflow --fresh --preset clang-reflection" ]]; then
+  exit 65
+fi
+if [[ "${FAKE_CMAKE_WRITE_LOG:-false}" == true ]]; then
+  {
+    printf '%s\n' 'retained compiler diagnostic'
+    printf '%s%s%s\n' 'LINEAR_API_' 'KEY ' 'must-not-appear-space'
+    printf '%s\n' '  wrapper:'
+    printf '%s\n' '    must-not-appear-deep-continuation'
+    printf '%s\n' 'https://user:must-not-appear-url@example.invalid/'
+  } >"${SYMPHONY_CMAKE_CONFIGURE_LOG}"
+fi
+exit "${FAKE_CMAKE_STATUS:-0}"
+EOF
+chmod +x "${setup_fixture}/bin/cmake"
+set +e
+p2996_failure="$(
+  PATH="${setup_fixture}/bin:${PATH}" \
+    FAKE_CMAKE_STATUS=47 \
+    FAKE_CMAKE_WRITE_LOG=true \
+    SYMPHONY_CMAKE_CONFIGURE_LOG="${setup_fixture}/configure.log" \
+    "${p2996_workflow_runner}" 2>&1
+)"
+readonly p2996_status=$?
+set -e
+test "${p2996_status}" -eq 47
+grep -Fq 'retained compiler diagnostic' <<<"${p2996_failure}"
+test "$(
+  grep -Fc '[redacted secret-bearing build log line]' <<<"${p2996_failure}"
+)" -eq 4
+if grep -Fq 'must-not-appear-' <<<"${p2996_failure}"; then
+  echo "clang-reflection diagnostic runner leaked a secret-shaped value" >&2
+  exit 1
+fi
+rm "${setup_fixture}/configure.log"
+cat >"${setup_fixture}/bin/tail" <<'EOF'
+#!/usr/bin/env bash
+exit 9
+EOF
+chmod +x "${setup_fixture}/bin/tail"
+set +e
+p2996_render_failure="$(
+  PATH="${setup_fixture}/bin:${PATH}" \
+    FAKE_CMAKE_STATUS=49 \
+    FAKE_CMAKE_WRITE_LOG=true \
+    SYMPHONY_CMAKE_CONFIGURE_LOG="${setup_fixture}/configure.log" \
+    "${p2996_workflow_runner}" 2>&1
+)"
+readonly p2996_render_status=$?
+set -e
+test "${p2996_render_status}" -eq 49
+grep -Fq 'failed to render clang-reflection configure diagnostics' \
+  <<<"${p2996_render_failure}"
+rm "${setup_fixture}/bin/tail"
+rm "${setup_fixture}/configure.log"
+printf '%s\n' 'stale diagnostic must not appear' >"${setup_fixture}/configure.log"
+set +e
+stale_p2996_failure="$(
+  PATH="${setup_fixture}/bin:${PATH}" \
+    FAKE_CMAKE_STATUS=48 \
+    SYMPHONY_CMAKE_CONFIGURE_LOG="${setup_fixture}/configure.log" \
+    "${p2996_workflow_runner}" 2>&1
+)"
+readonly stale_p2996_status=$?
+set -e
+test "${stale_p2996_status}" -eq 64
+grep -Fq 'test configure-log override must not exist before invocation' \
+  <<<"${stale_p2996_failure}"
+if grep -Fq 'stale diagnostic' <<<"${stale_p2996_failure}"; then
+  echo "clang-reflection diagnostic runner attributed a stale log" >&2
+  exit 1
+fi
+rm "${setup_fixture}/configure.log"
+cat >"${setup_fixture}/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" != "./scripts/check-p2996-compile-commands.py" ||
+      "$2" != "build/clang-reflection/compile_commands.json" ||
+      "$3" != /tmp/* ]]; then
+  exit 66
+fi
+EOF
+chmod +x "${setup_fixture}/bin/python3"
+cat >"${setup_fixture}/bin/ninja" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" != "-C build/clang-reflection -t commands symphony_p2996_tests" ]]; then
+  exit 67
+fi
+printf '%s\n' \
+  '/opt/clang-p2996/bin/clang++ -stdlib=libc++ -fuse-ld=lld -Wl,-rpath,/opt/clang-p2996/lib -o tests/symphony_p2996_tests'
+EOF
+chmod +x "${setup_fixture}/bin/ninja"
+test -z "$(
+  PATH="${setup_fixture}/bin:${PATH}" \
+    FAKE_CMAKE_STATUS=0 \
+    SYMPHONY_CMAKE_CONFIGURE_LOG="${setup_fixture}/configure.log" \
+    "${p2996_workflow_runner}" 2>&1
+)"
+rm "${setup_fixture}/bin/python3" "${setup_fixture}/bin/ninja"
+test -s "${build_log_redactor}"
 mkdir -p "${setup_fixture}/.build/vcpkg/buildtrees/stale"
 printf '%s\n' 'stale cached diagnostic' \
   >"${setup_fixture}/.build/vcpkg/buildtrees/stale/install-stale-out.log"
@@ -158,6 +307,11 @@ if awk 'length($0) > 320 { exit 1 }' <<<"${setup_failure}"; then
   :
 else
   echo "vcpkg diagnostic line exceeded the output bound" >&2
+  exit 1
+fi
+if ! awk 'length($0) == 303 && /\.\.\.$/ { found=1 } END { exit !found }' \
+    <<<"${setup_failure}"; then
+  echo "vcpkg diagnostic wrapper did not truncate the benign long line" >&2
   exit 1
 fi
 
