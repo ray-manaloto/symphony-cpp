@@ -231,8 +231,12 @@ RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
            VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
  && ccache --max-size=750M \
  && ccache --zero-stats \
- && ./scripts/devcontainer-setup.sh analysis \
  && ./scripts/check-format.sh \
- && cmake --preset clang-analysis \
+ && ./scripts/devcontainer-setup.sh analysis \
+ && cmake --fresh --preset clang-analysis \
+ && printf '#include <bits/c++config.h>\n' \
+      | /opt/llvm-22.1.8/bin/clang++ --gcc-toolchain=/opt/gcc-16.1 \
+          -std=c++26 -dM -E -x c++ - \
+      | grep -Fx '#define _GLIBCXX_RELEASE 16' \
  && ./scripts/check-tidy.sh \
  && ccache --show-stats

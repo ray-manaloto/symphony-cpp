@@ -57,7 +57,7 @@ if [[ "${profile}" == "analysis" ]]; then
     --workspace-folder "${repository_root}" \
     --config "${config}" \
     bash -lc "./scripts/check-format.sh \
-      && cmake --preset ${preset} \
+      && cmake --fresh --preset ${preset} \
       && ./scripts/check-tidy.sh"
 else
   devcontainer exec \

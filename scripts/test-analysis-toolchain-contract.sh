@@ -4,6 +4,27 @@ set -euo pipefail
 readonly verifier=./scripts/check-clang-format-version.sh
 readonly source_lister="${PWD}/scripts/list-format-sources.sh"
 readonly pinned_commit=ca7933e47d3a3451d81e72ac174dcb5aa28b59d1
+readonly presets=CMakePresets.json
+readonly tidy_config=.clang-tidy
+readonly tidy_runner=scripts/check-tidy.sh
+readonly containerfile=containers/Containerfile
+readonly devcontainer_runner=scripts/devcontainer-build.sh
+readonly compile_commands_verifier="${PWD}/scripts/check-analysis-compile-commands.py"
+readonly tidy_policy_verifier="${PWD}/scripts/check-tidy-policy.sh"
+
+grep -Fq \
+  '"VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/clang-analysis.cmake"' \
+  "${presets}"
+"${tidy_policy_verifier}" "${tidy_config}" "${tidy_runner}"
+if grep -Fq 'source_filter=' "${tidy_runner}"; then
+  echo "run-clang-tidy must consume the complete validated compilation database" >&2
+  exit 1
+fi
+grep -Fq \
+  'cmake --fresh --preset clang-analysis' \
+  "${containerfile}"
+grep -Fq 'cmake --fresh --preset ${preset}' "${devcontainer_runner}"
+grep -Fq "grep -Fx '#define _GLIBCXX_RELEASE 16'" "${containerfile}"
 
 "${verifier}" "clang-format version 22.1.8"
 "${verifier}" \
@@ -65,3 +86,137 @@ git_sources="$(
 )"
 readonly git_sources
 test "${git_sources}" = "${git_free_sources}"
+
+touch "${fixture_root}/src/command.cpp"
+cat >"${fixture_root}/compile_commands.json" <<EOF
+[
+  {
+    "directory": "${fixture_root}",
+    "file": "${fixture_root}/src/main.cpp",
+    "arguments": [
+      "/opt/llvm-22.1.8/bin/clang++",
+      "--gcc-toolchain=/opt/gcc-16.1",
+      "-std=c++26",
+      "-c",
+      "${fixture_root}/src/main.cpp"
+    ]
+  },
+  {
+    "directory": "${fixture_root}",
+    "file": "${fixture_root}/src/command.cpp",
+    "command": "ccache /opt/llvm-22.1.8/bin/clang++ --gcc-toolchain=/opt/gcc-16.1 -std=c++26 '-DNAME=with space' -c '${fixture_root}/src/command.cpp'"
+  }
+]
+EOF
+(
+  cd "${fixture_root}"
+  "${compile_commands_verifier}" compile_commands.json
+)
+cp "${fixture_root}/compile_commands.json" "${fixture_root}/compile_commands.valid.json"
+
+touch "${fixture_root}/src/unlisted.cpp"
+if (
+  cd "${fixture_root}"
+  "${compile_commands_verifier}" compile_commands.json 2>/dev/null
+); then
+  echo "accepted a project source without a compile command" >&2
+  exit 1
+fi
+rm "${fixture_root}/src/unlisted.cpp"
+
+for mutation in \
+  missing-gcc \
+  wrong-driver \
+  conflicting-gcc \
+  missing-standard \
+  conflicting-standard \
+  libcxx \
+  system-include \
+  sysroot \
+  cxx-system-include \
+  stdlib-system-include \
+  target \
+  no-standard-includes; do
+  python3 - \
+    "${fixture_root}/compile_commands.valid.json" \
+    "${fixture_root}/compile_commands.json" \
+    "${mutation}" <<'PY'
+import json
+import sys
+
+source, destination, mutation = sys.argv[1:]
+with open(source, encoding="utf-8") as stream:
+    database = json.load(stream)
+arguments = database[0]["arguments"]
+if mutation == "missing-gcc":
+    arguments.remove("--gcc-toolchain=/opt/gcc-16.1")
+elif mutation == "wrong-driver":
+    arguments.insert(0, "/usr/bin/g++")
+elif mutation == "conflicting-gcc":
+    arguments.append("--gcc-toolchain=/usr")
+elif mutation == "missing-standard":
+    arguments.remove("-std=c++26")
+elif mutation == "conflicting-standard":
+    arguments.append("-std=c++23")
+elif mutation == "libcxx":
+    arguments.append("-stdlib=libc++")
+elif mutation == "system-include":
+    arguments.extend(["-isystem", "/usr/include/c++/13"])
+elif mutation == "sysroot":
+    arguments.append("--sysroot=/tmp/alternate-root")
+elif mutation == "cxx-system-include":
+    arguments.extend(["-cxx-isystem", "/tmp/alternate-cxx"])
+elif mutation == "stdlib-system-include":
+    arguments.extend(["-stdlib++-isystem", "/tmp/alternate-stdlib"])
+elif mutation == "target":
+    arguments.append("--target=aarch64-linux-gnu")
+elif mutation == "no-standard-includes":
+    arguments.append("-nostdinc")
+else:
+    raise ValueError(f"unknown mutation: {mutation}")
+with open(destination, "w", encoding="utf-8") as stream:
+    json.dump(database, stream)
+PY
+  if (
+    cd "${fixture_root}"
+    "${compile_commands_verifier}" compile_commands.json 2>/dev/null
+  ); then
+    echo "accepted invalid analysis compile command mutation: ${mutation}" >&2
+    exit 1
+  fi
+done
+
+printf '%s\n' "WarningsAsErrors: '*'" >"${fixture_root}/warnings-as-errors.yml"
+if "${tidy_policy_verifier}" \
+  "${fixture_root}/warnings-as-errors.yml" "${tidy_runner}" 2>/dev/null; then
+  echo "accepted nonempty clang-tidy WarningsAsErrors" >&2
+  exit 1
+fi
+printf '%s\n' 'run-clang-tidy -warnings-as-errors=*' >"${fixture_root}/single-dash-runner.sh"
+if "${tidy_policy_verifier}" \
+  "${tidy_config}" "${fixture_root}/single-dash-runner.sh" 2>/dev/null; then
+  echo "accepted single-dash run-clang-tidy warning promotion" >&2
+  exit 1
+fi
+printf '%s\n' 'run-clang-tidy --warnings-as-errors=*' >"${fixture_root}/double-dash-runner.sh"
+if "${tidy_policy_verifier}" \
+  "${tidy_config}" "${fixture_root}/double-dash-runner.sh" 2>/dev/null; then
+  echo "accepted double-dash run-clang-tidy warning promotion" >&2
+  exit 1
+fi
+for config_option in -config= -config-file= --config= --config-file=; do
+  printf '%s\n' "run-clang-tidy ${config_option}${fixture_root}/warnings-as-errors.yml" \
+    >"${fixture_root}/config-runner.sh"
+  if "${tidy_policy_verifier}" \
+    "${tidy_config}" "${fixture_root}/config-runner.sh" 2>/dev/null; then
+    echo "accepted run-clang-tidy project config override: ${config_option}" >&2
+    exit 1
+  fi
+done
+mkdir -p "${fixture_root}/src/nested"
+printf '%s\n' "WarningsAsErrors: '*'" >"${fixture_root}/src/nested/.clang-tidy"
+if "${tidy_policy_verifier}" \
+  "${tidy_config}" "${tidy_runner}" "${fixture_root}" 2>/dev/null; then
+  echo "accepted nested clang-tidy warning promotion" >&2
+  exit 1
+fi

@@ -69,6 +69,18 @@ The published bases contain only stable, reusable CI tools:
 | clang-p2996 | The common build prerequisites plus native Bloomberg clang-p2996 at `7220baff` and its C++26 reflection runtime; AMD64 remains required while ARM64 earns differential parity |
 | Analysis | The GCC runtime plus the architecture-matched official LLVM 22.1.8 `clang-format`, `clang-tidy`, static analyzer, and LLD tools |
 
+The analysis CMake preset explicitly chainloads `cmake/toolchains/clang-analysis.cmake` through
+vcpkg's outer toolchain. Defining that chainload only inside the overlay triplet would configure
+dependency builds but leave project compile commands on the container's system libstdc++. The
+validation descendant therefore requires the generated compilation database to carry
+the pinned Clang compiler, exactly `-std=c++26`, and `--gcc-toolchain=/opt/gcc-16.1` in every
+analyzed project source command, and independently proves `_GLIBCXX_RELEASE == 16` before running
+clang-tidy over that complete database. Analysis configuration starts from a fresh CMake cache so a
+mounted build tree cannot retain pre-fix initialization flags. Exact formatting runs before
+dependency installation. Warning diagnostics remain report-only at this phase; behavioral fixtures
+reject nested or runner-supplied configuration and warning promotion, while compiler, configuration,
+and toolchain-selection errors remain fatal.
+
 They do not contain the source tree, a configured build tree, the repository's installed vcpkg
 graph, editor settings, named local volumes, or a Dev Container lifecycle result.
 
