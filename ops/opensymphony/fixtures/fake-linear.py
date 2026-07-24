@@ -51,6 +51,24 @@ def issue_node() -> dict:
     }
 
 
+def issue_summary_node() -> dict:
+    return {
+        "id": FIXTURE_ISSUE_ID,
+        "identifier": FIXTURE_ISSUE_IDENTIFIER,
+        "url": "https://linear.example.invalid/issue/FIX-901",
+        "title": "Contained no-model route fixture",
+        "priority": 1.0,
+        "createdAt": "2026-07-23T00:00:00Z",
+        "updatedAt": fixture_updated_at(),
+        "state": fixture_state(),
+        "children": {"nodes": []},
+        "inverseRelations": {
+            "nodes": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        },
+    }
+
+
 def issue_state_node() -> dict:
     return {
         "id": FIXTURE_ISSUE_ID,
@@ -103,7 +121,11 @@ class Handler(BaseHTTPRequestHandler):
         if mutation:
             self.respond(409, {"errors": [{"message": "fixture rejects tracker mutation"}]})
             return
-        if not isinstance(query, str) or operation not in {"IssuesByState", "IssueStatesByIds"}:
+        if not isinstance(query, str) or operation not in {
+            "IssuesByState",
+            "IssueSummariesByState",
+            "IssueStatesByIds",
+        }:
             self.respond(422, {"errors": [{"message": "fixture rejects unknown operation"}]})
             return
 
@@ -120,8 +142,11 @@ class Handler(BaseHTTPRequestHandler):
         else:
             states = variables.get("stateNames", [])
             expected_state = fixture_state()["name"]
+            response_node = (
+                issue_summary_node() if operation == "IssueSummariesByState" else issue_node()
+            )
             nodes = (
-                [issue_node()]
+                [response_node]
                 if isinstance(states, list) and expected_state in states
                 else []
             )

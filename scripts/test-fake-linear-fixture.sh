@@ -65,8 +65,57 @@ active_response="$(
 )"
 printf '%s\n' "${active_response}" | grep -Fq '"identifier":"FIX-901"'
 
+active_summary_response="$(
+  curl --fail --silent --show-error \
+    --header "authorization: fixture-key" \
+    --header "content-type: application/json" \
+    --data '{"query":"query IssueSummariesByState { issues { nodes { id identifier url title priority createdAt updatedAt state { id name type } children { nodes { id identifier url title state { name } } } inverseRelations { nodes { type issue { id identifier title state { id name type } } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }","variables":{"stateNames":["In Progress"]}}' \
+    "http://127.0.0.1:${port}/graphql"
+)"
+printf '%s\n' "${active_summary_response}" |
+  python3 -c '
+import json
+import sys
+
+response = json.load(sys.stdin)
+issues = response["data"]["issues"]
+assert issues["pageInfo"] == {"hasNextPage": False, "endCursor": None}
+assert len(issues["nodes"]) == 1
+issue = issues["nodes"][0]
+assert set(issue) == {
+    "id",
+    "identifier",
+    "url",
+    "title",
+    "priority",
+    "createdAt",
+    "updatedAt",
+    "state",
+    "children",
+    "inverseRelations",
+}
+assert issue["id"] == "fixture-issue-901"
+assert issue["identifier"] == "FIX-901"
+assert issue["url"] == "https://linear.example.invalid/issue/FIX-901"
+assert issue["title"] == "Contained no-model route fixture"
+assert issue["priority"] == 1.0
+assert issue["createdAt"] == "2026-07-23T00:00:00Z"
+assert issue["updatedAt"] == "2026-07-23T00:00:00Z"
+assert issue["state"] == {
+    "id": "fixture-state-started",
+    "name": "In Progress",
+    "type": "started",
+}
+assert issue["children"] == {"nodes": []}
+assert issue["inverseRelations"] == {
+    "nodes": [],
+    "pageInfo": {"hasNextPage": False, "endCursor": None},
+}
+'
+
 for mutation_query in \
   'mutation IssueArchive { issueArchive(id:"fixture") { success } }' \
+  'mutation IssueSummariesByState { issueArchive(id:"fixture") { success } }' \
   $'mutation\nIssueArchive { issueArchive(id:"fixture") { success } }' \
   $'mutation\tIssueArchive { issueArchive(id:"fixture") { success } }' \
   'mutation{ issueArchive(id:"fixture") { success } }'; do
