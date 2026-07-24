@@ -39,6 +39,27 @@ zizmor \
   --format plain \
   --color never \
   .github/workflows/*.yml
+
+javascript_index=0
+while IFS= read -r -d '' javascript_file; do
+  javascript_index=$((javascript_index + 1))
+  if ! git show ":${javascript_file}" 2>/dev/null |
+    node --check --input-type=module - >/dev/null 2>&1; then
+    echo "JavaScript syntax check failed for indexed module ${javascript_index}" >&2
+    exit 1
+  fi
+done < <(git ls-files -z --cached -- '*.mjs')
+
+javascript_worktree_index=0
+while IFS= read -r -d '' javascript_file; do
+  [[ -f "${javascript_file}" ]] || continue
+  javascript_worktree_index=$((javascript_worktree_index + 1))
+  if ! node --check -- "${javascript_file}" >/dev/null 2>&1; then
+    echo "JavaScript syntax check failed for working-tree module ${javascript_worktree_index}" >&2
+    exit 1
+  fi
+done < <(git ls-files -z --cached --others --exclude-standard -- '*.mjs')
+
 node scripts/check-dependency-policy.mjs
 ./scripts/test-analysis-toolchain-contract.sh
 ./scripts/test-toolchain-platform-contract.sh
