@@ -93,7 +93,8 @@ RUN apt-get update \
         /home/orchestrator/.opensymphony \
         /orchestrator \
         /target \
-        /workspaces
+        /workspaces \
+    && test ! -e /opt/symphony-cpp-seed
 
 COPY --from=builder-base /usr/local/cargo /opt/rust/cargo
 COPY --from=builder-base /usr/local/rustup /opt/rust/rustup

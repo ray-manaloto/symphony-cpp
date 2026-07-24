@@ -3,6 +3,9 @@
 set -euo pipefail
 
 readonly containerfile=containers/Containerfile
+readonly dockerignore=.dockerignore
+readonly opensymphony_containerfile=containers/OpenSymphony.Containerfile
+readonly opensymphony_dockerignore=containers/OpenSymphony.Containerfile.dockerignore
 readonly cmake_installer=scripts/install-cmake.sh
 readonly cmake_presets=CMakePresets.json
 readonly p2996_toolchain=cmake/toolchains/clang-p2996.cmake
@@ -545,15 +548,33 @@ if grep -Fq 'libc6,x86-64' "${containerfile}"; then
   exit 1
 fi
 
+toolchain_runtime_base="$(stage_block toolchain-runtime-base)"
+grep -Fq 'FROM ${CODEX_BASE} AS toolchain-runtime-base' <<<"${toolchain_runtime_base}"
+grep -Fq \
+  'RUN --mount=type=bind,source=scripts/install-cmake.sh,target=/tmp/install-cmake.sh,ro' \
+  <<<"${toolchain_runtime_base}"
+if grep -Eq '^(ADD|COPY|ONBUILD)[[:space:]]' <<<"${toolchain_runtime_base}"; then
+  echo "generic toolchain runtime base must not retain repository files in image layers" >&2
+  exit 1
+fi
+
 gcc_runtime="$(stage_block symphony-gcc-runtime)"
+grep -Fq 'FROM toolchain-runtime-base AS symphony-gcc-runtime' <<<"${gcc_runtime}"
 grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${gcc_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${gcc_runtime}"
 grep -Fq 'ENTRYPOINT []' <<<"${gcc_runtime}"
+test "$(grep -Ec '^COPY ' <<<"${gcc_runtime}")" -eq 1
+grep -Fq 'COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1' <<<"${gcc_runtime}"
 
 gcc_artifact="$(stage_block gcc16-artifact)"
 grep -Fq 'FROM scratch AS gcc16-artifact' <<<"${gcc_artifact}"
 grep -Fq 'COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1' \
   <<<"${gcc_artifact}"
+test "$(grep -Ec '^COPY ' <<<"${gcc_artifact}")" -eq 1
+if grep -Eq '^(ADD|ONBUILD)[[:space:]]|(/tmp/|/build/|/src/)' <<<"${gcc_artifact}"; then
+  echo "GCC artifact stage must not copy compiler build intermediates" >&2
+  exit 1
+fi
 gcc_package="$(stage_block symphony-gcc16)"
 grep -Fq 'FROM compiler-build-base AS symphony-gcc16' <<<"${gcc_package}"
 grep -Fq 'COPY --from=gcc16-artifact /opt/gcc-16.1 /opt/gcc-16.1' \
@@ -567,16 +588,36 @@ analysis_runtime="$(stage_block symphony-analysis)"
 grep -Fq 'FROM symphony-gcc-runtime AS symphony-analysis' <<<"${analysis_runtime}"
 grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${analysis_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${analysis_runtime}"
+test "$(grep -Ec '^COPY ' <<<"${analysis_runtime}")" -eq 1
+grep -Fq 'COPY --from=llvm-analysis-tools /opt/llvm-22.1.8 /opt/llvm-22.1.8' \
+  <<<"${analysis_runtime}"
+if grep -Fq 'check-clang-format-version' <<<"${analysis_runtime}"; then
+  echo "generic analysis runtime must not retain repository build helpers" >&2
+  exit 1
+fi
+analysis_validation="$(stage_block symphony-analysis-validation)"
+grep -Fq \
+  'RUN --mount=type=bind,source=scripts/check-clang-format-version.sh,target=/usr/local/bin/check-clang-format-version,ro \' \
+  <<<"${analysis_validation}"
 
 clang_runtime="$(stage_block symphony-ci-clang)"
+grep -Fq 'FROM toolchain-runtime-base AS symphony-ci-clang' <<<"${clang_runtime}"
 grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${clang_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${clang_runtime}"
 grep -Fq 'ENTRYPOINT []' <<<"${clang_runtime}"
+test "$(grep -Ec '^COPY ' <<<"${clang_runtime}")" -eq 1
+grep -Fq 'COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996' \
+  <<<"${clang_runtime}"
 
 clang_artifact="$(stage_block clang-p2996-artifact)"
 grep -Fq 'FROM scratch AS clang-p2996-artifact' <<<"${clang_artifact}"
 grep -Fq 'COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996' \
   <<<"${clang_artifact}"
+test "$(grep -Ec '^COPY ' <<<"${clang_artifact}")" -eq 1
+if grep -Eq '^(ADD|ONBUILD)[[:space:]]|(/tmp/|/build/|/src/)' <<<"${clang_artifact}"; then
+  echo "clang-p2996 artifact stage must not copy compiler build intermediates" >&2
+  exit 1
+fi
 
 clang_package="$(stage_block symphony-clang-p2996)"
 grep -Fq 'FROM compiler-build-base AS symphony-clang-p2996' <<<"${clang_package}"
@@ -1010,3 +1051,55 @@ for config in "${devcontainer_configs[@]}"; do
   grep -Fq 'source=symphony-cpp-mise,target=/root/.local/share/mise,type=volume' "${config}"
   grep -Fq 'source=symphony-cpp-pre-commit,target=/root/.cache/pre-commit,type=volume' "${config}"
 done
+
+expected_dockerignore="$(
+  printf '%s\n' \
+    '.git' \
+    '.github' \
+    '.codex' \
+    'build' \
+    '.build' \
+    '.cache' \
+    '.ccache' \
+    '.direnv' \
+    '.env*' \
+    '.opensymphony' \
+    'compile_commands.json' \
+    'vcpkg_installed' \
+    'cmake-build-*' \
+    'node_modules' \
+    'target' \
+    'out' \
+    'dist' \
+    '.DS_Store' \
+    'core' \
+    'core.*' \
+    '*.log' \
+    '*.tmp' \
+    '*.swp' \
+    '*~'
+)"
+test "$(cat "${dockerignore}")" = "${expected_dockerignore}"
+if grep -Eq '^!' "${dockerignore}"; then
+  echo "Docker build context containment must not contain negated ignore rules" >&2
+  exit 1
+fi
+
+test "$(wc -l <"${opensymphony_dockerignore}")" -eq 1
+grep -Fxq '**' "${opensymphony_dockerignore}"
+if grep -Eq '^(ADD|COPY)[[:space:]]+[^-]' "${opensymphony_containerfile}"; then
+  echo "OpenSymphony local image must remain independent of the repository build context" >&2
+  exit 1
+fi
+
+test "$(grep -Fc 'test ! -e /opt/symphony-cpp-seed' "${containerfile}")" -eq 2
+grep -Fq 'test ! -e /opt/symphony-cpp-seed' "${opensymphony_containerfile}"
+test "$(
+  grep -Fc \
+    'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
+    "${containerfile}"
+)" -eq 3
+if grep -Fq 'WORKDIR /workspaces/symphony-cpp' "${containerfile}"; then
+  echo "generic compiler images must not embed a project-specific working directory" >&2
+  exit 1
+fi

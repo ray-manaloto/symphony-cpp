@@ -190,10 +190,24 @@ RUN set -eux; \
     check-clang-format-version "${actual_version}"; \
     rm -rf /tmp/llvm
 
-FROM compiler-build-base AS symphony-gcc-runtime
+# Keep publishable runtimes independent from the builder ancestry. Repository
+# helpers are bind-mounted for installation and never committed to an image layer.
+FROM ${CODEX_BASE} AS toolchain-runtime-base
+USER root
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    autoconf automake bison build-essential ca-certificates ccache cmake curl flex git gnupg \
+    libgmp-dev libisl-dev libmpc-dev libmpfr-dev libzstd-dev ninja-build python3 texinfo xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=bind,source=scripts/install-cmake.sh,target=/tmp/install-cmake.sh,ro \
+    /tmp/install-cmake.sh
+
+FROM toolchain-runtime-base AS symphony-gcc-runtime
 ARG SOURCE_REVISION=unknown
 COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
-RUN printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
+RUN test ! -e /opt/symphony-cpp-seed \
+ && test ! -e /tmp/gcc \
+ && printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
  && ldconfig \
  && ldconfig -p | grep -F 'libstdc++.so.6' | grep -F '=> /opt/gcc-16.1/lib64/libstdc++.so.6'
 ENV PATH=/opt/gcc-16.1/bin:${PATH} \
@@ -201,35 +215,38 @@ ENV PATH=/opt/gcc-16.1/bin:${PATH} \
     CXX=/opt/gcc-16.1/bin/g++
 LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.description="GCC 16.1 C++26 toolchain base for symphony-cpp CI and local devcontainers"
+      org.opencontainers.image.description="Reusable GCC 16.1 C++26 toolchain base for CI and local devcontainers"
 ENTRYPOINT []
 CMD ["bash"]
 
 FROM symphony-gcc-runtime AS symphony-analysis
 ARG SOURCE_REVISION=unknown
 COPY --from=llvm-analysis-tools /opt/llvm-22.1.8 /opt/llvm-22.1.8
-COPY --from=llvm-analysis-tools /usr/local/bin/check-clang-format-version /usr/local/bin/
 ENV PATH=/opt/llvm-22.1.8/bin:/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/llvm-22.1.8/bin/clang \
     CXX=/opt/llvm-22.1.8/bin/clang++
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.description="LLVM 22.1.8 analysis toolchain base for symphony-cpp CI and local devcontainers"
-WORKDIR /workspaces/symphony-cpp
+      org.opencontainers.image.description="Reusable LLVM 22.1.8 analysis toolchain base for CI and local devcontainers"
+WORKDIR /workspaces
 
-FROM compiler-build-base AS symphony-ci-clang
+FROM toolchain-runtime-base AS symphony-ci-clang
 ARG SOURCE_REVISION=unknown
 COPY --from=symphony-clang-p2996 /opt/clang-p2996 /opt/clang-p2996
 ENV PATH=/opt/clang-p2996/bin:${PATH} \
     CC=/opt/clang-p2996/bin/clang \
     CXX=/opt/clang-p2996/bin/clang++
-RUN find /opt/clang-p2996/lib -type f -name 'libc++.so.1*' -printf '%h\n' \
+RUN test ! -e /opt/symphony-cpp-seed \
+ && test ! -e /tmp/llvm-build \
+ && test ! -e /tmp/llvm-project \
+ && test ! -e /tmp/p2996-reflection-probe \
+ && find /opt/clang-p2996/lib -type f -name 'libc++.so.1*' -printf '%h\n' \
       | sort -u >/etc/ld.so.conf.d/clang-p2996.conf \
  && test -s /etc/ld.so.conf.d/clang-p2996.conf \
  && ldconfig
 LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.description="Bloomberg clang-p2996 C++26 reflection toolchain base for symphony-cpp CI and local devcontainers"
-WORKDIR /workspaces/symphony-cpp
+      org.opencontainers.image.description="Reusable Bloomberg clang-p2996 C++26 reflection toolchain base for CI and local devcontainers"
+WORKDIR /workspaces
 ENTRYPOINT []
 CMD ["bash"]
 
@@ -310,7 +327,8 @@ RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
  && ccache --show-stats
 
 FROM symphony-analysis AS symphony-analysis-validation
-RUN test "$(dpkg --print-architecture)" = "amd64" \
+RUN --mount=type=bind,source=scripts/check-clang-format-version.sh,target=/usr/local/bin/check-clang-format-version,ro \
+    test "$(dpkg --print-architecture)" = "amd64" \
  && check-clang-format-version "$(clang-format --version)" \
  && test "$(clang-tidy --version \
       | sed -n 's/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p')" = "22.1.8" \
