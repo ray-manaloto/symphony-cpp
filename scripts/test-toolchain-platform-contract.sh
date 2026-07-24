@@ -4,6 +4,7 @@ set -euo pipefail
 
 readonly containerfile=containers/Containerfile
 readonly cmake_installer=scripts/install-cmake.sh
+readonly devcontainer_setup=scripts/devcontainer-setup.sh
 readonly workflow=.github/workflows/compiler-matrix.yml
 readonly source_workflow=.github/workflows/source-ci.yml
 readonly devcontainer_configs=(
@@ -13,6 +14,160 @@ readonly devcontainer_configs=(
 )
 
 bash -n "${cmake_installer}"
+bash -n "${devcontainer_setup}"
+grep -Fq 'run_vcpkg_install()' "${devcontainer_setup}"
+grep -Fq 'show_vcpkg_failure_logs()' "${devcontainer_setup}"
+test "$(grep -Fc 'run_vcpkg_install ' "${devcontainer_setup}")" -eq 3
+
+setup_fixture="$(mktemp -d)"
+readonly setup_fixture
+trap 'rm -rf "${setup_fixture}"' EXIT
+mkdir -p "${setup_fixture}/.build/vcpkg/buildtrees/stale"
+printf '%s\n' 'stale cached diagnostic' \
+  >"${setup_fixture}/.build/vcpkg/buildtrees/stale/install-stale-out.log"
+cat >"${setup_fixture}/.build/vcpkg/vcpkg" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly status="${FAKE_VCPKG_STATUS:-0}"
+if [[ "${status}" -eq 0 ]]; then
+  exit 0
+fi
+if [[ "${FAKE_VCPKG_WRITE_LOGS:-true}" != true ]]; then
+  exit "${status}"
+fi
+
+mkdir -p .build/vcpkg/buildtrees/current
+second=1
+for name in z-oldest y-older x-current w-current v-current u-current t-current; do
+  log_path=".build/vcpkg/buildtrees/current/install-${name}-out.log"
+  printf 'current log %s\n' "${name}" \
+    >"${log_path}"
+  printf -v timestamp '203001010000.%02d' "${second}"
+  touch -t "${timestamp}" "${log_path}"
+  second=$((second + 1))
+done
+{
+  printf '%s\n' 'pre-tail sentinel must not appear'
+  line=1
+  while [[ "${line}" -le 130 ]]; do
+    printf 'bounded line %03d\n' "${line}"
+    line=$((line + 1))
+  done
+  readonly hidden_suffix='must-not-appear'
+  printf '%s%s%s\n' 'LINEAR_API_' 'KEY=' "linear-${hidden_suffix}"
+  printf '%s%s%s\n' 'pass' 'word=' "password-${hidden_suffix}"
+  printf '%s%s%s\n' 'to' 'ken=' "token-${hidden_suffix}"
+  printf '%s%s%s\n' 'sec' 'ret=' "secret-${hidden_suffix}"
+  printf '%s%s%s\n' 'AWS_SECRET_ACCESS_' 'KEY=' "aws-${hidden_suffix}"
+  printf '%s%s%s\n' 'Author' 'ization: Basic ' "basic-${hidden_suffix}"
+  printf '%s%s%s\n' 'DOCKER_VOLUME_OWNER_' 'TOKEN=' "docker-${hidden_suffix}"
+  printf '%s%s%s\n' 'OPENSYMPHONY_ACCEPTANCE_OWNER_' 'TOKEN=' \
+    "acceptance-${hidden_suffix}"
+  printf '%s%s%s\n' 'SYMPHONY_FIXTURE_TRACKER_' 'SECRET=' \
+    "fixture-${hidden_suffix}"
+  printf '%0400d\n' 0
+  printf '%s\n' 'canonical stdout final sentinel'
+} >.build/vcpkg/buildtrees/current/stdout-a-newest.log
+touch -t 203001010000.08 .build/vcpkg/buildtrees/current/stdout-a-newest.log
+exit "${status}"
+EOF
+chmod +x "${setup_fixture}/.build/vcpkg/vcpkg"
+
+setup_success="$(
+  cd "${setup_fixture}"
+  # shellcheck source=/dev/null
+  source "${OLDPWD}/${devcontainer_setup}"
+  FAKE_VCPKG_STATUS=0 run_vcpkg_install --clean-after-build 2>&1
+)"
+readonly setup_success
+if [[ -n "${setup_success}" ]]; then
+  echo "successful vcpkg install emitted unexpected diagnostics" >&2
+  exit 1
+fi
+
+set +e
+setup_failure="$(
+  cd "${setup_fixture}"
+  # shellcheck source=/dev/null
+  source "${OLDPWD}/${devcontainer_setup}"
+  FAKE_VCPKG_STATUS=42 run_vcpkg_install --clean-after-build 2>&1
+)"
+setup_status=$?
+set -e
+readonly setup_failure setup_status
+if [[ "${setup_status}" -ne 42 ]]; then
+  echo "vcpkg diagnostic wrapper did not preserve failure status 42" >&2
+  exit 1
+fi
+if [[ "$(grep -Fc '===== ' <<<"${setup_failure}")" -ne 6 ]]; then
+  echo "vcpkg diagnostics did not emit exactly six current logs" >&2
+  exit 1
+fi
+if [[ "$(
+  grep -F '===== ' <<<"${setup_failure}" | sed -n '1p'
+)" != "===== .build/vcpkg/buildtrees/current/stdout-a-newest.log =====" ]]; then
+  echo "vcpkg diagnostics did not emit the newest log first" >&2
+  exit 1
+fi
+if ! grep -Fq 'canonical stdout final sentinel' <<<"${setup_failure}"; then
+  echo "vcpkg diagnostics omitted the final line of the newest log" >&2
+  exit 1
+fi
+if grep -Fq 'pre-tail sentinel must not appear' <<<"${setup_failure}"; then
+  echo "vcpkg diagnostics exceeded the 120-line tail bound" >&2
+  exit 1
+fi
+if [[ "$(grep -Fc '[redacted secret-bearing build log line]' <<<"${setup_failure}")" -ne 9 ]]; then
+  echo "vcpkg diagnostics did not suppress every credential-shaped fixture line" >&2
+  exit 1
+fi
+if grep -Eq '(linear|password|token|secret|aws|basic|docker|acceptance|fixture)-must-not-appear' \
+    <<<"${setup_failure}"; then
+  echo "vcpkg diagnostics exposed a secret-bearing line" >&2
+  exit 1
+fi
+if grep -Fq 'stale cached diagnostic' <<<"${setup_failure}"; then
+  echo "vcpkg diagnostics emitted a stale cached log" >&2
+  exit 1
+fi
+if grep -Fq 'current log z-oldest' <<<"${setup_failure}" ||
+    grep -Fq 'current log y-older' <<<"${setup_failure}"; then
+  echo "vcpkg diagnostics exceeded the six-newest-log bound" >&2
+  exit 1
+fi
+if awk 'length($0) > 320 { exit 1 }' <<<"${setup_failure}"; then
+  :
+else
+  echo "vcpkg diagnostic line exceeded the output bound" >&2
+  exit 1
+fi
+
+rm -rf "${setup_fixture}/.build/vcpkg/buildtrees/current"
+set +e
+setup_without_logs="$(
+  cd "${setup_fixture}"
+  # shellcheck source=/dev/null
+  source "${OLDPWD}/${devcontainer_setup}"
+  FAKE_VCPKG_STATUS=23 FAKE_VCPKG_WRITE_LOGS=false \
+    run_vcpkg_install --clean-after-build 2>&1
+)"
+setup_without_logs_status=$?
+set -e
+readonly setup_without_logs setup_without_logs_status
+if [[ "${setup_without_logs_status}" -ne 23 ]]; then
+  echo "vcpkg empty-log diagnostic did not preserve failure status 23" >&2
+  exit 1
+fi
+if ! grep -Fq 'current vcpkg attempt produced no nonempty build logs' \
+    <<<"${setup_without_logs}"; then
+  echo "vcpkg empty-log failure lacked an explicit current-attempt diagnostic" >&2
+  exit 1
+fi
+if grep -Fq 'stale cached diagnostic' <<<"${setup_without_logs}"; then
+  echo "vcpkg diagnostics substituted a stale log for an empty attempt" >&2
+  exit 1
+fi
 
 stage_block() {
   local stage="$1"

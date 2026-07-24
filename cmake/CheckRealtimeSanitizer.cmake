@@ -9,7 +9,7 @@ set(CMAKE_REQUIRED_LINK_OPTIONS
   -fno-omit-frame-pointer)
 
 check_cxx_source_compiles(
-  [[
+  [=[
     #include <sanitizer/rtsan_interface.h>
 
     #ifndef __has_feature
@@ -24,22 +24,22 @@ check_cxx_source_compiles(
       nonblocking_probe();
       return 0;
     }
-  ]]
+  ]=]
   SYMPHONY_RTSAN_AVAILABLE)
 
 check_cxx_source_compiles(
-  [[
+  [=[
     void missing_noexcept() [[clang::nonblocking]] {}
 
     int main() {
       missing_noexcept();
       return 0;
     }
-  ]]
+  ]=]
   SYMPHONY_RTSAN_ACCEPTED_MISSING_NOEXCEPT)
 
 check_cxx_source_compiles(
-  [[
+  [=[
     void allocating_operation() noexcept [[clang::nonblocking]] {
       auto* value = new int{42};
       delete value;
@@ -49,7 +49,7 @@ check_cxx_source_compiles(
       allocating_operation();
       return 0;
     }
-  ]]
+  ]=]
   SYMPHONY_RTSAN_ACCEPTED_ALLOCATION)
 
 cmake_pop_check_state()

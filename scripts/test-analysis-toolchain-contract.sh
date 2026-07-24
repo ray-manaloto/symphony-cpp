@@ -47,6 +47,12 @@ grep -Fq '__has_feature(realtime_sanitizer)' "${rtsan_probe}"
 grep -Fq '#include <sanitizer/rtsan_interface.h>' "${rtsan_probe}"
 grep -Fq 'SYMPHONY_RTSAN_ACCEPTED_MISSING_NOEXCEPT' "${rtsan_probe}"
 grep -Fq 'SYMPHONY_RTSAN_ACCEPTED_ALLOCATION' "${rtsan_probe}"
+test "$(grep -Foc '[=[' "${rtsan_probe}")" -eq 3
+test "$(grep -Foc ']=]' "${rtsan_probe}")" -eq 3
+if grep -Eq '^[[:space:]]*\[\[$' "${rtsan_probe}"; then
+  echo "RTSan C++ probes must not use a bracket delimiter that collides with attributes" >&2
+  exit 1
+fi
 grep -Fq 'if("${program_result}" STREQUAL "0")' "${rtsan_failure_driver}"
 grep -Fq 'program_output MATCHES "${EXPECTED_REPORT}"' "${rtsan_failure_driver}"
 test "$(grep -Foc 'symphony_rtsan_options)' "${test_cmake}")" -eq 2
