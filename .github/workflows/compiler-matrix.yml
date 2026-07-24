@@ -208,6 +208,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Validate LLVM version-output contract
+        run: ./scripts/test-analysis-toolchain-contract.sh
       - name: Reclaim ephemeral runner disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
@@ -246,7 +248,7 @@ jobs:
               --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
           )" = "${GITHUB_SHA}"
           docker run --rm "${IMAGE}:${GITHUB_SHA}" bash -lc '
-            test "$(clang-format --version)" = "clang-format version 22.1.8"
+            check-clang-format-version "$(clang-format --version)"
             test "$(clang-tidy --version |
               sed -n "s/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p")" = "22.1.8"
             test -x /opt/llvm-22.1.8/bin/run-clang-tidy
@@ -372,7 +374,7 @@ jobs:
           test "$(docker image inspect "${ANALYSIS_IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
           test "$(docker image inspect "${ANALYSIS_IMAGE}:${GITHUB_SHA}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "${GITHUB_SHA}"
           docker run --rm "${ANALYSIS_IMAGE}:${GITHUB_SHA}" bash -lc '
-            test "$(clang-format --version)" = "clang-format version 22.1.8"
+            check-clang-format-version "$(clang-format --version)"
             test "$(clang-tidy --version |
               sed -n "s/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p")" = "22.1.8"
             test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"

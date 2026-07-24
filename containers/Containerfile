@@ -71,6 +71,7 @@ ARG LLVM_VERSION=22.1.8
 ARG LLVM_SHA256=df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384
 ARG LLVM_SIGNER=FFB3368980F3E6BB5737145A316C56D064CACBA5
 ARG LLVM_RELEASE_KEYS_SHA256=f38bd19b7f2d22cafa755841e6ce9375b9a2e6d41f7b974e4953d6b084839001
+COPY scripts/check-clang-format-version.sh /usr/local/bin/check-clang-format-version
 WORKDIR /tmp/llvm
 RUN set -eux; \
     curl --fail --location --proto '=https' --tlsv1.2 \
@@ -101,7 +102,7 @@ RUN set -eux; \
     test -x "/opt/llvm-${LLVM_VERSION}/bin/clang-format"; \
     actual_version="$("/opt/llvm-${LLVM_VERSION}/bin/clang-format" --version)"; \
     printf 'clang-format version output: <%s>\n' "${actual_version}"; \
-    test "${actual_version}" = "clang-format version ${LLVM_VERSION}"; \
+    check-clang-format-version "${actual_version}"; \
     rm -rf /tmp/llvm
 
 FROM compiler-build-base AS symphony-gcc-runtime
@@ -122,6 +123,7 @@ CMD ["bash"]
 FROM symphony-gcc-runtime AS symphony-analysis
 ARG SOURCE_REVISION=unknown
 COPY --from=llvm-analysis-tools /opt/llvm-22.1.8 /opt/llvm-22.1.8
+COPY --from=llvm-analysis-tools /usr/local/bin/check-clang-format-version /usr/local/bin/
 ENV PATH=/opt/llvm-22.1.8/bin:/opt/gcc-16.1/bin:${PATH} \
     CC=/opt/llvm-22.1.8/bin/clang \
     CXX=/opt/llvm-22.1.8/bin/clang++

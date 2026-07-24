@@ -2,9 +2,8 @@
 set -euo pipefail
 
 readonly clang_format=/opt/llvm-22.1.8/bin/clang-format
-readonly expected_version="clang-format version 22.1.8"
 
-test "$("${clang_format}" --version)" = "${expected_version}"
+./scripts/check-clang-format-version.sh "$("${clang_format}" --version)"
 
 git ls-files -z --cached --others --exclude-standard -- \
   ':(glob)include/**/*.h' \
