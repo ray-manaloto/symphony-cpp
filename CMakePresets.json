@@ -25,6 +25,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_VERIFY_INTERFACE_HEADER_SETS": "ON",
         "SYMPHONY_ENABLE_REFLECTION": "ON"
       },
       "environment": {
@@ -61,6 +62,7 @@
       "binaryDir": "${sourceDir}/build/clang-reflection",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "/opt/clang-p2996/bin/clang++",
+        "CMAKE_VERIFY_INTERFACE_HEADER_SETS": "OFF",
         "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-p2996"
       }
@@ -72,6 +74,7 @@
       "cacheVariables": {
         "BUILD_TESTING": "OFF",
         "CMAKE_CXX_COMPILER": "/opt/llvm-22.1.8/bin/clang++",
+        "CMAKE_VERIFY_INTERFACE_HEADER_SETS": "OFF",
         "SYMPHONY_ENABLE_REFLECTION": "OFF",
         "SYMPHONY_WARNINGS_AS_ERRORS": "OFF",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-analysis"
@@ -82,22 +85,38 @@
     {
       "name": "gcc-debug",
       "configurePreset": "gcc-debug",
-      "jobs": 4
+      "jobs": 4,
+      "targets": [
+        "all",
+        "all_verify_interface_header_sets"
+      ]
     },
     {
       "name": "gcc-release",
       "configurePreset": "gcc-release",
-      "jobs": 4
+      "jobs": 4,
+      "targets": [
+        "all",
+        "all_verify_interface_header_sets"
+      ]
     },
     {
       "name": "gcc-sanitizers",
       "configurePreset": "gcc-sanitizers",
-      "jobs": 4
+      "jobs": 4,
+      "targets": [
+        "all",
+        "all_verify_interface_header_sets"
+      ]
     },
     {
       "name": "gcc-tsan",
       "configurePreset": "gcc-tsan",
-      "jobs": 4
+      "jobs": 4,
+      "targets": [
+        "all",
+        "all_verify_interface_header_sets"
+      ]
     },
     {
       "name": "clang-reflection",

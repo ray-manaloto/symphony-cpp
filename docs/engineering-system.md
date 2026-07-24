@@ -220,7 +220,7 @@ experimental clang-p2996 fork.
   portability, selected concurrency/CERT, and include-cleaner checks.
 - Run IWYU report-only with a compatible pinned LLVM build; promote only stable project-header
   findings and never auto-rewrite includes in CI.
-- Add self-contained compilation fixtures for every public header and compile-time/static-assert
+- [x] Add self-contained compilation fixtures for every public header and compile-time/static-assert
   contract fixtures.
 - [x] Build and test the existing `gcc-release` preset because optimized diagnostics differ.
 
