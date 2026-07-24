@@ -5,6 +5,10 @@ set -euo pipefail
 readonly containerfile=containers/Containerfile
 readonly cmake_installer=scripts/install-cmake.sh
 readonly devcontainer_setup=scripts/devcontainer-setup.sh
+readonly p2996_test=tests/p2996_tests.cpp
+readonly upstream_lock=docs/upstream-lock.md
+readonly ut_manifest=vcpkg-ports/ut/vcpkg.json
+readonly ut_port=vcpkg-ports/ut/portfile.cmake
 readonly workflow=.github/workflows/compiler-matrix.yml
 readonly source_workflow=.github/workflows/source-ci.yml
 readonly devcontainer_configs=(
@@ -15,6 +19,20 @@ readonly devcontainer_configs=(
 
 bash -n "${cmake_installer}"
 bash -n "${devcontainer_setup}"
+test "$(grep -Fc -- '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF' "${ut_port}")" -eq 1
+test "$(grep -Fc -- '-DUT_ENABLE_MODULES=OFF' "${ut_port}")" -eq 1
+node -e '
+  const fs = require("node:fs");
+  const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (manifest["port-version"] !== 1) process.exit(1);
+' "${ut_manifest}"
+test "$(
+  grep -Fc 'openalgz/ut | `fc3f5a9c36dfc56bd2cb0eab07733005e5af7b74`; source SHA-512' \
+    "${upstream_lock}"
+)" -eq 1
+grep -F 'openalgz/ut | `fc3f5a9c36dfc56bd2cb0eab07733005e5af7b74`; source SHA-512' \
+  "${upstream_lock}" | grep -Fq 'overlay port revision `1`'
+grep -Fq '#error "p2996 differential test requires reflection"' "${p2996_test}"
 grep -Fq 'run_vcpkg_install()' "${devcontainer_setup}"
 grep -Fq 'show_vcpkg_failure_logs()' "${devcontainer_setup}"
 test "$(grep -Fc 'run_vcpkg_install ' "${devcontainer_setup}")" -eq 3

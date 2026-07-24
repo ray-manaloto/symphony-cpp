@@ -4,7 +4,10 @@
 
 #include "symphony/meta/reflection.hpp"
 
-#if defined(SYMPHONY_ENABLE_REFLECTION)
+#if !defined(SYMPHONY_ENABLE_REFLECTION)
+#error "p2996 differential test requires reflection"
+#endif
+
 namespace symphony::test {
 struct DifferentialConfig {
   int poll_interval_ms;
@@ -28,4 +31,3 @@ ut::suite p2996_tests = [] {
   };
 };
 } // namespace symphony::test
-#endif

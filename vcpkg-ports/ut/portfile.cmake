@@ -8,6 +8,7 @@ vcpkg_cmake_configure(
   SOURCE_PATH "${SOURCE_PATH}"
   OPTIONS
     -DBUILD_TESTING=OFF
+    -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
     -DUT_COMPILE_TIME=OFF
     -DUT_ENABLE_MODULES=OFF)
 vcpkg_cmake_install()
