@@ -76,7 +76,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/graphql":
             self.respond(404, {"errors": [{"message": "unknown fixture path"}]})
             return
-        if self.headers.get("authorization") != "fixture-not-a-secret":
+        if self.headers.get("authorization") != "fixture-key":
             self.respond(401, {"errors": [{"message": "fixture authorization required"}]})
             return
         length = int(self.headers.get("content-length", "0"))

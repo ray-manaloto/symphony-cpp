@@ -16,7 +16,7 @@ printf '%s\n' \
   '    if [[ "$*" == *"dev.symphony.acceptance-owner"* ]]; then' \
   '      printf "run-opensymphony-contained\n"' \
   '    else' \
-  '      printf "%s\n" "${DOCKER_VOLUME_OWNER_TOKEN:-${OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN:-launcher-owner}}"' \
+  '      printf "%s\n" "${DOCKER_VOLUME_OWNER_TOKEN:-${OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN:-own-fixt}}"' \
   '    fi' \
   '    exit 0' \
   '  fi' \
@@ -54,7 +54,7 @@ run_launcher env \
   LINEAR_API_KEY=fixture \
   OPENSYMPHONY_ACCEPTANCE_SUFFIX="${acceptance_suffix}" \
   OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED=true \
-  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=launcher-owner \
+  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=own-fixt \
   OPENSYMPHONY_STATE_VOLUME="symphony-opensymphony-state-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_CODEX_AUTH_VOLUME="symphony-codex-auth-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_WORKSPACES_VOLUME="symphony-opensymphony-workspaces-acceptance-${acceptance_suffix}" \
@@ -67,7 +67,7 @@ run_launcher env \
   LINEAR_API_KEY=fixture \
   OPENSYMPHONY_ACCEPTANCE_SUFFIX="${acceptance_suffix}" \
   OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED=true \
-  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=launcher-owner \
+  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=own-fixt \
   OPENSYMPHONY_STATE_VOLUME="symphony-opensymphony-state-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_CODEX_AUTH_VOLUME="symphony-codex-auth-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_WORKSPACES_VOLUME="symphony-opensymphony-workspaces-acceptance-${acceptance_suffix}" \
@@ -133,10 +133,10 @@ fi
 
 if run_launcher env \
   LINEAR_API_KEY=fixture \
-  DOCKER_VOLUME_OWNER_TOKEN=foreign-owner \
+  DOCKER_VOLUME_OWNER_TOKEN=own-other \
   OPENSYMPHONY_ACCEPTANCE_SUFFIX="${acceptance_suffix}" \
   OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED=true \
-  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=launcher-owner \
+  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN=own-fixt \
   OPENSYMPHONY_STATE_VOLUME="symphony-opensymphony-state-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_CODEX_AUTH_VOLUME="symphony-codex-auth-acceptance-${acceptance_suffix}" \
   OPENSYMPHONY_WORKSPACES_VOLUME="symphony-opensymphony-workspaces-acceptance-${acceptance_suffix}" \
@@ -153,7 +153,7 @@ if [[ -n "${OPENSYMPHONY_INTEGRATION_IMAGE:-}" ]]; then
   (
     cd "${repo_root}"
     if [[ "${OPENSYMPHONY_SEED_FIXTURE_CODEX_LOGIN:-false}" == "true" ]]; then
-      printf 'fixture-not-a-secret\n' |
+      printf 'fixture-key\n' |
         docker run --rm --interactive \
           --volume "${OPENSYMPHONY_CODEX_AUTH_VOLUME}:/home/orchestrator/.codex" \
           --entrypoint codex \

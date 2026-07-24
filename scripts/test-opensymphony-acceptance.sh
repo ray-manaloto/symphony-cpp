@@ -203,7 +203,7 @@ common_args=(
   "${hardening_args[@]}"
   "${limit_args[@]}"
   --network "${network}"
-  --env LINEAR_API_KEY=fixture-not-a-secret
+  --env LINEAR_API_KEY=fixture-key
   --env CCACHE_DIR=/home/orchestrator/.cache/ccache
   --env UV_CACHE_DIR=/home/orchestrator/.cache/uv
   --env VCPKG_DEFAULT_BINARY_CACHE=/home/orchestrator/.cache/vcpkg/archives
@@ -221,7 +221,7 @@ common_args=(
   --volume "${workspaces_volume}:/workspaces"
 )
 
-printf 'fixture-not-a-secret\n' |
+printf 'fixture-key\n' |
   docker run --rm --interactive \
     "${hardening_args[@]}" \
     "${limit_args[@]}" \
@@ -253,7 +253,7 @@ printf 'fixture-not-a-secret\n' |
     OPENSYMPHONY_VCPKG_ARCHIVES_VOLUME="${vcpkg_archives_volume}" \
     OPENSYMPHONY_UV_CACHE_VOLUME="${uv_cache_volume}" \
     ./scripts/opensymphony-container.sh preflight
-  LINEAR_API_KEY=fixture-not-a-secret \
+  LINEAR_API_KEY=fixture-key \
     OPENSYMPHONY_IMAGE="${image}" \
     OPENSYMPHONY_NETWORK="${network}" \
     OPENSYMPHONY_ACCEPTANCE_SUFFIX="${suffix}" \
@@ -306,7 +306,7 @@ docker run --detach \
   --network "${network}" \
   "${hardening_args[@]}" \
   "${limit_args[@]}" \
-  --env LINEAR_API_KEY=fixture-not-a-secret \
+  --env LINEAR_API_KEY=fixture-key \
   --env CCACHE_DIR=/home/orchestrator/.cache/ccache \
   --env UV_CACHE_DIR=/home/orchestrator/.cache/uv \
   --env VCPKG_DEFAULT_BINARY_CACHE=/home/orchestrator/.cache/vcpkg/archives \
@@ -462,7 +462,7 @@ docker run --detach \
   --network "${network}" \
   "${hardening_args[@]}" \
   "${limit_args[@]}" \
-  --env LINEAR_API_KEY=fixture-not-a-secret \
+  --env LINEAR_API_KEY=fixture-key \
   --env CCACHE_DIR=/home/orchestrator/.cache/ccache \
   --env UV_CACHE_DIR=/home/orchestrator/.cache/uv \
   --env VCPKG_DEFAULT_BINARY_CACHE=/home/orchestrator/.cache/vcpkg/archives \

@@ -58,7 +58,7 @@ start_server active
 
 active_response="$(
   curl --fail --silent --show-error \
-    --header "authorization: fixture-not-a-secret" \
+    --header "authorization: fixture-key" \
     --header "content-type: application/json" \
     --data '{"query":"query IssuesByState { issues { nodes { id } } }","variables":{"stateNames":["In Progress"]}}' \
     "http://127.0.0.1:${port}/graphql"
@@ -74,7 +74,7 @@ for mutation_query in \
     curl --silent --show-error \
       --output "${fixture_root}/mutation.json" \
       --write-out '%{http_code}' \
-      --header "authorization: fixture-not-a-secret" \
+      --header "authorization: fixture-key" \
       --header "content-type: application/json" \
       --data "$(printf '{"query":%s,"variables":{}}' \
         "$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' <<<"${mutation_query}")")" \
@@ -101,7 +101,7 @@ for rejected_query in \
     curl --silent --show-error \
       --output "${fixture_root}/rejected.json" \
       --write-out '%{http_code}' \
-      --header "authorization: fixture-not-a-secret" \
+      --header "authorization: fixture-key" \
       --header "content-type: application/json" \
       --data "${rejected_body}" \
       "http://127.0.0.1:${port}/graphql"
@@ -124,7 +124,7 @@ wrong_path_status="$(
   curl --silent --show-error \
     --output "${fixture_root}/wrong-path.json" \
     --write-out '%{http_code}' \
-    --header "authorization: fixture-not-a-secret" \
+    --header "authorization: fixture-key" \
     --header "content-type: application/json" \
     --data '{"query":"query IssuesByState { issues { nodes { id } } }","variables":{}}' \
     "http://127.0.0.1:${port}/wrong"
@@ -136,7 +136,7 @@ start_server terminal
 
 terminal_response="$(
   curl --fail --silent --show-error \
-    --header "authorization: fixture-not-a-secret" \
+    --header "authorization: fixture-key" \
     --header "content-type: application/json" \
     --data '{"query":"query IssuesByState { issues { nodes { id identifier state { name type } } } }","variables":{"stateNames":["Done"]}}' \
     "http://127.0.0.1:${port}/graphql"
@@ -146,7 +146,7 @@ printf '%s\n' "${terminal_response}" | grep -Fq '"name":"Done","type":"completed
 
 terminal_active_response="$(
   curl --fail --silent --show-error \
-    --header "authorization: fixture-not-a-secret" \
+    --header "authorization: fixture-key" \
     --header "content-type: application/json" \
     --data '{"query":"query IssuesByState { issues { nodes { id } } }","variables":{"stateNames":["In Progress"]}}' \
     "http://127.0.0.1:${port}/graphql"
@@ -159,7 +159,7 @@ fi
 
 terminal_state_response="$(
   curl --fail --silent --show-error \
-    --header "authorization: fixture-not-a-secret" \
+    --header "authorization: fixture-key" \
     --header "content-type: application/json" \
     --data '{"query":"query IssueStatesByIds { issues { nodes { id identifier updatedAt state { id name type } } } }","variables":{"issueIds":["fixture-issue-901"]}}' \
     "http://127.0.0.1:${port}/graphql"
