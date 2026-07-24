@@ -19,6 +19,7 @@ linear_fixture="symphony-opensymphony-linear-fixture-${suffix}"
 no_model_daemon="symphony-opensymphony-no-model-${suffix}"
 recovery_daemon="symphony-opensymphony-recovery-${suffix}"
 fixture_repo=""
+ast_fixture_root=""
 template_commit="84a6c1d49926ccc663c5ad8018d2742f777917e3"
 template_tree="7960ff709b1c372cf9397f270203d3154d8fd03b"
 runtime_cpus="${OPENSYMPHONY_ACCEPTANCE_CPUS:-4}"
@@ -111,6 +112,13 @@ cleanup() {
       cleanup_failed=true
     fi
   fi
+  if [[ -n "${ast_fixture_root}" ]]; then
+    if [[ "${ast_fixture_root}" != /tmp/symphony-opensymphony-ast.* ]] ||
+      ! rm -rf -- "${ast_fixture_root}"; then
+      echo "failed to remove disposable OpenSymphony AST fixture" >&2
+      cleanup_failed=true
+    fi
+  fi
   if (( result != 0 )); then
     exit "${result}"
   fi
@@ -121,6 +129,39 @@ cleanup() {
 }
 trap cleanup EXIT
 fixture_repo="$(mktemp -d /tmp/symphony-opensymphony-acceptance.XXXXXX)"
+ast_fixture_root="$(mktemp -d /tmp/symphony-opensymphony-ast.XXXXXX)"
+printf '%s\n' \
+  'pub fn ast_rust_entry() { ast_rust_helper(); }' \
+  'fn ast_rust_helper() {}' \
+  >"${ast_fixture_root}/fixture.rs"
+printf '%s\n' \
+  'function astTsEntry(): void { astTsHelper(); }' \
+  'function astTsHelper(): void {}' \
+  >"${ast_fixture_root}/fixture.ts"
+printf '%s\n' \
+  'function AstTsxEntry() { return <div>{astTsxHelper()}</div>; }' \
+  'function astTsxHelper() { return "tsx"; }' \
+  >"${ast_fixture_root}/fixture.tsx"
+printf '%s\n' \
+  'function astJsEntry() { astJsHelper(); }' \
+  'function astJsHelper() {}' \
+  >"${ast_fixture_root}/fixture.js"
+printf '%s\n' \
+  'function AstJsxEntry() { return <div>{astJsxHelper()}</div>; }' \
+  'function astJsxHelper() { return "jsx"; }' \
+  >"${ast_fixture_root}/fixture.jsx"
+printf '%s\n' \
+  'def ast_python_entry():' \
+  '    ast_python_helper()' \
+  '' \
+  'def ast_python_helper():' \
+  '    return None' \
+  >"${ast_fixture_root}/fixture.py"
+printf '%s\n' '{"fixture": "json"}' >"${ast_fixture_root}/fixture.json"
+printf '%s\n' 'fixture: yaml' >"${ast_fixture_root}/fixture.yaml"
+printf '%s\n' 'fixture = "toml"' >"${ast_fixture_root}/fixture.toml"
+printf '%s\n' '# Fixture Markdown' >"${ast_fixture_root}/fixture.md"
+printf '%s\n' 'void unsupported_cpp() {}' >"${ast_fixture_root}/unsupported.cpp"
 
 for name in \
   "${auth_volume}" \
@@ -592,9 +633,11 @@ docker run --detach \
   --name "${memory_daemon}" \
   --label "dev.symphony.acceptance-run=${owner_token}" \
   --network "${network}" \
+  --workdir /target \
   "${hardening_args[@]}" \
   "${limit_args[@]}" \
   --volume "${repo_root}:/target:ro" \
+  --volume "${ast_fixture_root}:/target/ops/opensymphony/fixtures:ro" \
   --volume "${repo_root}/ops/opensymphony/config.yaml:/orchestrator/config.yaml:ro" \
   --volume "${state_volume}:/target/.opensymphony:ro" \
   --entrypoint opensymphony \
@@ -644,6 +687,145 @@ memory_tools="$(
 )"
 printf '%s\n' "${memory_tools}" | grep -Fq '"name":"memory.status"'
 printf '%s\n' "${memory_tools}" | grep -Fq '"name":"memory.context"'
+for ast_tool in \
+  code.ast.status \
+  code.ast.outline \
+  code.ast.symbols \
+  code.ast.references \
+  code.ast.query \
+  code.ast.context \
+  code.ast.diagnostics; do
+  printf '%s\n' "${memory_tools}" | grep -Fq "\"name\":\"${ast_tool}\""
+done
+ast_status="$(
+  docker run --rm \
+    "${hardening_args[@]}" \
+    "${limit_args[@]}" \
+    --network "${network}" \
+    --entrypoint curl \
+    "${image}" \
+    --fail --silent --show-error \
+    --header "content-type: application/json" \
+    --data '{"jsonrpc":"2.0","id":"ast-status","method":"tools/call","params":{"name":"code.ast.status","arguments":{}}}' \
+    "http://${memory_daemon}:8765/mcp"
+)"
+printf '%s\n' "${ast_status}" |
+  docker run --rm --interactive \
+    "${hardening_args[@]}" \
+    "${limit_args[@]}" \
+    --entrypoint python3 \
+    "${image}" \
+    -c '
+import json
+import sys
+
+response = json.load(sys.stdin)
+if "error" in response:
+    raise AssertionError("AST status MCP error: {!r}".format(response["error"]))
+result = response.get("result")
+assert isinstance(result, dict), f"AST status omitted object result; keys={sorted(response)}"
+assert result["provider"] == "tree-sitter-ast"
+assert result["available"] is True
+assert result["parserVersion"] == "0.26.9"
+assert result["languages"] == [
+    "rust",
+    "typescript",
+    "tsx",
+    "javascript",
+    "jsx",
+    "python",
+]
+assert result["queryPackVersions"] == {
+    "rust": "rust-query-pack-v2",
+    "typescript": "typescript-query-pack-v1",
+    "tsx": "tsx-query-pack-v1",
+    "javascript": "javascript-query-pack-v1",
+    "jsx": "jsx-query-pack-v1",
+    "python": "python-query-pack-v1",
+}
+'
+ast_outline="$(
+  docker run --rm \
+    "${hardening_args[@]}" \
+    "${limit_args[@]}" \
+    --network "${network}" \
+    --entrypoint curl \
+    "${image}" \
+    --fail --silent --show-error \
+    --header "content-type: application/json" \
+    --data '{"jsonrpc":"2.0","id":"ast-outline","method":"tools/call","params":{"name":"code.ast.outline","arguments":{"paths":["ops/opensymphony/fixtures"],"limit":100}}}' \
+    "http://${memory_daemon}:8765/mcp"
+)"
+printf '%s\n' "${ast_outline}" |
+  docker run --rm --interactive \
+    "${hardening_args[@]}" \
+    "${limit_args[@]}" \
+    --entrypoint python3 \
+    "${image}" \
+    -c '
+import json
+import re
+import sys
+
+response = json.load(sys.stdin)
+if "error" in response:
+    raise AssertionError("AST outline MCP error: {!r}".format(response["error"]))
+result = response.get("result")
+assert isinstance(result, dict), f"AST outline omitted object result; keys={sorted(response)}"
+documents = result["documents"]
+assert len(documents) == 10
+by_language = {document["language"]: document for document in documents}
+expected = {
+    "rust": (
+        "ast_rust_entry",
+        "tree-sitter-rust-0.24.2:0.26.9",
+        "rust-query-pack-v2",
+    ),
+    "typescript": (
+        "astTsEntry",
+        "tree-sitter-typescript-0.23.2:0.26.9",
+        "typescript-query-pack-v1",
+    ),
+    "tsx": (
+        "AstTsxEntry",
+        "tree-sitter-typescript-0.23.2:0.26.9",
+        "tsx-query-pack-v1",
+    ),
+    "javascript": (
+        "astJsEntry",
+        "tree-sitter-javascript-0.25.0:0.26.9",
+        "javascript-query-pack-v1",
+    ),
+    "jsx": (
+        "AstJsxEntry",
+        "tree-sitter-javascript-0.25.0:0.26.9",
+        "jsx-query-pack-v1",
+    ),
+    "python": (
+        "ast_python_entry",
+        "tree-sitter-python-0.25.0:0.26.9",
+        "python-query-pack-v1",
+    ),
+}
+for language, (symbol, parser, query_pack) in expected.items():
+    document = by_language[language]
+    assert document["parserVersion"] == parser
+    assert document["queryPackVersion"] == query_pack
+    assert document["diagnostics"] == []
+    assert re.fullmatch(r"[0-9a-f]{64}", document["contentSha256"])
+    assert symbol in {item["name"] for item in document["symbols"]}
+
+for language in ("json", "yaml", "toml", "markdown"):
+    document = by_language[language]
+    assert document["parserVersion"] == "lightweight-text:n/a"
+    assert document["queryPackVersion"] == f"{language}-lightweight-v1"
+    assert document["diagnostics"] == []
+    assert re.fullmatch(r"[0-9a-f]{64}", document["contentSha256"])
+    assert document["symbols"]
+
+assert not any(document["path"].endswith("unsupported.cpp") for document in documents)
+assert "parsed 10 file(s)" in result["trace"]
+'
 memory_admin_response="$(
   docker run --rm \
     "${hardening_args[@]}" \

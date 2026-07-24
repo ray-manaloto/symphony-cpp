@@ -23,7 +23,7 @@ merely because the initial Codex route does not need it.
 | Demo `daemon` | Prove and label as demo-only | Exercise loopback snapshots and sampling independently; never treat it as the real scheduler gateway |
 | Codex `debug` | Retain for operator recovery | The CLI path is exposed; a future recovery check must use an already persisted fixture thread and must not start another model turn |
 | OpenHands `debug` / `rehydrate` | Prove in disposable conversations | Exercise normal, `--app`, summarized, and no-summary recovery paths without touching retained Codex or live OpenHands state |
-| Code graph / AST context | Prove every supported language; record the C++ gap | Exercise the pinned JavaScript/JSX, TypeScript/TSX, Python, and Rust query packs plus lightweight JSON/YAML/TOML/Markdown parsing. C++ is unsupported; do not claim C++ indexing or add an unreviewed parser |
+| Code graph / AST context | Read-only AST query-pack gate proven; persistent graph remains open | The contained gate exercises the pinned JavaScript/JSX, TypeScript/TSX, Python, and Rust query packs plus lightweight JSON/YAML/TOML/Markdown parsing with exact parser/query-pack provenance, content hashes, and zero diagnostics. C++ is explicitly unsupported. Persistent ingestion, graph construction, and graph-backed context still require separate disposable-fixture evidence |
 | Hierarchy/dependency scheduling | Retain, fixture-gated | The scheduler supports it, but multi-issue Linear mutation is outside the one-canary boundary; add a deterministic GraphQL fixture before raising concurrency |
 | Concurrent workers | Prove with isolated fixture workers | Exercise configured concurrency, scheduling, cancellation, stalls, retries, and workspace isolation with deterministic fake workers before selecting the operational default |
 | Branch push, PR creation, AI PR review, and merge | Adopt through a separate guarded publisher | Prove the template workflow in a disposable Git/GitHub fixture first. Live adoption requires deterministic issue branches, no-bypass base-branch rules, a short-lived single-repository GitHub App token held only by the publisher, a digest-bound approved plan-policy manifest, fresh required evidence, and stable required checks. Ordinary plan-conformant changes may merge autonomously; ambiguity, researched plan/spec contradictions, dependency/toolchain-pin policy changes, or incomplete/stale evidence require human resolution with cited options and tradeoffs |
@@ -74,3 +74,11 @@ in-flight Codex/OpenHands recovery, conversation resume, terminal workspace
 deletion, or periodic cleanup idempotence, and it does not close the other
 feature-specific disposable gates above. Credential-bearing live-project dry
 runs remain a separate suffix-scoped local ceremony and never run in public CI.
+
+The same contained acceptance now proves the read-only AST query-pack sub-gate
+against ten temporary documents: Rust, TypeScript, TSX, JavaScript, JSX, Python,
+JSON, YAML, TOML, and Markdown. It requires the exact pinned provider, parser,
+and query-pack versions, SHA-256 source citations, no diagnostics, and an
+unchanged memory-state fingerprint; it also requires the C++ fixture to remain
+absent from results. This is not evidence for persistent code-graph ingestion,
+graph-backed context, or C++ parsing.
