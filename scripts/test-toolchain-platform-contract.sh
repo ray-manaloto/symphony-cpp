@@ -6,6 +6,10 @@ readonly containerfile=containers/Containerfile
 readonly dockerignore=.dockerignore
 readonly opensymphony_containerfile=containers/OpenSymphony.Containerfile
 readonly opensymphony_dockerignore=containers/OpenSymphony.Containerfile.dockerignore
+readonly generic_bake=containers/bake.hcl
+readonly p2996_bake=containers/p2996-separated.bake.hcl
+readonly p2996_validation_containerfile=containers/validation/clang-p2996.Containerfile
+readonly p2996_validation_dockerignore=containers/validation/clang-p2996.Containerfile.dockerignore
 readonly cmake_installer=scripts/install-cmake.sh
 readonly cmake_presets=CMakePresets.json
 readonly p2996_toolchain=cmake/toolchains/clang-p2996.cmake
@@ -62,11 +66,11 @@ grep -Fq "find /opt/clang-p2996/lib -type f -name 'libc++.so.1*'" \
   "${containerfile}"
 grep -Fq 'ldconfig' "${containerfile}"
 grep -Fq -- '-fuse-ld=lld tests/fixtures/p2996_reflection_probe.cpp' \
-  "${containerfile}"
-grep -Fq '"/opt/clang-p2996/bin/ld.lld"' "${containerfile}"
-grep -Fq 'libc\+\+\.so\.1 => /opt/clang-p2996/' "${containerfile}"
+  "${p2996_validation_containerfile}"
+grep -Fq '"/opt/clang-p2996/bin/ld.lld"' "${p2996_validation_containerfile}"
+grep -Fq 'libc\+\+\.so\.1 => /opt/clang-p2996/' "${p2996_validation_containerfile}"
 test -x "${p2996_workflow_runner}"
-grep -Fq './scripts/run-clang-reflection-workflow.sh' "${containerfile}"
+grep -Fq './scripts/run-clang-reflection-workflow.sh' "${p2996_validation_containerfile}"
 grep -Fq 'bash -lc "./scripts/run-clang-reflection-workflow.sh"' \
   scripts/devcontainer-build.sh
 grep -Fq 'CLANG_P2996_ARTIFACT_REF: ghcr.io/${{ github.repository_owner }}/symphony-toolchain-clang-p2996:7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-amd64-77b98dd8970c509c9492ad30e19a4ce6dbb6474fc14b167b9aed6094fd9bc276' \
@@ -75,7 +79,7 @@ grep -Fq 'Probe immutable clang-p2996 package' \
   .github/workflows/compiler-matrix.yml
 grep -Fq 'Immutable clang-p2996 package is required for validation' \
   .github/workflows/compiler-matrix.yml
-grep -Fq 'clang-p2996-artifact=docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}' \
+grep -Fq 'CLANG_P2996_ARTIFACT_CONTEXT: docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}' \
   .github/workflows/compiler-matrix.yml
 if grep -Fq 'cache-to: type=gha,mode=min,scope=symphony-clang-p2996-artifact-' \
     .github/workflows/compiler-matrix.yml; then
@@ -461,7 +465,7 @@ clang_recipe_sha256="$(
     cat "${cmake_installer}"
     awk '
       /^FROM compiler-build-base AS clang-builder/ { emit = 1 }
-      /^FROM compiler-build-base AS symphony-clang-p2996/ { exit }
+      /^FROM clang-p2996-artifact-input AS symphony-clang-p2996/ { exit }
       emit { print }
     ' "${containerfile}"
     cat "${p2996_probe}"
@@ -620,9 +624,55 @@ if grep -Eq '^(ADD|ONBUILD)[[:space:]]|(/tmp/|/build/|/src/)' <<<"${clang_artifa
 fi
 
 clang_package="$(stage_block symphony-clang-p2996)"
-grep -Fq 'FROM compiler-build-base AS symphony-clang-p2996' <<<"${clang_package}"
-grep -Fq 'COPY --from=clang-p2996-artifact /opt/clang-p2996 /opt/clang-p2996' \
+grep -Fq 'FROM clang-p2996-artifact-input AS symphony-clang-p2996' \
   <<<"${clang_package}"
+if grep -Fq 'AS clang-p2996-artifact-input' "${containerfile}" ||
+  grep -Eq '^(COPY|ADD)[[:space:]]' <<<"${clang_package}"; then
+  echo "clang runtime assembly must fail closed without the external artifact context" >&2
+  exit 1
+fi
+if grep -Fq 'FROM symphony-ci-clang AS symphony-clang-validation' "${containerfile}" ||
+  grep -Fq 'clang-p2996-vcpkg-' "${containerfile}"; then
+  echo "generic toolchain Containerfile must not contain project p2996 validation" >&2
+  exit 1
+fi
+grep -Fq 'FROM runtime-base AS p2996-validation-execution' \
+  "${p2996_validation_containerfile}"
+grep -Fq 'FROM scratch AS clang-p2996-validation' "${p2996_validation_containerfile}"
+grep -Fq \
+  'COPY --from=p2996-validation-execution /validation/clang-p2996 /clang-p2996-validation-passed' \
+  "${p2996_validation_containerfile}"
+test "$(grep -Ec '^(COPY|ADD)[[:space:]]' "${p2996_validation_containerfile}")" -eq 1
+if grep -Eq '^(LABEL|ENTRYPOINT)[[:space:]]' "${p2996_validation_containerfile}"; then
+  echo "project validation marker image must not present itself as a reusable runtime" >&2
+  exit 1
+fi
+grep -Fq '"clang-p2996-artifact-input" = CLANG_P2996_ARTIFACT_CONTEXT' "${p2996_bake}"
+grep -Fq '"runtime-base" = "target:clang-p2996-runtime"' "${p2996_bake}"
+test "$(grep -Fc 'output = ["type=cacheonly"]' "${p2996_bake}")" -eq 2
+grep -Fq 'default     = ""' "${p2996_bake}"
+grep -Fq \
+  'condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", CLANG_P2996_ARTIFACT_CONTEXT))' \
+  "${p2996_bake}"
+cmp -s "${dockerignore}" "${p2996_validation_dockerignore}"
+grep -Fq '"clang-p2996-artifact-input" = CLANG_P2996_ARTIFACT_CONTEXT' \
+  "${generic_bake}"
+if grep -Fq 'target "symphony-clang-p2996"' "${generic_bake}"; then
+  echo "generic Bake graph must not expose the external compiler package as a build target" >&2
+  exit 1
+fi
+test "$(grep -Fhc 'default     = ""' "${generic_bake}" "${p2996_bake}" | awk '{sum += $1} END {print sum}')" -eq 2
+test "$(
+  grep -Fhc \
+    'condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", CLANG_P2996_ARTIFACT_CONTEXT))' \
+    "${generic_bake}" "${p2996_bake}" |
+    awk '{sum += $1} END {print sum}'
+)" -eq 2
+test "$(grep -Ec '^FROM[[:space:]]' "${p2996_validation_containerfile}")" -eq 2
+test "$(
+  grep -E '^FROM[[:space:]]' "${p2996_validation_containerfile}" | tail -n 1
+)" = 'FROM scratch AS clang-p2996-validation'
+grep -Fq 'CCACHE_COMPILERCHECK=content' "${p2996_validation_containerfile}"
 
 grep -Fq 'default: amd64' "${workflow}"
 seed_input="$(workflow_input_block seed_clang_artifact_package)"
@@ -640,7 +690,10 @@ grep -Fq 'scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' "${workflow}"
 grep -Fq 'if: ${{ inputs.architecture == '\''arm64'\'' && inputs.lineage != '\''gcc16'\'' }}' \
   "${workflow}"
 grep -Fq 'target: symphony-gcc-validation' "${workflow}"
-grep -Fq 'target: symphony-clang-validation' "${workflow}"
+if grep -Fq 'target: symphony-clang-validation' "${workflow}"; then
+  echo "clang project validation must use the separated Bake graph" >&2
+  exit 1
+fi
 test "$(
   grep -Fc '      - name: Verify native runner architecture and capacity' "${workflow}"
 )" -eq 2
@@ -723,7 +776,6 @@ grep -Fxq \
   "        if: \${{ steps.clang-artifact-probe.outputs.hit != 'true' && inputs.seed_clang_artifact_package }}" \
   <<<"${clang_publish_step}"
 grep -Fxq '          target: clang-p2996-artifact' <<<"${clang_publish_step}"
-grep -Fxq '          target: symphony-clang-validation' <<<"${clang_validation_step}"
 grep -Fxq \
   '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
   <<<"${gcc_publish_step}"
@@ -772,25 +824,60 @@ grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${clang_publ
 grep -Fxq \
   "          cache-from: type=gha,scope=${clang_artifact_scope}" \
   <<<"${clang_publish_step}"
-grep -Fq 'echo "digest=${digest}"' <<<"${clang_probe_step}"
-grep -Fq 'PROBED_DIGEST: ${{ steps.clang-artifact-probe.outputs.digest }}' \
+grep -Fq 'echo "index_digest=${digest}"' <<<"${clang_probe_step}"
+grep -Fq 'PROBED_INDEX_DIGEST: ${{ steps.clang-artifact-probe.outputs.index_digest }}' \
   <<<"${clang_select_step}"
-grep -Fq 'PUBLISHED_DIGEST: ${{ steps.clang-artifact-publish.outputs.digest }}' \
+grep -Fq 'PUBLISHED_INDEX_DIGEST: ${{ steps.clang-artifact-publish.outputs.digest }}' \
   <<<"${clang_select_step}"
-grep -Fq 'digest="${PROBED_DIGEST}"' <<<"${clang_select_step}"
-grep -Fq 'digest="${PUBLISHED_DIGEST}"' <<<"${clang_select_step}"
-grep -Fxq \
-  '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
-  <<<"${clang_validation_step}"
-grep -Fxq '          context: .' <<<"${clang_validation_step}"
-grep -Fxq '          file: containers/Containerfile' <<<"${clang_validation_step}"
-grep -Fxq '          outputs: type=cacheonly' <<<"${clang_validation_step}"
-grep -Fxq '          load: false' <<<"${clang_validation_step}"
-grep -Fxq '          push: false' <<<"${clang_validation_step}"
-grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${clang_validation_step}"
+grep -Fq 'index_digest="${PROBED_INDEX_DIGEST}"' <<<"${clang_select_step}"
+grep -Fq 'index_digest="${PUBLISHED_INDEX_DIGEST}"' <<<"${clang_select_step}"
 grep -Fq \
-  'clang-p2996-artifact=docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}' \
+  'if .mediaType != "application/vnd.oci.image.index.v1+json" then' \
+  <<<"${clang_select_step}"
+grep -Fq '.mediaType == "application/vnd.oci.image.manifest.v1+json"' \
+  <<<"${clang_select_step}"
+grep -Fq '.platform.os == "linux"' <<<"${clang_select_step}"
+grep -Fq '.platform.architecture == "amd64"' <<<"${clang_select_step}"
+grep -Fq 'if length == 1 then' <<<"${clang_select_step}"
+grep -Fq '"${ARTIFACT_REF}@${digest}"' <<<"${clang_select_step}"
+grep -Fq \
+  'if [[ "${child_media_type}" != "application/vnd.oci.image.manifest.v1+json" ]]; then' \
+  <<<"${clang_select_step}"
+grep -Fq 'echo "digest=${digest}"' <<<"${clang_select_step}"
+grep -Fq 'echo "index_digest=${index_digest}"' <<<"${clang_select_step}"
+grep -Fxq '        env:' <<<"${clang_validation_step}"
+grep -Fxq \
+  '          BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}' \
   <<<"${clang_validation_step}"
+grep -Fxq \
+  '          CLANG_P2996_ARTIFACT_CONTEXT: docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}' \
+  <<<"${clang_validation_step}"
+grep -Fq 'docker buildx bake \' <<<"${clang_validation_step}"
+grep -Fq -- '--builder "${BUILDX_BUILDER}" \' <<<"${clang_validation_step}"
+grep -Fq -- '--file containers/p2996-separated.bake.hcl \' \
+  <<<"${clang_validation_step}"
+grep -Fq -- '--progress=plain \' <<<"${clang_validation_step}"
+grep -Fxq '            clang-p2996-validation' <<<"${clang_validation_step}"
+if grep -Eq '^[[:space:]]+uses:' <<<"${clang_validation_step}" ||
+  grep -Fq -- '--load' <<<"${clang_validation_step}" ||
+  grep -Fq -- '--push' <<<"${clang_validation_step}" ||
+  grep -Fq -- '--output' <<<"${clang_validation_step}" ||
+  grep -Fq -- '--set' <<<"${clang_validation_step}" ||
+  grep -Fq 'cache-to:' <<<"${clang_validation_step}" ||
+  grep -Fq 'tags:' <<<"${clang_validation_step}" ||
+  grep -Eq 'type=(registry|docker|oci|local)' <<<"${clang_validation_step}" ||
+  grep -Fq 'docker buildx build' <<<"${clang_validation_step}" ||
+  grep -Fq 'docker buildx imagetools create' <<<"${clang_validation_step}"; then
+  echo "clang Bake validation must remain cache-only and non-publishing" >&2
+  exit 1
+fi
+grep -Fq \
+  'clang-p2996-ccache-v2-${{ needs.clang-p2996-artifact.outputs.digest }}-' \
+  <<<"${clang_job}"
+if grep -Fq 'clang-p2996-ccache-v1-' <<<"${clang_job}"; then
+  echo "clang compiler cache must remain scoped to the selected compiler manifest" >&2
+  exit 1
+fi
 if grep -Fq '          cache-to:' <<<"${gcc_artifact_job}"; then
   echo "GCC artifact package must not consume GitHub Actions cache storage" >&2
   exit 1
@@ -969,8 +1056,8 @@ test "${setup_buildx_id_line}" -lt "${base_step_line}"
 test "${base_step_line}" -lt "${restore_ccache_line}"
 test "${restore_ccache_line}" -lt "${bridge_ccache_line}"
 test "${bridge_ccache_line}" -lt "${validation_step_line}"
-test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "4"
-test "$(grep -Fc 'load: false' "${workflow}")" = "6"
+test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "3"
+test "$(grep -Fc 'load: false' "${workflow}")" = "5"
 test "$(grep -Fc 'version: v0.35.0' "${workflow}")" = "5"
 grep -Fq \
   'uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723' \
@@ -982,7 +1069,7 @@ grep -Fq \
   'utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7' \
   "${workflow}"
 
-test "$(grep -Fc 'push: false' "${workflow}")" = "4"
+test "$(grep -Fc 'push: false' "${workflow}")" = "3"
 test "$(grep -Ec '^permissions:$' "${workflow}")" = "1"
 test "$(grep -Ec '^[[:space:]]*permissions:' "${workflow}")" = "5"
 test "$(grep -Ec '^  contents: read$' "${workflow}")" = "1"
@@ -1098,7 +1185,12 @@ test "$(
   grep -Fc \
     'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
     "${containerfile}"
-)" -eq 3
+)" -eq 2
+test "$(
+  grep -Fc \
+    'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
+    "${p2996_validation_containerfile}"
+)" -eq 1
 if grep -Fq 'WORKDIR /workspaces/symphony-cpp' "${containerfile}"; then
   echo "generic compiler images must not embed a project-specific working directory" >&2
   exit 1

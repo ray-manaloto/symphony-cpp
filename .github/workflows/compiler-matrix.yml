@@ -295,6 +295,7 @@ jobs:
     outputs:
       ref: ${{ steps.clang-artifact.outputs.ref }}
       digest: ${{ steps.clang-artifact.outputs.digest }}
+      index_digest: ${{ steps.clang-artifact.outputs.index_digest }}
     permissions:
       contents: read
       packages: write
@@ -337,7 +338,7 @@ jobs:
             fi
             {
               echo "hit=true"
-              echo "digest=${digest}"
+              echo "index_digest=${digest}"
             } >>"${GITHUB_OUTPUT}"
           elif grep -qiE 'manifest unknown|not found|no such manifest' "${error_log}"; then
             echo "hit=false" >>"${GITHUB_OUTPUT}"
@@ -371,22 +372,64 @@ jobs:
         env:
           ARTIFACT_REF: ${{ env.CLANG_P2996_ARTIFACT_REF }}
           CACHE_HIT: ${{ steps.clang-artifact-probe.outputs.hit }}
-          PROBED_DIGEST: ${{ steps.clang-artifact-probe.outputs.digest }}
-          PUBLISHED_DIGEST: ${{ steps.clang-artifact-publish.outputs.digest }}
+          PROBED_INDEX_DIGEST: ${{ steps.clang-artifact-probe.outputs.index_digest }}
+          PUBLISHED_INDEX_DIGEST: ${{ steps.clang-artifact-publish.outputs.digest }}
         run: |
           set -euo pipefail
           if [[ "${CACHE_HIT}" == true ]]; then
-            digest="${PROBED_DIGEST}"
+            index_digest="${PROBED_INDEX_DIGEST}"
           else
-            digest="${PUBLISHED_DIGEST}"
+            index_digest="${PUBLISHED_INDEX_DIGEST}"
           fi
+          if [[ ! "${index_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid clang-p2996 package index digest: ${index_digest}" >&2
+            exit 1
+          fi
+
+          index_json="$(
+            docker buildx imagetools inspect \
+              "${ARTIFACT_REF}@${index_digest}" \
+              --raw
+          )"
+          digest="$(
+            jq -er '
+              if .mediaType != "application/vnd.oci.image.index.v1+json" then
+                error("clang-p2996 package must be an OCI image index")
+              else
+                [
+                  .manifests[]
+                  | select(
+                      .mediaType == "application/vnd.oci.image.manifest.v1+json"
+                      and .platform.os == "linux"
+                      and .platform.architecture == "amd64"
+                    )
+                ]
+                | if length == 1 then
+                    .[0].digest
+                  else
+                    error("clang-p2996 package must contain exactly one linux/amd64 image manifest")
+                  end
+              end
+            ' <<<"${index_json}"
+          )"
           if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "invalid clang-p2996 package digest: ${digest}" >&2
+            echo "invalid clang-p2996 linux/amd64 manifest digest: ${digest}" >&2
+            exit 1
+          fi
+          child_media_type="$(
+            docker buildx imagetools inspect \
+              "${ARTIFACT_REF}@${digest}" \
+              --raw |
+              jq -er '.mediaType'
+          )"
+          if [[ "${child_media_type}" != "application/vnd.oci.image.manifest.v1+json" ]]; then
+            echo "clang-p2996 platform digest is not an OCI image manifest" >&2
             exit 1
           fi
           {
             echo "ref=${ARTIFACT_REF}"
             echo "digest=${digest}"
+            echo "index_digest=${index_digest}"
           } >>"${GITHUB_OUTPUT}"
 
   clang-p2996:
@@ -425,10 +468,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.CCACHE_DANCE_DIR }}
-          key: ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v2-${{ needs.clang-p2996-artifact.outputs.digest }}-${{ hashFiles('containers/Containerfile', 'containers/validation/clang-p2996.Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
-            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-
+            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v2-${{ needs.clang-p2996-artifact.outputs.digest }}-${{ hashFiles('containers/Containerfile', 'containers/validation/clang-p2996.Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
+            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v2-${{ needs.clang-p2996-artifact.outputs.digest }}-
       - name: Bridge clang-p2996 compiler cache into BuildKit
         uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
         with:
@@ -444,19 +487,20 @@ jobs:
           skip-extraction: ${{ steps.clang-ccache.outputs.cache-hit }}
           utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7
       - name: Build and validate clang-p2996 without loading it
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-clang-validation
-          platforms: linux/amd64
-          outputs: type=cacheonly
-          load: false
-          push: false
-          builder: ${{ steps.buildx.outputs.name }}
-          build-args: SOURCE_REVISION=${{ github.sha }}
-          build-contexts: |
-            clang-p2996-artifact=docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}
+        env:
+          BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}
+          CLANG_P2996_ARTIFACT_CONTEXT: docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${CLANG_P2996_ARTIFACT_CONTEXT}" =~ ^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "clang-p2996 validation requires an exact digest-pinned artifact context" >&2
+            exit 2
+          fi
+          docker buildx bake \
+            --builder "${BUILDX_BUILDER}" \
+            --file containers/p2996-separated.bake.hcl \
+            --progress=plain \
+            clang-p2996-validation
   llvm-analysis:
     name: LLVM 22.1.8 analysis base and source-quality contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}

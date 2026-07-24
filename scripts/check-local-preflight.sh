@@ -89,9 +89,10 @@ fi
 
 if [[ "${run_docker_checks}" == true ]]; then
   readonly containerfile=containers/Containerfile
+  readonly clang_p2996_artifact_context="docker-image://ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996:7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-amd64-77b98dd8970c509c9492ad30e19a4ce6dbb6474fc14b167b9aed6094fd9bc276@sha256:d054fa3bcde2091b69950c321a06ba35f9f4a628ad69c5e95849020d9cfe9e68"
+  readonly static_runtime_context="docker-image://ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304"
   for target in \
     symphony-gcc-validation \
-    symphony-clang-validation \
     symphony-analysis-validation; do
     docker buildx build \
       --file "${containerfile}" \
@@ -100,6 +101,58 @@ if [[ "${run_docker_checks}" == true ]]; then
       --call=check \
       .
   done
+  docker buildx build \
+    --file "${containerfile}" \
+    --platform linux/amd64 \
+    --target symphony-ci-clang \
+    --build-context "clang-p2996-artifact-input=${clang_p2996_artifact_context}" \
+    --call=check \
+    .
+  docker buildx build \
+    --file containers/validation/clang-p2996.Containerfile \
+    --platform linux/amd64 \
+    --target clang-p2996-validation \
+    --build-context "runtime-base=${static_runtime_context}" \
+    --call=check \
+    .
+  for invalid_artifact_context in \
+    "" \
+    "docker-image://example.invalid/compiler:mutable" \
+    "docker-image://example.invalid/compiler@sha256:1234"; do
+    if CLANG_P2996_ARTIFACT_CONTEXT="${invalid_artifact_context}" \
+      docker buildx bake \
+        --file containers/p2996-separated.bake.hcl \
+        --print \
+        clang-p2996-validation >/dev/null 2>&1; then
+      echo "p2996 Bake graph accepted an inexact artifact context" >&2
+      exit 1
+    fi
+  done
+  resolved_p2996_bake="$(
+    CLANG_P2996_ARTIFACT_CONTEXT="${clang_p2996_artifact_context}" \
+      docker buildx bake \
+        --file containers/p2996-separated.bake.hcl \
+        --print \
+        clang-p2996-validation
+  )"
+  jq -e \
+    --arg artifact_context "${clang_p2996_artifact_context}" \
+    '
+      (.target | keys | sort) ==
+        ["clang-p2996-runtime", "clang-p2996-validation"] and
+      .target["clang-p2996-runtime"].contexts["clang-p2996-artifact-input"] ==
+        $artifact_context and
+      .target["clang-p2996-runtime"].output == [{"type": "cacheonly"}] and
+      .target["clang-p2996-validation"].contexts["runtime-base"] ==
+        "target:clang-p2996-runtime" and
+      .target["clang-p2996-validation"].output == [{"type": "cacheonly"}] and
+      ([.target[] | has("tags") or has("cache-to")] | any) == false
+    ' <<<"${resolved_p2996_bake}" >/dev/null
+  CLANG_P2996_ARTIFACT_CONTEXT="${clang_p2996_artifact_context}" \
+    docker buildx bake \
+      --file containers/bake.hcl \
+      --print \
+      symphony-ci-clang >/dev/null
   docker buildx build \
     --file "${containerfile}" \
     --platform linux/arm64 \
