@@ -10,6 +10,7 @@ readonly generic_bake=containers/bake.hcl
 readonly p2996_bake=containers/p2996-separated.bake.hcl
 readonly p2996_validation_containerfile=containers/validation/clang-p2996.Containerfile
 readonly p2996_validation_dockerignore=containers/validation/clang-p2996.Containerfile.dockerignore
+readonly oci_platform_checker=scripts/check-oci-platform.sh
 readonly cmake_installer=scripts/install-cmake.sh
 readonly cmake_presets=CMakePresets.json
 readonly p2996_toolchain=cmake/toolchains/clang-p2996.cmake
@@ -32,6 +33,95 @@ readonly devcontainer_configs=(
 bash -n "${cmake_installer}"
 bash -n "${devcontainer_setup}"
 bash -n "${p2996_workflow_runner}"
+test -x "${oci_platform_checker}"
+bash -n "${oci_platform_checker}"
+
+readonly amd64_manifest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+readonly arm64_manifest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+readonly attestation_manifest=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+oci_index_fixture="$(
+  cat <<JSON
+{
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "${amd64_manifest}",
+      "platform": {"os": "linux", "architecture": "amd64"}
+    },
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "${arm64_manifest}",
+      "platform": {"os": "linux", "architecture": "arm64"}
+    },
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "${attestation_manifest}",
+      "platform": {"os": "unknown", "architecture": "unknown"}
+    }
+  ]
+}
+JSON
+)"
+readonly oci_index_fixture
+test "$(
+  "${oci_platform_checker}" select-index amd64 <<<"${oci_index_fixture}"
+)" = "${amd64_manifest}"
+test "$(
+  "${oci_platform_checker}" select-index arm64 <<<"${oci_index_fixture}"
+)" = "${arm64_manifest}"
+printf '%s\n' '{"os":"linux","architecture":"amd64"}' |
+  "${oci_platform_checker}" validate-image amd64
+printf '%s\n' '{"os":"linux","architecture":"arm64"}' |
+  "${oci_platform_checker}" validate-image arm64
+
+expect_oci_check_failure() {
+  local mode="$1"
+  local architecture="$2"
+  local fixture="$3"
+  local status
+  set +e
+  "${oci_platform_checker}" "${mode}" "${architecture}" \
+    <<<"${fixture}" >/dev/null 2>&1
+  status=$?
+  set -e
+  test "${status}" -ne 0
+}
+
+expect_oci_check_failure \
+  select-index \
+  amd64 \
+  "$(jq '.manifests += [.manifests[0]]' <<<"${oci_index_fixture}")"
+expect_oci_check_failure \
+  select-index \
+  arm64 \
+  "$(jq '.manifests |= map(select(.platform.architecture != "arm64"))' \
+    <<<"${oci_index_fixture}")"
+expect_oci_check_failure \
+  select-index \
+  amd64 \
+  "$(jq '.mediaType = "application/vnd.oci.image.manifest.v1+json"' \
+    <<<"${oci_index_fixture}")"
+expect_oci_check_failure \
+  select-index \
+  amd64 \
+  "$(jq '.manifests[0].digest = "sha256:1234"' <<<"${oci_index_fixture}")"
+expect_oci_check_failure \
+  select-index \
+  amd64 \
+  "$(jq '.manifests[0].mediaType = "application/vnd.oci.image.index.v1+json"' \
+    <<<"${oci_index_fixture}")"
+expect_oci_check_failure select-index amd64 '{}'
+expect_oci_check_failure select-index amd64 ''
+expect_oci_check_failure \
+  validate-image \
+  amd64 \
+  '{"os":"linux","architecture":"arm64"}'
+expect_oci_check_failure \
+  validate-image \
+  arm64 \
+  '{"os":"windows","architecture":"arm64"}'
+
 node - "${cmake_presets}" <<'JS'
 const fs = require("node:fs");
 const document = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
@@ -587,6 +677,8 @@ grep -Fq 'test "$(/opt/gcc-16.1/bin/g++ -dumpfullversion)" = "16.1.0"' \
   "${containerfile}"
 grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
   "${containerfile}"
+gcc_container_validation="$(stage_block symphony-gcc-validation)"
+grep -Fq 'CCACHE_COMPILERCHECK=content' <<<"${gcc_container_validation}"
 
 analysis_runtime="$(stage_block symphony-analysis)"
 grep -Fq 'FROM symphony-gcc-runtime AS symphony-analysis' <<<"${analysis_runtime}"
@@ -790,13 +882,23 @@ grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${gcc_publis
 grep -Fxq \
   '          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' \
   <<<"${gcc_publish_step}"
-grep -Fq 'echo "digest=${digest}"' <<<"${gcc_probe_step}"
-grep -Fq 'PROBED_DIGEST: ${{ steps.gcc-artifact-probe.outputs.digest }}' \
+grep -Fq 'echo "index_digest=${digest}"' <<<"${gcc_probe_step}"
+grep -Fq 'PROBED_INDEX_DIGEST: ${{ steps.gcc-artifact-probe.outputs.index_digest }}' \
   <<<"${gcc_select_step}"
-grep -Fq 'PUBLISHED_DIGEST: ${{ steps.gcc-artifact-publish.outputs.digest }}' \
+grep -Fq 'PUBLISHED_INDEX_DIGEST: ${{ steps.gcc-artifact-publish.outputs.digest }}' \
   <<<"${gcc_select_step}"
-grep -Fq 'digest="${PROBED_DIGEST}"' <<<"${gcc_select_step}"
-grep -Fq 'digest="${PUBLISHED_DIGEST}"' <<<"${gcc_select_step}"
+grep -Fq 'TARGET_ARCH: ${{ inputs.architecture }}' <<<"${gcc_select_step}"
+grep -Fq 'index_digest="${PROBED_INDEX_DIGEST}"' <<<"${gcc_select_step}"
+grep -Fq 'index_digest="${PUBLISHED_INDEX_DIGEST}"' <<<"${gcc_select_step}"
+grep -Fq './scripts/check-oci-platform.sh \' <<<"${gcc_select_step}"
+grep -Fq '              select-index \' <<<"${gcc_select_step}"
+grep -Fq '              "${TARGET_ARCH}" <<<"${index_json}"' <<<"${gcc_select_step}"
+grep -Fq '"${ARTIFACT_REF}@${digest}"' <<<"${gcc_select_step}"
+grep -Fq \
+  './scripts/check-oci-platform.sh validate-image "${TARGET_ARCH}"' \
+  <<<"${gcc_select_step}"
+grep -Fq 'echo "digest=${digest}"' <<<"${gcc_select_step}"
+grep -Fq 'echo "index_digest=${index_digest}"' <<<"${gcc_select_step}"
 grep -Fxq \
   '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
   <<<"${gcc_validation_step}"
@@ -810,6 +912,13 @@ grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${gcc_valida
 grep -Fq \
   'gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
   <<<"${gcc_validation_step}"
+grep -Fq \
+  'gcc16-ccache-v2-${{ needs.gcc16-artifact.outputs.digest }}-' \
+  <<<"${gcc_job}"
+if grep -Fq 'gcc16-ccache-v1-' <<<"${gcc_job}"; then
+  echo "GCC compiler cache must remain scoped to the selected compiler manifest" >&2
+  exit 1
+fi
 grep -Fxq \
   '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
   <<<"${clang_publish_step}"
@@ -831,17 +940,12 @@ grep -Fq 'PUBLISHED_INDEX_DIGEST: ${{ steps.clang-artifact-publish.outputs.diges
   <<<"${clang_select_step}"
 grep -Fq 'index_digest="${PROBED_INDEX_DIGEST}"' <<<"${clang_select_step}"
 grep -Fq 'index_digest="${PUBLISHED_INDEX_DIGEST}"' <<<"${clang_select_step}"
-grep -Fq \
-  'if .mediaType != "application/vnd.oci.image.index.v1+json" then' \
-  <<<"${clang_select_step}"
-grep -Fq '.mediaType == "application/vnd.oci.image.manifest.v1+json"' \
-  <<<"${clang_select_step}"
-grep -Fq '.platform.os == "linux"' <<<"${clang_select_step}"
-grep -Fq '.platform.architecture == "amd64"' <<<"${clang_select_step}"
-grep -Fq 'if length == 1 then' <<<"${clang_select_step}"
+grep -Fq './scripts/check-oci-platform.sh \' <<<"${clang_select_step}"
+grep -Fq '              select-index \' <<<"${clang_select_step}"
+grep -Fq '              amd64 <<<"${index_json}"' <<<"${clang_select_step}"
 grep -Fq '"${ARTIFACT_REF}@${digest}"' <<<"${clang_select_step}"
 grep -Fq \
-  'if [[ "${child_media_type}" != "application/vnd.oci.image.manifest.v1+json" ]]; then' \
+  './scripts/check-oci-platform.sh validate-image amd64' \
   <<<"${clang_select_step}"
 grep -Fq 'echo "digest=${digest}"' <<<"${clang_select_step}"
 grep -Fq 'echo "index_digest=${index_digest}"' <<<"${clang_select_step}"
