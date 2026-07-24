@@ -24,6 +24,7 @@ struct TokenUsage {
   std::uint64_t reasoning_output_tokens{0};
   std::uint64_t total_tokens{0};
   std::optional<std::int64_t> model_context_window;
+  std::optional<std::uint64_t> last_input_tokens;
 };
 
 struct RateLimitWindow {

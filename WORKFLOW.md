@@ -94,13 +94,14 @@ Every code-bearing or policy/control-document result requires an independent
 normal review against its exact fingerprint. Security, concurrency, persistence,
 credential, workspace cleanup, release, publication, autonomous-merge, and
 policy/control-document changes also require a separate adversarial review;
-unresolved or stale findings block completion. After the distinct last-turn
-context telemetry gate passes, at 60% finish only the active atomic slice and
-prepare the durable handoff; at 65% authorize no continuation. Until that gate
-passes, cumulative-only or missing telemetry pauses percentage-based supervisor
-continuation. Any observed compaction or four completed turns in this session
-also authorizes no continuation and resumes only from a verified checkpoint in a
-fresh session. An issue may use at most four accepted model-backed sessions; that
-issue-wide counter never resets. Never continue a compacted session. If two
-consecutive attempts make no material progress, stop and report a
-stalled/no-progress outcome instead of repeating the same approach.
+unresolved or stale findings block completion. The pure policy uses only decoded
+last-turn input telemetry: at 60% finish the active atomic slice and prepare the
+durable handoff; at 65% authorize no continuation. Missing last-turn telemetry
+pauses rather than using cumulative totals. Stock OpenSymphony does not enforce
+these transitions; the external supervisor process remains disarmed until its
+telemetry/checkpoint wiring passes. Any observed compaction or four completed
+turns in this session also authorizes no continuation and resumes only from a
+verified checkpoint in a fresh session. An issue may use at most four accepted
+model-backed sessions; that issue-wide counter never resets. Never continue a
+compacted session. If two consecutive attempts make no material progress, stop
+and report a stalled/no-progress outcome instead of repeating the same approach.

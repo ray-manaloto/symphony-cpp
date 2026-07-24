@@ -657,12 +657,28 @@ static ut::suite scheduler_tests = [] {
     symphony::workspace::FixtureWorkspaceExecutor workspaces(root);
     symphony::codex::FakeAgentRuntime runtime;
     symphony::codex::RunResult first{true, false, std::nullopt, "s1", {}};
-    first.token_usage = symphony::codex::TokenUsage{10, 4, 6, 2, 16, 200000};
+    first.token_usage = symphony::codex::TokenUsage{
+        .input_tokens = 10,
+        .cached_input_tokens = 4,
+        .output_tokens = 6,
+        .reasoning_output_tokens = 2,
+        .total_tokens = 16,
+        .model_context_window = 200000,
+        .last_input_tokens = std::nullopt,
+    };
     first.compaction_count = 1;
     first.rate_limits = symphony::codex::RateLimits{
         "codex", symphony::codex::RateLimitWindow{25, 300, 1000}, std::nullopt};
     symphony::codex::RunResult second{true, false, std::nullopt, "s2", {}};
-    second.token_usage = symphony::codex::TokenUsage{3, 1, 2, 1, 5, 180000};
+    second.token_usage = symphony::codex::TokenUsage{
+        .input_tokens = 3,
+        .cached_input_tokens = 1,
+        .output_tokens = 2,
+        .reasoning_output_tokens = 1,
+        .total_tokens = 5,
+        .model_context_window = 180000,
+        .last_input_tokens = std::nullopt,
+    };
     second.compaction_count = 2;
     second.rate_limits = symphony::codex::RateLimits{
         std::nullopt, std::nullopt, symphony::codex::RateLimitWindow{50, 10080, 2000}};
@@ -682,6 +698,7 @@ static ut::suite scheduler_tests = [] {
     ut::expect(scheduler.codex_totals().total_tokens == std::uint64_t{21});
     ut::expect(scheduler.codex_totals().model_context_window ==
                std::optional<std::int64_t>{180000});
+    ut::expect(!scheduler.codex_totals().last_input_tokens.has_value());
     ut::expect(scheduler.codex_compactions() == std::uint64_t{3});
     ut::expect(scheduler.latest_rate_limits()->limit_id == std::optional<std::string>{"codex"});
     ut::expect(scheduler.latest_rate_limits()->primary->used_percent == 25);

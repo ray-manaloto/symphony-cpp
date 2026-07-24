@@ -26,18 +26,19 @@ void validate(const ContextBudgetConfig& config) {
 }
 
 bool threshold_reached(const codex::TokenUsage& usage, const std::uint32_t percent) noexcept {
-  if (!usage.model_context_window || *usage.model_context_window <= 0) {
+  if (!usage.model_context_window || *usage.model_context_window <= 0 || !usage.last_input_tokens) {
     return false;
   }
 
   const auto window = static_cast<std::uint64_t>(*usage.model_context_window);
   const auto whole = (window / 100U) * percent;
   const auto remainder = ((window % 100U) * percent + 99U) / 100U;
-  return usage.input_tokens >= whole + remainder;
+  return *usage.last_input_tokens >= whole + remainder;
 }
 
 bool usable_telemetry(const codex::TokenUsage& usage) noexcept {
-  return usage.model_context_window && *usage.model_context_window > 0;
+  return usage.model_context_window && *usage.model_context_window > 0 &&
+         usage.last_input_tokens.has_value();
 }
 
 } // namespace

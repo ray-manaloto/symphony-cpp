@@ -168,6 +168,33 @@ static ut::suite codex_tests = [] {
     ut::expect(usage.token_usage->output_tokens == std::uint64_t{9});
     ut::expect(usage.token_usage->total_tokens == std::uint64_t{26});
     ut::expect(usage.token_usage->model_context_window == std::optional<std::int64_t>{200000});
+    ut::expect(usage.token_usage->last_input_tokens == std::optional<std::uint64_t>{7});
+
+    const auto missing_last_input = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"totalTokens":5},"total":{"inputTokens":19,"cachedInputTokens":0,"outputTokens":5,"reasoningOutputTokens":0,"totalTokens":24},"modelContextWindow":200000}}})");
+    ut::expect(missing_last_input.token_usage.has_value());
+    ut::expect(missing_last_input.token_usage->input_tokens == std::uint64_t{19});
+    ut::expect(!missing_last_input.token_usage->last_input_tokens.has_value());
+
+    const auto zero_last_input = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":0},"total":{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":0},"modelContextWindow":200000}}})");
+    ut::expect(zero_last_input.token_usage->last_input_tokens == std::optional<std::uint64_t>{0});
+    const auto maximum_last_input = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":9223372036854775807},"total":{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":0},"modelContextWindow":200000}}})");
+    ut::expect(maximum_last_input.token_usage->last_input_tokens ==
+               std::optional<std::uint64_t>{9223372036854775807ULL});
+    ut::expect(ut::throws([] {
+      static_cast<void>(symphony::codex::AppServerProtocol::decode(
+          R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":-1},"total":{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":0},"modelContextWindow":200000}}})"));
+    }));
+    ut::expect(ut::throws([] {
+      static_cast<void>(symphony::codex::AppServerProtocol::decode(
+          R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":9223372036854775808},"total":{"inputTokens":0,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":0},"modelContextWindow":200000}}})"));
+    }));
+    ut::expect(ut::throws([] {
+      static_cast<void>(symphony::codex::AppServerProtocol::decode(
+          R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":1},"total":{"inputTokens":1},"modelContextWindow":200000}}})"));
+    }));
 
     const auto limits = symphony::codex::AppServerProtocol::decode(
         R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1234}}}})");
@@ -247,6 +274,41 @@ static ut::suite codex_tests = [] {
                "Continue with turn 2");
   };
 
+  ut::test("app-server conversation rejects stale last-turn telemetry") = [] {
+    symphony::codex::FakeProtocolChannel channel;
+    channel.enqueue(R"({"id":0,"result":{}})");
+    channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
+    channel.enqueue(R"({"method":"turn/started","params":{"turn":{"id":"turn_1"}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_1","tokenUsage":{"last":{"inputTokens":5},"total":{"inputTokens":8,"cachedInputTokens":0,"outputTokens":2,"reasoningOutputTokens":0,"totalTokens":10},"modelContextWindow":100}}})");
+    channel.enqueue(R"({"method":"turn/completed","params":{"turn":{"id":"turn_1"}}})");
+    channel.enqueue(R"({"method":"turn/started","params":{"turn":{"id":"turn_2"}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_1","tokenUsage":{"last":{"inputTokens":99},"total":{"inputTokens":99,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":99},"modelContextWindow":100}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"turnId":"turn_2","tokenUsage":{"last":{"inputTokens":98},"total":{"inputTokens":98,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":98},"modelContextWindow":100}}})");
+    channel.enqueue(
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_other","turnId":"turn_2","tokenUsage":{"last":{"inputTokens":97},"total":{"inputTokens":97,"cachedInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0,"totalTokens":97},"modelContextWindow":100}}})");
+    channel.enqueue(R"({"method":"turn/completed","params":{"turn":{"id":"turn_2"}}})");
+    symphony::codex::RunRequest request;
+    request.workspace.path = "/tmp/work";
+    request.prompt = "Full issue prompt";
+    request.max_turns = 2;
+    request.continuation_prompt_after_turn = [](const std::uint32_t completed_turns) {
+      return std::optional<std::string>{"Continue with turn " +
+                                        std::to_string(completed_turns + 1)};
+    };
+
+    const auto result =
+        symphony::codex::AppServerConversation::run(channel, request, std::chrono::seconds{1});
+
+    ut::expect(result.normal_exit);
+    ut::expect(result.turns_completed == std::uint32_t{2});
+    ut::expect(result.token_usage.has_value());
+    ut::expect(result.token_usage->total_tokens == std::uint64_t{10});
+    ut::expect(!result.token_usage->last_input_tokens.has_value());
+  };
+
   ut::test("app-server conversation returns latest telemetry with completion") = [] {
     symphony::codex::FakeProtocolChannel channel;
     channel.enqueue(R"({"id":0,"result":{}})");
@@ -273,6 +335,7 @@ static ut::suite codex_tests = [] {
     ut::expect(result.normal_exit);
     ut::expect(result.token_usage.has_value());
     ut::expect(result.token_usage->total_tokens == std::uint64_t{11});
+    ut::expect(result.token_usage->last_input_tokens == std::optional<std::uint64_t>{3});
     ut::expect(result.rate_limits.has_value());
     ut::expect(result.rate_limits->limit_id == std::optional<std::string>{"codex"});
     ut::expect(result.rate_limits->primary->used_percent == 9);
@@ -315,7 +378,7 @@ static ut::suite codex_tests = [] {
     channel.enqueue(R"({"id":1,"result":{"thread":{"id":"thr_1"}}})");
     channel.enqueue(R"({"method":"turn/started","params":{"turn":{"id":"turn_1"}}})");
     channel.enqueue(
-        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_1","tokenUsage":{"last":{"totalTokens":750},"total":{"totalTokens":750},"modelContextWindow":1000}}})");
+        R"({"method":"thread/tokenUsage/updated","params":{"threadId":"thr_1","turnId":"turn_1","tokenUsage":{"last":{"inputTokens":1,"totalTokens":1},"total":{"inputTokens":700,"cachedInputTokens":25,"outputTokens":50,"reasoningOutputTokens":25,"totalTokens":750},"modelContextWindow":1000}}})");
     channel.enqueue(R"({"method":"turn/completed","params":{"turn":{"id":"turn_1"}}})");
     symphony::codex::RunRequest request;
     request.workspace.path = "/tmp/work";

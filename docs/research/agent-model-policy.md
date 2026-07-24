@@ -55,11 +55,11 @@ then expand only after measured throughput and defect-recall evidence.
   both the external OpenSymphony and standalone C++ paths now use Sol/high.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction. End the bounded worker session after any observed compaction,
-  then resume from durable workspace and tracker state in a fresh process and thread. Keep the
-  external supervisor's 50/60/65% controls disabled until the adapter distinctly decodes
-  `tokenUsage.last.inputTokens` with a positive context window and that contract passes fixtures;
-  never estimate missing utilization. Observed-compaction and per-session-turn rollover remain
-  active meanwhile.
+  then resume from durable workspace and tracker state in a fresh process and thread. The adapter
+  distinctly decodes optional `tokenUsage.last.inputTokens`, and the pure reducer's 50/60/65%
+  fixtures pass and pause on a missing value or non-positive window. Keep the external supervisor
+  process disarmed until its telemetry/checkpoint wiring passes; never estimate missing
+  utilization. Observed-compaction and per-session-turn rollover remain active meanwhile.
 - Enforce a turn budget independently of context size. The repository workflow uses four turns per
   session. A compaction is not progress and does not reset retry/no-progress policy.
 - Select Sol/high at baseline. Use Sol/xhigh in the next fresh session for cross-subsystem design or
@@ -79,15 +79,15 @@ then expand only after measured throughput and defect-recall evidence.
   without logging prompts, issue content, credentials, or hidden reasoning.
 
 Use the repository-wide checkpoint and recurrence policy in
-[`../engineering-system.md`](../engineering-system.md). Once the distinct last-turn telemetry gate
-passes, checkpoint at 50% reported context use, prepare a fresh-session handoff at 60%, and make the
-configured 65% rollover mandatory. Until then, pause percentage-based supervisor continuation
-rather than interpreting cumulative totals as last-turn pressure. A second occurrence of one
-normalized failure family must promote a deterministic guard; a third stops automatic retries and
-triggers bounded reconciliation against the approved plan, normative specification, current
-evidence, upstream reports, and primary sources. Human Review is required only if material
-ambiguity or contradiction remains, with cited options, tradeoffs, and a recommendation. Forking
-and compaction never reset those counters.
+[`../engineering-system.md`](../engineering-system.md). The pure policy checkpoints at 50% decoded
+last-turn input use, prepares a fresh-session handoff at 60%, and makes 65% rollover mandatory; the
+external process may enforce those transitions only after its wiring gate passes. Missing
+last-turn telemetry pauses rather than interpreting cumulative totals as context pressure. A second
+occurrence of one normalized failure family must promote a deterministic guard; a third stops
+automatic retries and triggers bounded reconciliation against the approved plan, normative
+specification, current evidence, upstream reports, and primary sources. Human Review is required
+only if material ambiguity or contradiction remains, with cited options, tradeoffs, and a
+recommendation. Forking and compaction never reset those counters.
 
 ## Primary evidence
 

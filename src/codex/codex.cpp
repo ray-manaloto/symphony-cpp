@@ -43,15 +43,18 @@ struct ResultBody {
   std::optional<Identity> thread;
   std::optional<Identity> turn;
   struct TokenUsageBreakdown {
-    std::uint64_t inputTokens{0};
-    std::uint64_t cachedInputTokens{0};
-    std::uint64_t outputTokens{0};
-    std::uint64_t reasoningOutputTokens{0};
-    std::uint64_t totalTokens{0};
-    std::uint64_t cacheWriteInputTokens{0};
+    std::optional<std::int64_t> inputTokens;
+    std::optional<std::int64_t> cachedInputTokens;
+    std::optional<std::int64_t> outputTokens;
+    std::optional<std::int64_t> reasoningOutputTokens;
+    std::optional<std::int64_t> totalTokens;
+    std::optional<std::int64_t> cacheWriteInputTokens;
+  };
+  struct LastTokenUsageBreakdown {
+    std::optional<std::int64_t> inputTokens;
   };
   struct ThreadTokenUsage {
-    TokenUsageBreakdown last;
+    LastTokenUsageBreakdown last;
     TokenUsageBreakdown total;
     std::optional<std::int64_t> modelContextWindow;
   };
@@ -69,6 +72,8 @@ struct ResultBody {
     std::optional<RateLimitWindowBody> primary;
     std::optional<RateLimitWindowBody> secondary;
   };
+  std::optional<std::string> threadId;
+  std::optional<std::string> turnId;
   std::optional<ThreadTokenUsage> tokenUsage;
   std::optional<RateLimitSnapshotBody> rateLimits;
   std::optional<ThreadItem> item;
@@ -158,6 +163,21 @@ bool context_pressure_reached(const TokenUsage& usage, const std::uint32_t perce
   const auto whole = (window / 100U) * percent;
   const auto remainder = ((window % 100U) * percent + 99U) / 100U;
   return usage.total_tokens >= whole + remainder;
+}
+
+std::uint64_t token_count(const std::int64_t value) {
+  if (value < 0) {
+    throw std::runtime_error("app-server token count is negative");
+  }
+  return static_cast<std::uint64_t>(value);
+}
+
+std::uint64_t required_token_count(const std::optional<std::int64_t>& value,
+                                   const std::string_view name) {
+  if (!value) {
+    throw std::runtime_error("app-server token count is missing: " + std::string{name});
+  }
+  return token_count(*value);
 }
 
 class BoostProcessProtocolChannel final : public ProtocolChannel {
@@ -521,14 +541,27 @@ ProtocolUpdate AppServerProtocol::decode(const std::string_view line) {
   }
   update.response_id = message.id;
   if (message.params) {
+    if (message.params->threadId) update.thread_id = *message.params->threadId;
+    if (message.params->turnId) update.turn_id = *message.params->turnId;
     if (message.params->thread) update.thread_id = message.params->thread->id;
     if (message.params->turn) update.turn_id = message.params->turn->id;
     if (message.params->tokenUsage) {
-      const auto& total = message.params->tokenUsage->total;
-      update.token_usage =
-          TokenUsage{total.inputTokens,  total.cachedInputTokens,
-                     total.outputTokens, total.reasoningOutputTokens,
-                     total.totalTokens,  message.params->tokenUsage->modelContextWindow};
+      const auto& usage = *message.params->tokenUsage;
+      const auto& total = usage.total;
+      update.token_usage = TokenUsage{
+          .input_tokens = required_token_count(total.inputTokens, "total.inputTokens"),
+          .cached_input_tokens =
+              required_token_count(total.cachedInputTokens, "total.cachedInputTokens"),
+          .output_tokens = required_token_count(total.outputTokens, "total.outputTokens"),
+          .reasoning_output_tokens =
+              required_token_count(total.reasoningOutputTokens, "total.reasoningOutputTokens"),
+          .total_tokens = required_token_count(total.totalTokens, "total.totalTokens"),
+          .model_context_window = usage.modelContextWindow,
+          .last_input_tokens =
+              usage.last.inputTokens
+                  ? std::optional<std::uint64_t>{token_count(*usage.last.inputTokens)}
+                  : std::nullopt,
+      };
     }
     if (message.params->rateLimits) {
       const auto map_window = [](const auto& source) -> std::optional<RateLimitWindow> {
@@ -657,9 +690,15 @@ RunResult AppServerConversation::run(ProtocolChannel& channel, const RunRequest&
       result.error = std::string{"malformed app-server message: "} + error.what();
       return result;
     }
-    if (!update.thread_id.empty()) thread_id = update.thread_id;
-    if (!update.turn_id.empty()) turn_id = update.turn_id;
-    if (update.token_usage) result.token_usage = update.token_usage;
+    if (update.token_usage) {
+      const auto current_turn = !thread_id.empty() && !turn_id.empty();
+      const auto correlated =
+          current_turn && update.thread_id == thread_id && update.turn_id == turn_id;
+      if (correlated) result.token_usage = update.token_usage;
+    } else {
+      if (!update.thread_id.empty()) thread_id = update.thread_id;
+      if (!update.turn_id.empty()) turn_id = update.turn_id;
+    }
     if (update.rate_limits) {
       if (!result.rate_limits) result.rate_limits.emplace();
       merge_rate_limits(*result.rate_limits, *update.rate_limits);
@@ -744,6 +783,7 @@ RunResult AppServerConversation::run(ProtocolChannel& channel, const RunRequest&
         return result;
       }
       turn_id.clear();
+      if (result.token_usage) result.token_usage->last_input_tokens.reset();
       channel.write(AppServerProtocol::turn_start_request(
           next_request_id++, thread_id, request.workspace.path, *continuation, policy));
       turn_started_at = std::chrono::steady_clock::now();

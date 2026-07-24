@@ -96,11 +96,17 @@ observed, the current worker session exits normally at the next completed turn w
 continuation; a retry starts from the durable workspace in a fresh process and thread. The current
 standalone path decodes cumulative `tokenUsage.total` and compares cumulative `total_tokens` with a
 positive model context-window size. That conservative rollover remains executable but is not the
-external supervisor's intended last-turn context-pressure metric. The supervisor percentage policy
-must remain disabled until the Codex adapter separately decodes and fixture-proves
-`tokenUsage.last.inputTokens`; cumulative cached, output, reasoning, and total fields remain cost
-and conservative-rollover evidence. Missing telemetry is never estimated. This reduces compaction
-pressure but cannot interrupt an internal compaction that Codex performs during a single turn.
+external supervisor's last-turn context-pressure metric. The Codex adapter separately preserves
+optional `tokenUsage.last.inputTokens`, and the pure supervisor policy uses only that field while
+pausing on an absent value or non-positive window. Each token update is correlated to its required
+thread and turn identities; starting a continuation clears the prior last-turn value while retaining
+cumulative evidence, and schema-valid stale cross-turn updates are ignored. Malformed frames still
+fail closed during decoding. All cumulative counters must be present, and provider token counts must
+fit a non-negative signed 64-bit value before entering the unsigned domain. Cumulative cached,
+output, reasoning, and total fields remain cost and conservative-rollover evidence. The external
+supervisor process remains disarmed until complete telemetry/checkpoint wiring passes. Missing
+telemetry is never estimated. This reduces compaction pressure but cannot interrupt an internal
+compaction that Codex performs during a single turn.
 
 One worker invocation owns one app-server process and coding-agent thread. After each successful
 turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a

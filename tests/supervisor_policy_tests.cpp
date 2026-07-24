@@ -21,6 +21,7 @@ TokenUsage usage(const std::uint64_t total, const std::int64_t window) {
   result.input_tokens = total;
   result.total_tokens = total;
   result.model_context_window = window;
+  result.last_input_tokens = total;
   return result;
 }
 
@@ -51,14 +52,15 @@ static ut::suite supervisor_policy_tests = [] {
   };
 
   ut::test("only latest input tokens measure context pressure") = [] {
-    auto output_heavy = usage(1, 100);
-    output_heavy.cached_input_tokens = 90;
-    output_heavy.output_tokens = 90;
-    output_heavy.reasoning_output_tokens = 90;
-    output_heavy.total_tokens = 271;
+    auto cumulative_heavy = usage(1, 100);
+    cumulative_heavy.input_tokens = 90;
+    cumulative_heavy.cached_input_tokens = 90;
+    cumulative_heavy.output_tokens = 90;
+    cumulative_heavy.reasoning_output_tokens = 90;
+    cumulative_heavy.total_tokens = 360;
 
     const auto decision =
-        decide_context_budget({}, {}, {.token_usage = output_heavy, .completed_turns = 1});
+        decide_context_budget({}, {}, {.token_usage = cumulative_heavy, .completed_turns = 1});
 
     ut::expect(decision.action == ContextBudgetAction::continue_session);
     ut::expect(decision.reason == ContextBudgetReason::below_checkpoint);
@@ -82,18 +84,27 @@ static ut::suite supervisor_policy_tests = [] {
     missing.completed_turns = 1;
     TokenUsage absent_window;
     absent_window.total_tokens = 99;
+    TokenUsage missing_last;
+    missing_last.input_tokens = 99;
+    missing_last.total_tokens = 99;
+    missing_last.model_context_window = 100;
     ContextBudgetObservation absent{
         .token_usage = absent_window,
+        .completed_turns = 1,
+    };
+    ContextBudgetObservation no_last{
+        .token_usage = missing_last,
         .completed_turns = 1,
     };
 
     const auto missing_decision = decide_context_budget({}, {}, missing);
     const auto absent_decision = decide_context_budget({}, {}, absent);
+    const auto no_last_decision = decide_context_budget({}, {}, no_last);
     const auto zero_decision = decide_context_budget({}, {}, observed(99, 0));
     const auto negative_decision = decide_context_budget({}, {}, observed(99, -1));
 
-    for (const auto* decision :
-         {&missing_decision, &absent_decision, &zero_decision, &negative_decision}) {
+    for (const auto* decision : {&missing_decision, &absent_decision, &no_last_decision,
+                                 &zero_decision, &negative_decision}) {
       ut::expect(decision->action == ContextBudgetAction::pause_needs_telemetry);
       ut::expect(decision->reason == ContextBudgetReason::telemetry_unavailable);
     }

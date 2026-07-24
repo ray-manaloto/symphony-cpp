@@ -37,7 +37,7 @@ upstream issues before widening autonomous worker or merge authority.
 | Wall-clock budget | 90 minutes from the first model-backed run |
 | No-progress budget | Two consecutive post-baseline runs |
 | Repeated-failure budget | Two matching redacted signatures without changed diff/check evidence |
-| Context metric gate | Distinct last-turn `tokenUsage.last.inputTokens` decoding must pass before the supervisor uses percentages |
+| Context metric gate | Distinct optional `tokenUsage.last.inputTokens` decoding and pure reducer fixtures pass; external process wiring remains disarmed |
 | Context checkpoint | At 50% of decoded last-turn input tokens over the reported positive model context window |
 | Context handoff | At 60%, finish only the active atomic slice and prepare durable handoff |
 | Context rollover | At 65%, authorize no continuation and resume from durable state in a fresh session |
@@ -47,9 +47,10 @@ upstream issues before widening autonomous worker or merge authority.
 | Operational concurrency | One until the complete isolated-concurrency fixture passes |
 
 Cached input is not added to the last-turn input count again. Cumulative token totals are cost
-evidence, not the target context-utilization metric. Current Codex notification decoding maps
-`tokenUsage.total`; until a distinct `tokenUsage.last` field is decoded and fixture-proven, this
-supervisor percentage policy remains disabled and missing usable telemetry pauses. The issue-wide
+evidence, not the target context-utilization metric. The adapter separately decodes optional
+`tokenUsage.last.inputTokens`; the pure reducer uses only that value and pauses when it or the
+positive context window is missing. The external supervisor process still has no accepted
+telemetry/checkpoint wiring, so this operational percentage policy remains disarmed. The issue-wide
 session counter increments only after the launched child and gateway identities are accepted. The
 fourth session may finish; a fifth may not launch. Every accepted model-backed worker session
 consumes that budget even when it is later cancelled for a checkpoint. Fresh-session reconciliation
