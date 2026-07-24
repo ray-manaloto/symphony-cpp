@@ -132,7 +132,7 @@ static ut::suite persistence_tests = [] {
     if (events) ut::expect(events->size() == append_count);
   };
 
-  ut::test("sqlite event repository cancels a queued append while busy") = [] {
+  ut::test("sqlite event repository cancels an async append before mutation while busy") = [] {
     FixtureDatabase fixture{"cancelled"};
     auto opened = symphony::persistence::SqliteEventRepository::open(fixture.path());
     ut::expect(opened.has_value());

@@ -5,7 +5,9 @@
 #include <functional>
 #include <future>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
+#include <stop_token>
 #include <system_error>
 #include <tuple>
 #include <type_traits>
@@ -74,9 +76,22 @@ template <typename Impl> bool acquire_append_slot(Impl& impl) noexcept {
 }
 
 template <typename Impl>
-std::expected<std::int64_t, Error> append_event(Impl& impl, NewEvent event) {
+std::expected<std::int64_t, Error> append_event(Impl& impl, NewEvent event,
+                                                const std::stop_token stop_token = {}) {
+  const auto cancellable = stop_token.stop_possible();
+  if (stop_token.stop_requested()) return std::unexpected(cancellation_error());
+
+  std::optional<sqlite::transaction> transaction;
   try {
-    sqlite::transaction transaction{impl.connection};
+    transaction.emplace(impl.connection, cancellable ? sqlite::transaction::immediate
+                                                     : sqlite::transaction::deferred);
+  } catch (...) {
+    return std::unexpected(current_error());
+  }
+
+  try {
+    if (stop_token.stop_requested()) return std::unexpected(cancellation_error());
+
     impl.connection
         .prepare("INSERT INTO symphony_events("
                  "schema_version, type, issue_id, payload"
@@ -84,7 +99,7 @@ std::expected<std::int64_t, Error> append_event(Impl& impl, NewEvent event) {
         .execute({event.schema_version, event.type, event.issue_id, event.payload});
     const auto sequence =
         static_cast<std::int64_t>(sqlite3_last_insert_rowid(impl.connection.handle()));
-    transaction.commit();
+    transaction->commit();
     return sequence;
   } catch (...) {
     return std::unexpected(current_error());
@@ -212,16 +227,14 @@ std::expected<void, Error> SqliteEventRepository::submit_append(std::string key,
   if (!acquire_append_slot(*impl_)) return std::unexpected(overload_error());
 
   try {
-    impl_->tasks.submit(execution_key, [impl = impl_.get(), key = std::move(key),
-                                        event = std::move(event)](
-                                           const std::stop_token stop_token) mutable noexcept {
-      auto result = stop_token.stop_requested()
-                        ? std::expected<std::int64_t, Error>{std::unexpected(cancellation_error())}
-                        : append_event(*impl, std::move(event));
-      const std::scoped_lock lock(impl->completion_mutex);
-      impl->append_completions.push_back(AppendCompletion{std::move(key), std::move(result)});
-      impl->pending_appends.fetch_sub(1, std::memory_order_relaxed);
-    });
+    impl_->tasks.submit(
+        execution_key, [impl = impl_.get(), key = std::move(key), event = std::move(event)](
+                           const std::stop_token stop_token) mutable noexcept {
+          auto result = append_event(*impl, std::move(event), stop_token);
+          const std::scoped_lock lock(impl->completion_mutex);
+          impl->append_completions.push_back(AppendCompletion{std::move(key), std::move(result)});
+          impl->pending_appends.fetch_sub(1, std::memory_order_relaxed);
+        });
   } catch (...) {
     impl_->pending_appends.fetch_sub(1, std::memory_order_relaxed);
     return std::unexpected(current_error());
