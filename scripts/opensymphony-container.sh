@@ -5,10 +5,27 @@ mode="${1:-dry-run}"
 shift || true
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="${OPENSYMPHONY_IMAGE:-ghcr.io/ray-manaloto/symphony-orchestrator@sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982}"
+image="${OPENSYMPHONY_IMAGE:-symphony-opensymphony:local}"
 state_volume="${OPENSYMPHONY_STATE_VOLUME:-symphony-opensymphony-state}"
 auth_volume="${OPENSYMPHONY_CODEX_AUTH_VOLUME:-symphony-codex-auth}"
 workspaces_volume="${OPENSYMPHONY_WORKSPACES_VOLUME:-symphony-opensymphony-workspaces}"
+tools_volume="${OPENSYMPHONY_TOOLS_VOLUME:-symphony-opensymphony-tools}"
+ccache_volume="${OPENSYMPHONY_CCACHE_VOLUME:-symphony-opensymphony-gcc16-ccache}"
+vcpkg_archives_volume="${OPENSYMPHONY_VCPKG_ARCHIVES_VOLUME:-symphony-opensymphony-vcpkg-archives}"
+uv_cache_volume="${OPENSYMPHONY_UV_CACHE_VOLUME:-symphony-opensymphony-uv-cache}"
+runtime_cpus="${OPENSYMPHONY_RUNTIME_CPUS:-6}"
+runtime_memory="${OPENSYMPHONY_RUNTIME_MEMORY:-16g}"
+container_network="${OPENSYMPHONY_NETWORK:-}"
+
+if [[ -n "${container_network}" ]] &&
+  [[ ! "${container_network}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+  echo "unsafe OpenSymphony Docker network name" >&2
+  exit 2
+fi
+network_args=()
+if [[ -n "${container_network}" ]]; then
+  network_args+=(--network "${container_network}")
+fi
 
 require_linear_key() {
   if [[ -z "${LINEAR_API_KEY:-}" ]]; then
@@ -26,19 +43,99 @@ require_issue() {
   printf '%s' "${issue}"
 }
 
+require_acceptance_volumes() {
+  local suffix="${OPENSYMPHONY_ACCEPTANCE_SUFFIX:-}"
+  local owner_token="${OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN:-}"
+  if [[ "${OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED:-}" != "true" ]]; then
+    echo "doctor and dry-run require the owned contained-resource ceremony" >&2
+    exit 2
+  fi
+  if [[ -z "${suffix}" ]] || [[ ! "${suffix}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+    echo "dry-run requires a safe OPENSYMPHONY_ACCEPTANCE_SUFFIX" >&2
+    exit 2
+  fi
+  if [[ -z "${owner_token}" ]] || [[ ! "${owner_token}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+    echo "doctor and dry-run require a safe contained-resource owner token" >&2
+    exit 2
+  fi
+
+  local expected=(
+    "symphony-opensymphony-state-acceptance-${suffix}"
+    "symphony-codex-auth-acceptance-${suffix}"
+    "symphony-opensymphony-workspaces-acceptance-${suffix}"
+    "symphony-opensymphony-tools-acceptance-${suffix}"
+    "symphony-opensymphony-gcc16-ccache-acceptance-${suffix}"
+    "symphony-opensymphony-vcpkg-archives-acceptance-${suffix}"
+    "symphony-opensymphony-uv-cache-acceptance-${suffix}"
+  )
+  local actual=(
+    "${state_volume}"
+    "${auth_volume}"
+    "${workspaces_volume}"
+    "${tools_volume}"
+    "${ccache_volume}"
+    "${vcpkg_archives_volume}"
+    "${uv_cache_volume}"
+  )
+  local index
+  for index in "${!expected[@]}"; do
+    if [[ "${actual[$index]}" != "${expected[$index]}" ]]; then
+      echo "dry-run requires exact disposable acceptance volumes for suffix ${suffix}" >&2
+      exit 2
+    fi
+    if [[ "$(
+      docker volume inspect \
+        --format '{{ index .Labels "dev.symphony.acceptance-run" }}' \
+        "${actual[$index]}" 2>/dev/null
+    )" != "${owner_token}" ]]; then
+      echo "doctor and dry-run require owned disposable volumes" >&2
+      exit 2
+    fi
+  done
+}
+
 common_args=(
   --rm
   --interactive
+  --workdir /target
+  --cpus "${runtime_cpus}"
+  --memory "${runtime_memory}"
+  --memory-swap "${runtime_memory}"
   --read-only
+  --cap-drop ALL
+  --security-opt no-new-privileges
+  --pids-limit 2048
   --tmpfs "/tmp:rw,noexec,nosuid,size=256m"
+  --env CCACHE_DIR=/home/orchestrator/.cache/ccache
+  --env UV_CACHE_DIR=/home/orchestrator/.cache/uv
+  --env VCPKG_DEFAULT_BINARY_CACHE=/home/orchestrator/.cache/vcpkg/archives
   --volume "${repo_root}:/target:ro"
   --volume "${repo_root}/WORKFLOW.md:/orchestrator/WORKFLOW.md:ro"
   --volume "${repo_root}/ops/opensymphony/config.yaml:/orchestrator/config.yaml:ro"
   --volume "${auth_volume}:/home/orchestrator/.codex"
+  --volume "${tools_volume}:/home/orchestrator/.opensymphony"
+  --volume "${ccache_volume}:/home/orchestrator/.cache/ccache"
+  --volume "${vcpkg_archives_volume}:/home/orchestrator/.cache/vcpkg/archives"
+  --volume "${uv_cache_volume}:/home/orchestrator/.cache/uv"
   --volume "${repo_root}/ops/opensymphony/codex-config.toml:/home/orchestrator/.codex/config.toml:ro"
   --volume "${workspaces_volume}:/workspaces"
   --volume "${state_volume}:/target/.opensymphony"
 )
+if (( ${#network_args[@]} > 0 )); then
+  common_args+=("${network_args[@]}")
+fi
+
+run_with_linear_key() {
+  local entrypoint="$1"
+  shift
+  printf '%s\n' "${LINEAR_API_KEY}" |
+    docker run "${common_args[@]}" \
+      --entrypoint sh \
+      "${image}" \
+      -euc 'IFS= read -r LINEAR_API_KEY
+export LINEAR_API_KEY
+exec "$@"' sh "${entrypoint}" "$@"
+}
 
 case "${mode}" in
   login)
@@ -46,7 +143,23 @@ case "${mode}" in
       echo "login accepts no additional arguments" >&2
       exit 2
     fi
-    exec docker run --rm --interactive --tty \
+    login_args=(
+      --rm
+      --interactive
+      --tty
+      --read-only
+      --cpus "${runtime_cpus}"
+      --memory "${runtime_memory}"
+      --memory-swap "${runtime_memory}"
+      --cap-drop ALL
+      --security-opt no-new-privileges
+      --pids-limit 512
+      --tmpfs "/tmp:rw,noexec,nosuid,size=256m"
+    )
+    if (( ${#network_args[@]} > 0 )); then
+      login_args+=("${network_args[@]}")
+    fi
+    exec docker run "${login_args[@]}" \
       --entrypoint codex \
       --volume "${auth_volume}:/home/orchestrator/.codex" \
       "${image}" login --device-auth
@@ -91,7 +204,24 @@ case "${mode}" in
       echo "memory-init accepts no additional arguments" >&2
       exit 2
     fi
-    exec docker run --rm --read-only \
+    memory_init_args=(
+      --rm
+      --read-only
+      --cpus "${runtime_cpus}"
+      --memory "${runtime_memory}"
+      --memory-swap "${runtime_memory}"
+      --cap-drop ALL
+      --cap-add CHOWN
+      --cap-add DAC_OVERRIDE
+      --cap-add FOWNER
+      --security-opt no-new-privileges
+      --pids-limit 512
+      --tmpfs "/tmp:rw,noexec,nosuid,size=64m"
+    )
+    if (( ${#network_args[@]} > 0 )); then
+      memory_init_args+=("${network_args[@]}")
+    fi
+    exec docker run "${memory_init_args[@]}" \
       --user 0:0 \
       --entrypoint sh \
       --volume "${state_volume}:/state" \
@@ -145,7 +275,7 @@ case "${mode}" in
       exit 2
     fi
     exec docker run "${common_args[@]}" \
-      "${image}" memory --config /orchestrator/config.yaml status
+      "${image}" memory --config /target/.opensymphony/memory/memory.yaml status
     ;;
   memory-context)
     issue="$(require_issue "${1:-}")"
@@ -154,9 +284,8 @@ case "${mode}" in
       exit 2
     fi
     require_linear_key
-    exec docker run "${common_args[@]}" \
-      --env LINEAR_API_KEY \
-      "${image}" memory --config /orchestrator/config.yaml context --issue "${issue}"
+    run_with_linear_key opensymphony \
+      memory --config /target/.opensymphony/memory/memory.yaml context --issue "${issue}"
     ;;
   doctor)
     if (( $# != 0 )); then
@@ -164,9 +293,8 @@ case "${mode}" in
       exit 2
     fi
     require_linear_key
-    exec docker run "${common_args[@]}" \
-      --env LINEAR_API_KEY \
-      "${image}" doctor --config /orchestrator/config.yaml
+    require_acceptance_volumes
+    run_with_linear_key opensymphony doctor --config /orchestrator/config.yaml
     ;;
   dry-run|run)
     if (( $# != 0 )); then
@@ -176,20 +304,41 @@ case "${mode}" in
     require_linear_key
     run_args=(run --config /orchestrator/config.yaml)
     if [[ "${mode}" == "dry-run" ]]; then
+      require_acceptance_volumes
       run_args+=(--dry-run)
     fi
 
-    exec docker run "${common_args[@]}" \
-      --env LINEAR_API_KEY \
+    printf '%s\n' "${LINEAR_API_KEY}" |
+      exec docker run "${common_args[@]}" \
+      --entrypoint sh \
       --publish 127.0.0.1:2468:2468 \
-      "${image}" "${run_args[@]}"
+      "${image}" \
+      -euc 'IFS= read -r LINEAR_API_KEY
+export LINEAR_API_KEY
+exec opensymphony "$@"' sh "${run_args[@]}"
     ;;
   tui)
     if (( $# != 0 )); then
       echo "tui accepts no additional arguments" >&2
       exit 2
     fi
-    exec docker run --rm --interactive --tty \
+    tui_args=(
+      --rm
+      --interactive
+      --tty
+      --read-only
+      --cpus "${runtime_cpus}"
+      --memory "${runtime_memory}"
+      --memory-swap "${runtime_memory}"
+      --cap-drop ALL
+      --security-opt no-new-privileges
+      --pids-limit 512
+      --tmpfs "/tmp:rw,noexec,nosuid,size=64m"
+    )
+    if (( ${#network_args[@]} > 0 )); then
+      tui_args+=("${network_args[@]}")
+    fi
+    exec docker run "${tui_args[@]}" \
       --add-host host.docker.internal:host-gateway \
       "${image}" tui --url http://host.docker.internal:2468/
     ;;
@@ -200,9 +349,8 @@ case "${mode}" in
       exit 2
     fi
     require_linear_key
-    exec docker run "${common_args[@]}" \
-      --env LINEAR_API_KEY \
-      "${image}" debug --config /orchestrator/config.yaml "${issue}"
+    run_with_linear_key opensymphony \
+      debug --config /orchestrator/config.yaml "${issue}"
     ;;
   *)
     echo "usage: $0 {login|memory-init|preflight|memory-status|memory-context ISSUE|doctor|dry-run|run|tui|debug ISSUE}" >&2

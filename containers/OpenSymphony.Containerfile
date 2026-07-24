@@ -1,9 +1,11 @@
 ARG RUST_IMAGE=rust:1.93.0-bookworm@sha256:d0a4aa3ca2e1088ac0c81690914a0d810f2eee188197034edf366ed010a2b382
+ARG SYMPHONY_CPP_BASE=ghcr.io/ray-manaloto/symphony-dev@sha256:d4ee55fe474d331705a6f6c786ef6740aa1c76111e9eb519e7f37e0601f6b698
 
-FROM ${RUST_IMAGE} AS builder
+FROM ${RUST_IMAGE} AS builder-base
 
 ARG OPENSYMPHONY_REPOSITORY=https://github.com/kumanday/OpenSymphony.git
 ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
+ARG TARGETARCH
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
@@ -21,16 +23,59 @@ RUN git clone --filter=blob:none --no-checkout "${OPENSYMPHONY_REPOSITORY}" open
 WORKDIR /src/opensymphony
 RUN groupadd --gid 10001 orchestrator \
     && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash orchestrator \
-    && chown -R orchestrator:orchestrator /src/opensymphony
+    && chown -R orchestrator:orchestrator /src/opensymphony \
+    && install -d --owner=orchestrator --group=orchestrator \
+        /opt/opensymphony/bin \
+        /opt/licenses
 USER orchestrator
 ENV CARGO_HOME=/home/orchestrator/.cargo
-RUN cargo test --locked --workspace \
-    && cargo build --locked --release
-USER root
-RUN install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
+
+FROM builder-base AS upstream-tests
+RUN --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-registry,target=/home/orchestrator/.cargo/registry,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-git,target=/home/orchestrator/.cargo/git,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-target,target=/src/opensymphony/target,uid=10001,gid=10001,sharing=locked \
+    cargo test --locked --workspace --no-run
+RUN --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-registry,target=/home/orchestrator/.cargo/registry,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-git,target=/home/orchestrator/.cargo/git,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-target,target=/src/opensymphony/target,uid=10001,gid=10001,sharing=locked \
+    cargo test --locked --workspace -- --test-threads=1
+
+FROM builder-base AS candidate-builder
+RUN --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-registry,target=/home/orchestrator/.cargo/registry,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-git,target=/home/orchestrator/.cargo/git,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-target,target=/src/opensymphony/target,uid=10001,gid=10001,sharing=locked \
+    cargo build --locked --release \
+    && install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
     && install -D --mode=0644 LICENSE /opt/licenses/OpenSymphony-LICENSE
 
-FROM ${RUST_IMAGE} AS symphony-orchestrator
+FROM upstream-tests AS validated-builder
+RUN --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-registry,target=/home/orchestrator/.cargo/registry,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-git,target=/home/orchestrator/.cargo/git,uid=10001,gid=10001,sharing=locked \
+    --mount=type=cache,id=opensymphony-${OPENSYMPHONY_COMMIT}-${TARGETARCH}-cargo-target,target=/src/opensymphony/target,uid=10001,gid=10001,sharing=locked \
+    cargo build --locked --release \
+    && install -D --mode=0755 target/release/opensymphony /opt/opensymphony/bin/opensymphony \
+    && install -D --mode=0644 LICENSE /opt/licenses/OpenSymphony-LICENSE
+
+FROM ${SYMPHONY_CPP_BASE} AS runtime-tools
+
+ARG CODEX_CLI_VERSION=0.145.0
+ARG NODE_VERSION=24.15.0
+
+RUN node_source="/root/.nvm/versions/node/v${NODE_VERSION}" \
+    && test -x "${node_source}/bin/node" \
+    && test "$("${node_source}/bin/node" --version)" = "v${NODE_VERSION}" \
+    && install -d /opt/node /opt/tools/bin \
+    && cp --archive "${node_source}/." /opt/node/ \
+    && install --mode=0755 "$(readlink -f /root/.local/bin/uv)" /opt/tools/bin/uv
+
+ENV PATH="/opt/node/bin:/opt/tools/bin:${PATH}"
+RUN test "$(node --version)" = "v${NODE_VERSION}" \
+    && test "$(uv --version)" = "uv 0.7.22" \
+    && npm install --global --prefix /opt/node --omit=dev "@openai/codex@${CODEX_CLI_VERSION}" \
+    && test "$(codex --version)" = "codex-cli ${CODEX_CLI_VERSION}" \
+    && npm cache clean --force
+
+FROM ${SYMPHONY_CPP_BASE} AS orchestrator-runtime
 
 ARG CODEX_CLI_VERSION=0.145.0
 ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
@@ -40,26 +85,57 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
-        nodejs \
-        npm \
-        openssh-client \
-    && npm install --global --omit=dev "@openai/codex@${CODEX_CLI_VERSION}" \
-    && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 orchestrator \
     && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash orchestrator \
     && install -d --owner=orchestrator --group=orchestrator \
         /home/orchestrator/.codex \
+        /home/orchestrator/.opensymphony \
         /orchestrator \
         /target \
         /workspaces
 
-COPY --from=builder /opt/opensymphony/bin/opensymphony /usr/local/bin/opensymphony
-COPY --from=builder /opt/licenses/OpenSymphony-LICENSE /LICENSES/OpenSymphony-LICENSE
+COPY --from=builder-base /usr/local/cargo /opt/rust/cargo
+COPY --from=builder-base /usr/local/rustup /opt/rust/rustup
+COPY --from=runtime-tools /opt/node /opt/node
+COPY --from=runtime-tools /opt/tools /opt/tools
 
+ENV HOME=/home/orchestrator \
+    CARGO_HOME=/opt/rust/cargo \
+    RUSTUP_HOME=/opt/rust/rustup \
+    PATH="/opt/node/bin:/opt/tools/bin:/opt/rust/cargo/bin:${PATH}"
+
+RUN test "$(cargo --version | awk '{print $2}')" = "1.93.0" \
+    && test "$(rustc --version | awk '{print $2}')" = "1.93.0" \
+    && test "$(node --version)" = "v24.15.0" \
+    && test "$(codex --version)" = "codex-cli ${CODEX_CLI_VERSION}" \
+    && test "$(uv --version)" = "uv 0.7.22"
+
+FROM orchestrator-runtime AS symphony-orchestrator-candidate
+
+ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
+COPY --from=candidate-builder /opt/opensymphony/bin/opensymphony /usr/local/bin/opensymphony
+COPY --from=candidate-builder /opt/licenses/OpenSymphony-LICENSE /LICENSES/OpenSymphony-LICENSE
 LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
-      org.opencontainers.image.description="Contained OpenSymphony development orchestrator for symphony-cpp" \
-      dev.opensymphony.source.commit="${OPENSYMPHONY_COMMIT}"
+      org.opencontainers.image.description="Unvalidated local-only OpenSymphony acceptance candidate for symphony-cpp" \
+      dev.opensymphony.source.commit="${OPENSYMPHONY_COMMIT}" \
+      dev.opensymphony.upstream-tests="unverified-candidate"
+
+USER orchestrator
+WORKDIR /orchestrator
+EXPOSE 2468
+ENTRYPOINT ["opensymphony"]
+CMD ["run", "--config", "/orchestrator/config.yaml", "--dry-run"]
+
+FROM orchestrator-runtime AS symphony-orchestrator
+
+ARG OPENSYMPHONY_COMMIT=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
+COPY --from=validated-builder /opt/opensymphony/bin/opensymphony /usr/local/bin/opensymphony
+COPY --from=validated-builder /opt/licenses/OpenSymphony-LICENSE /LICENSES/OpenSymphony-LICENSE
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
+      org.opencontainers.image.description="Validated local-only OpenSymphony development orchestrator for symphony-cpp" \
+      dev.opensymphony.source.commit="${OPENSYMPHONY_COMMIT}" \
+      dev.opensymphony.upstream-tests="passed"
 
 USER orchestrator
 WORKDIR /orchestrator
