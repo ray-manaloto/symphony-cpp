@@ -43,7 +43,7 @@ jobs:
       - name: Install build frontend
         run: |
           apt-get update
-          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git ninja-build nodejs tar unzip zip zstd
+          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs tar unzip zip zstd
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

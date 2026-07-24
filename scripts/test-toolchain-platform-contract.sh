@@ -30,6 +30,10 @@ readonly devcontainer_configs=(
   .devcontainer/analysis/devcontainer.json
 )
 
+grep -Fq \
+  'apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs tar unzip zip zstd' \
+  "${source_workflow}"
+
 bash -n "${cmake_installer}"
 bash -n "${devcontainer_setup}"
 bash -n "${p2996_workflow_runner}"
