@@ -11,10 +11,15 @@ of OpenAI Symphony Draft v1.
   are fixture-proven.
 - Native collaboration may use parallel read-only research, triage, or review lanes. The root
   integration agent is the only writer unless isolated worktrees and file claims are explicit.
+- Validate the complete pinned OpenSymphony feature matrix before disabling a feature. Reproduce
+  upstream behavior and link the upstream issue before adding an external-supervisor containment.
 - One exact GitHub Actions run has one watcher. Quiet or stale partial logs never justify a
   duplicate run.
 - Four turns bound one worker session. Reported context utilization triggers earlier checkpoints
   and rollover; compaction never resets no-progress evidence.
+- Fully researched, plan/spec-conformant changes may follow the guarded autonomous merge path.
+  Human intervention is reserved for material ambiguity or contradiction that remains after
+  source, test, upstream-report, and primary-documentation reconciliation.
 
 ## Closed learning loop
 
@@ -27,7 +32,10 @@ flowchart LR
   V --> P{"Recurrence?"}
   P -->|"first"| L["Record evidence and guard"]
   P -->|"second in 30 days"| G["Promote deterministic guard"]
-  P -->|"third"| H["Stop retries; Human Review"]
+  P -->|"third"| R["Stop retries; bounded research"]
+  R --> D{"Plan and specification resolve it?"}
+  D -->|"yes"| X
+  D -->|"no"| H["Human decision with citations and tradeoffs"]
   L --> O
   G --> O
 ```
@@ -57,8 +65,11 @@ Promotion policy:
    regression guard.
 2. Second occurrence in the same family within 30 days: strengthen a deterministic check, script,
    fixture, skill, or mandatory checklist and name its owner.
-3. Third occurrence: disable automatic retry for that family, route to Human Review, and require a
-   policy or architecture correction before resuming.
+3. Third occurrence: disable automatic retry for that family and perform a bounded reconciliation
+   of the approved plan, normative specification, current source/tests, upstream reports, and
+   primary documentation. Resume autonomously only when those sources determine a plan-conformant
+   correction. Otherwise route the exact unresolved ambiguity or contradiction to Human Review
+   with citations, viable proposals, advantages, disadvantages, and a recommendation.
 
 Every promoted guard needs a deletion trigger so stale ceremony does not accumulate.
 
@@ -135,19 +146,23 @@ ownership have deterministic fixtures. Until then, keep OpenSymphony's
 | below 50% | normal bounded work |
 | 50% | checkpoint after the next coherent change; add no scope |
 | 60% | prepare durable handoff and finish only the active atomic slice |
-| 70% or configured rollover | start no continuation; resume from the checkpoint in a fresh process/thread |
+| 65% or configured rollover | start no continuation; resume from the checkpoint in a fresh process/thread |
 | any observed compaction | finish the active turn, checkpoint, and use a fresh process/thread |
-| telemetry absent | never estimate; checkpoint every turn and enforce the four-turn cap |
+| telemetry absent | pause; never estimate or authorize another worker run |
 
-Fork only to create a genuinely independent lane with a small input/output contract. Do not fork a
-bloated or compacted session as recovery; use a fresh session from durable state. Neither compaction,
-forking, nor process exit resets retry/no-progress counters.
+Fork only to create a genuinely independent lane with a small input/output contract or the
+supervisor's short-lived recovery checkpoint. A recovery fork is durable evidence, not a session to
+continue working in; resume from reconciled durable state in a fresh session. Do not continue a
+bloated or compacted session. Neither compaction, forking, nor process exit resets
+retry/no-progress counters.
 
 The default implementer remains Sol/high. Use Sol/xhigh for cross-subsystem architecture, bounded
 primary-source research, or the fresh session after one abnormal/no-progress result. Use one
-Sol/max recovery session only after the same signature repeats, then require Human Review if it
-repeats again. Terra/medium is appropriate for contained reproduction/CI triage and can move to
-high when causality remains ambiguous. The deterministic controller uses no model.
+Sol/max recovery session only after the same signature repeats, then stop automatic retries and
+perform the bounded research reconciliation if it repeats again. Require Human Review only when
+material ambiguity or a plan/specification conflict remains. Terra/medium is appropriate for
+contained reproduction/CI triage and can move to high when causality remains ambiguous. The
+deterministic controller uses no model.
 
 Monitor model/effort effectiveness through progress fingerprints, recurrence signatures, terminal
 reasons, context/compaction telemetry, correction latency, and defects caught in independent
@@ -161,7 +176,7 @@ Persist these fields at each coherent checkpoint:
 ```text
 schema_version, checkpoint_id, issue_id, repository_url,
 base_sha, head_sha, branch, worktree, role, model, effort, turn_number,
-context_window, cumulative_input_tokens, cumulative_output_tokens,
+context_window, last_input_tokens, cumulative_input_tokens, cumulative_output_tokens,
 cumulative_cached_tokens, context_utilization_percent, compaction_count,
 scope_and_acceptance, progress_fingerprint,
 failure_signature, failure_family, consecutive_failure_count,
@@ -173,6 +188,16 @@ next_atomic_action, next_owner, review_state, created_at
 
 The event store is the future machine-readable authority. A code-bearing checkpoint also needs an
 exact commit. Before workspace cleanup, the controller must verify that the handoff was persisted.
+
+## Local artifact lifecycle
+
+Delete project-specific local images, stopped containers, volumes, networks, generated acceptance
+artifacts, and build outputs once no current validation, recovery, or reproducibility contract
+needs them. Resolve the exact immutable ID or repository-owned label first, verify that no active
+run or durable handoff references it, retain only the bounded evidence needed to reproduce the
+result, and then remove that exact object. Never use a broad prune as task cleanup, delete a shared
+base/toolchain image or cache, or remove another lane's resource. Unclear ownership or retention
+requirements pause cleanup for research.
 
 ## Coding, analysis, and documentation roadmap
 

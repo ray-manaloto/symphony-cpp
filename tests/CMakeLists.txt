@@ -22,6 +22,13 @@ add_test(
   NAME symphony_workflow_document
   COMMAND $<TARGET_FILE:symphonyctl> validate ${PROJECT_SOURCE_DIR}/WORKFLOW.md)
 
+add_executable(symphony_supervisor_policy_tests
+  test_main.cpp supervisor_policy_tests.cpp)
+target_link_libraries(symphony_supervisor_policy_tests PRIVATE
+  symphony_supervisor_policy ut::ut)
+add_test(NAME symphony_supervisor_policy_tests
+  COMMAND symphony_supervisor_policy_tests)
+
 add_executable(symphony_intel_provider_tests
   test_main.cpp
   intel_provider_tests.cpp)

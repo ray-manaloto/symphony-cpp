@@ -56,7 +56,7 @@ then expand only after measured throughput and defect-recall evidence.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction. End the bounded worker session after any observed compaction,
   then resume from durable workspace and tracker state in a fresh process and thread. When Codex
-  reports cumulative tokens and a positive context window, apply the repository's configured 70%
+  reports last-turn input tokens and a positive context window, apply the repository's configured 65%
   between-turn rollover threshold; never estimate missing utilization.
 - Enforce a turn budget independently of context size. The repository workflow uses four turns per
   session. A compaction is not progress and does not reset retry/no-progress policy.
@@ -71,10 +71,12 @@ then expand only after measured throughput and defect-recall evidence.
 
 Use the repository-wide checkpoint and recurrence policy in
 [`../engineering-system.md`](../engineering-system.md). In particular, checkpoint at 50% reported
-context use, prepare a fresh-session handoff at 60%, and make the configured 70% rollover
+context use, prepare a fresh-session handoff at 60%, and make the configured 65% rollover
 mandatory. A second occurrence of one normalized failure family must promote a deterministic guard;
-a third stops automatic retries and requires Human Review. Forking and compaction never reset those
-counters.
+a third stops automatic retries and triggers bounded reconciliation against the approved plan,
+normative specification, current evidence, upstream reports, and primary sources. Human Review is
+required only if material ambiguity or contradiction remains, with cited options, tradeoffs, and a
+recommendation. Forking and compaction never reset those counters.
 
 ## Primary evidence
 
