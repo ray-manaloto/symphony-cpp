@@ -31,6 +31,11 @@ on:
         required: false
         default: false
         type: boolean
+      seed_gcc_artifact_package:
+        description: Explicitly publish the missing pinned GCC 16.1 artifact package
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -65,13 +70,148 @@ jobs:
         run: |
           echo "clang artifact publication requires main or codex/implementation" >&2
           exit 2
+      - name: Restrict GCC artifact publication to its exact lane
+        if: ${{ inputs.seed_gcc_artifact_package && inputs.lineage != 'gcc16' }}
+        run: |
+          echo "GCC artifact publication requires lineage=gcc16" >&2
+          exit 2
+      - name: Restrict GCC artifact publication to reviewed branches
+        if: ${{ inputs.seed_gcc_artifact_package && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/codex/implementation' }}
+        run: |
+          echo "GCC artifact publication requires main or codex/implementation" >&2
+          exit 2
+
+  gcc16-artifact:
+    name: Resolve or publish GCC 16.1 artifact
+    if: ${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' }}
+    needs: validate-inputs
+    concurrency:
+      group: gcc16-artifact-${{ inputs.architecture }}-6b1431c2581c93d174792a530acd054c06979d9185117aefca7f03a46830f51d
+      cancel-in-progress: false
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 360
+    outputs:
+      ref: ${{ steps.gcc-artifact.outputs.ref }}
+      digest: ${{ steps.gcc-artifact.outputs.digest }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TOOLCHAIN_ARCH: ${{ inputs.architecture }}
+      TOOLCHAIN_PLATFORM: linux/${{ inputs.architecture }}
+      GCC16_ARTIFACT_REF: ghcr.io/${{ github.repository_owner }}/symphony-toolchain-gcc:16.1.0-${{ inputs.architecture }}-6b1431c2581c93d174792a530acd054c06979d9185117aefca7f03a46830f51d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify native runner architecture and capacity
+        run: |
+          test "$(dpkg --print-architecture)" = "${TOOLCHAIN_ARCH}"
+          case "${TOOLCHAIN_ARCH}" in
+            amd64) expected_machine=x86_64 ;;
+            arm64) expected_machine=aarch64 ;;
+            *) echo "unsupported toolchain architecture: ${TOOLCHAIN_ARCH}" >&2; exit 64 ;;
+          esac
+          test "$(uname -m)" = "${expected_machine}"
+          df -h /
+          df -i /
+          docker system df
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+        id: buildx
+        with:
+          version: v0.35.0
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Probe immutable GCC 16.1 package
+        id: gcc-artifact-probe
+        env:
+          ARTIFACT_REF: ${{ env.GCC16_ARTIFACT_REF }}
+        run: |
+          set -euo pipefail
+          error_log="$(mktemp)"
+          if digest="$(
+            docker buildx imagetools inspect \
+              "${ARTIFACT_REF}" \
+              --format '{{.Manifest.Digest}}' \
+              2>"${error_log}"
+          )"; then
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "invalid GCC 16.1 package digest: ${digest}" >&2
+              exit 1
+            fi
+            {
+              echo "hit=true"
+              echo "digest=${digest}"
+            } >>"${GITHUB_OUTPUT}"
+          elif grep -qiE 'manifest unknown|not found|no such manifest' "${error_log}"; then
+            echo "hit=false" >>"${GITHUB_OUTPUT}"
+          else
+            cat "${error_log}" >&2
+            exit 1
+          fi
+      - name: Require explicit GCC package seed on a miss
+        if: ${{ steps.gcc-artifact-probe.outputs.hit != 'true' && !inputs.seed_gcc_artifact_package }}
+        run: |
+          echo "Immutable GCC 16.1 package is required for validation; dispatch this exact lane once with seed_gcc_artifact_package=true" >&2
+          exit 2
+      - name: Publish isolated GCC 16.1 package before source validation
+        id: gcc-artifact-publish
+        if: ${{ steps.gcc-artifact-probe.outputs.hit != 'true' && inputs.seed_gcc_artifact_package }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: containers/Containerfile
+          target: gcc16-artifact
+          platforms: ${{ env.TOOLCHAIN_PLATFORM }}
+          push: true
+          tags: ${{ env.GCC16_ARTIFACT_REF }}
+          provenance: mode=max
+          sbom: true
+          load: false
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
+      - name: Select captured GCC 16.1 package digest
+        id: gcc-artifact
+        env:
+          ARTIFACT_REF: ${{ env.GCC16_ARTIFACT_REF }}
+          CACHE_HIT: ${{ steps.gcc-artifact-probe.outputs.hit }}
+          PROBED_DIGEST: ${{ steps.gcc-artifact-probe.outputs.digest }}
+          PUBLISHED_DIGEST: ${{ steps.gcc-artifact-publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ "${CACHE_HIT}" == true ]]; then
+            digest="${PROBED_DIGEST}"
+          else
+            digest="${PUBLISHED_DIGEST}"
+          fi
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "invalid GCC 16.1 package digest: ${digest}" >&2
+            exit 1
+          fi
+          {
+            echo "ref=${ARTIFACT_REF}"
+            echo "digest=${digest}"
+          } >>"${GITHUB_OUTPUT}"
 
   gcc16:
     name: GCC 16.1 ${{ inputs.architecture }} base and source contracts
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' }}
-    needs: validate-inputs
+    needs:
+      - validate-inputs
+      - gcc16-artifact
     runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
     env:
       TOOLCHAIN_ARCH: ${{ inputs.architecture }}
       TOOLCHAIN_PLATFORM: linux/${{ inputs.architecture }}
@@ -100,19 +240,12 @@ jobs:
         id: buildx
         with:
           version: v0.35.0
-      - name: Persist stable GCC 16.1 base before source validation
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
         with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-gcc-runtime
-          platforms: ${{ env.TOOLCHAIN_PLATFORM }}
-          outputs: type=cacheonly
-          load: false
-          push: false
-          builder: ${{ steps.buildx.outputs.name }}
-          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
-          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m,ignore-error=true
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Restore bounded GCC compiler cache
         id: gcc-ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -148,7 +281,8 @@ jobs:
           push: false
           builder: ${{ steps.buildx.outputs.name }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
+          build-contexts: |
+            gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}
   clang-p2996-artifact:
     name: Resolve or publish clang-p2996 artifact
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'clang-p2996' }}

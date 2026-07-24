@@ -79,6 +79,17 @@ if grep -Fq 'cache-to: type=gha,mode=min,scope=symphony-clang-p2996-artifact-' \
   echo "clang-p2996 package still writes its multi-gigabyte artifact to Actions cache" >&2
   exit 1
 fi
+grep -Fq 'GCC16_ARTIFACT_REF: ghcr.io/${{ github.repository_owner }}/symphony-toolchain-gcc:16.1.0-${{ inputs.architecture }}-6b1431c2581c93d174792a530acd054c06979d9185117aefca7f03a46830f51d' \
+  .github/workflows/compiler-matrix.yml
+grep -Fq 'Resolve or publish GCC 16.1 artifact' \
+  .github/workflows/compiler-matrix.yml
+grep -Fq 'gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
+  .github/workflows/compiler-matrix.yml
+if grep -Fq 'cache-to: type=gha,mode=min,scope=symphony-gcc16-' \
+    .github/workflows/compiler-matrix.yml; then
+  echo "GCC 16.1 package still writes its multi-gigabyte artifact to Actions cache" >&2
+  exit 1
+fi
 test "$(grep -Fc -- '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF' "${ut_port}")" -eq 1
 test "$(grep -Fc -- '-DUT_ENABLE_MODULES=OFF' "${ut_port}")" -eq 1
 node -e '
@@ -439,6 +450,7 @@ workflow_input_block() {
 readonly clang_commit=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
 readonly clang_artifact_scope="symphony-clang-p2996-artifact-${clang_commit}-v1"
 readonly clang_artifact_recipe_sha256=77b98dd8970c509c9492ad30e19a4ce6dbb6474fc14b167b9aed6094fd9bc276
+readonly gcc_artifact_recipe_sha256=6b1431c2581c93d174792a530acd054c06979d9185117aefca7f03a46830f51d
 
 clang_recipe_sha256="$(
   {
@@ -458,6 +470,20 @@ clang_recipe_sha256="$(
 )"
 readonly clang_recipe_sha256
 test "${clang_recipe_sha256}" = "${clang_artifact_recipe_sha256}"
+
+gcc_recipe_sha256="$(
+  {
+    awk '/^FROM compiler-build-base AS clang-builder/{exit} {print}' "${containerfile}"
+    cat "${cmake_installer}"
+    cat "${p2996_probe}"
+  } | if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+)"
+readonly gcc_recipe_sha256
+test "${gcc_recipe_sha256}" = "${gcc_artifact_recipe_sha256}"
 
 grep -Fq \
   'ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304' \
@@ -524,6 +550,19 @@ grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${gcc_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${gcc_runtime}"
 grep -Fq 'ENTRYPOINT []' <<<"${gcc_runtime}"
 
+gcc_artifact="$(stage_block gcc16-artifact)"
+grep -Fq 'FROM scratch AS gcc16-artifact' <<<"${gcc_artifact}"
+grep -Fq 'COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1' \
+  <<<"${gcc_artifact}"
+gcc_package="$(stage_block symphony-gcc16)"
+grep -Fq 'FROM compiler-build-base AS symphony-gcc16' <<<"${gcc_package}"
+grep -Fq 'COPY --from=gcc16-artifact /opt/gcc-16.1 /opt/gcc-16.1' \
+  <<<"${gcc_package}"
+grep -Fq 'test "$(/opt/gcc-16.1/bin/g++ -dumpfullversion)" = "16.1.0"' \
+  "${containerfile}"
+grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
+  "${containerfile}"
+
 analysis_runtime="$(stage_block symphony-analysis)"
 grep -Fq 'FROM symphony-gcc-runtime AS symphony-analysis' <<<"${analysis_runtime}"
 grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${analysis_runtime}"
@@ -549,6 +588,10 @@ seed_input="$(workflow_input_block seed_clang_artifact_package)"
 grep -Fxq '        required: false' <<<"${seed_input}"
 grep -Fxq '        default: false' <<<"${seed_input}"
 grep -Fxq '        type: boolean' <<<"${seed_input}"
+gcc_seed_input="$(workflow_input_block seed_gcc_artifact_package)"
+grep -Fxq '        required: false' <<<"${gcc_seed_input}"
+grep -Fxq '        default: false' <<<"${gcc_seed_input}"
+grep -Fxq '        type: boolean' <<<"${gcc_seed_input}"
 grep -Fq "runs-on: \${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}" \
   "${workflow}"
 grep -Fq 'platforms: ${{ env.TOOLCHAIN_PLATFORM }}' "${workflow}"
@@ -557,7 +600,14 @@ grep -Fq 'if: ${{ inputs.architecture == '\''arm64'\'' && inputs.lineage != '\''
   "${workflow}"
 grep -Fq 'target: symphony-gcc-validation' "${workflow}"
 grep -Fq 'target: symphony-clang-validation' "${workflow}"
+test "$(
+  grep -Fc '      - name: Verify native runner architecture and capacity' "${workflow}"
+)" -eq 2
+test "$(
+  grep -Fc '      - name: Reclaim ephemeral runner disk' "${workflow}"
+)" -eq 5
 gcc_job="$(workflow_job_block gcc16)"
+gcc_artifact_job="$(workflow_job_block gcc16-artifact)"
 clang_job="$(workflow_job_block clang-p2996)"
 clang_artifact_job="$(workflow_job_block clang-p2996-artifact)"
 validate_job="$(workflow_job_block validate-inputs)"
@@ -568,6 +618,10 @@ grep -Fq \
   "group: clang-p2996-artifact-${clang_commit}-amd64-${clang_artifact_recipe_sha256}" \
   <<<"${clang_artifact_job}"
 grep -Fq '      cancel-in-progress: false' <<<"${clang_artifact_job}"
+grep -Fq \
+  "group: gcc16-artifact-\${{ inputs.architecture }}-${gcc_artifact_recipe_sha256}" \
+  <<<"${gcc_artifact_job}"
+grep -Fq '      cancel-in-progress: false' <<<"${gcc_artifact_job}"
 publication_boundary_step="$(
   workflow_step_block_for_job "${validate_job}" \
     "Restrict clang artifact publication to its exact lane"
@@ -578,13 +632,30 @@ grep -Fxq \
 grep -Fq \
   'clang artifact publication requires lineage=clang-p2996 and architecture=amd64' \
   <<<"${publication_boundary_step}"
-gcc_base_step="$(
-  workflow_step_block_for_job "${gcc_job}" \
-    "Persist stable GCC 16.1 base before source validation"
+gcc_publication_boundary_step="$(
+  workflow_step_block_for_job "${validate_job}" \
+    "Restrict GCC artifact publication to its exact lane"
 )"
+grep -Fxq \
+  "        if: \${{ inputs.seed_gcc_artifact_package && inputs.lineage != 'gcc16' }}" \
+  <<<"${gcc_publication_boundary_step}"
+grep -Fq 'GCC artifact publication requires lineage=gcc16' \
+  <<<"${gcc_publication_boundary_step}"
 gcc_validation_step="$(
   workflow_step_block_for_job "${gcc_job}" \
     "Build and validate GCC toolchain without loading it"
+)"
+gcc_probe_step="$(
+  workflow_step_block_for_job "${gcc_artifact_job}" \
+    "Probe immutable GCC 16.1 package"
+)"
+gcc_publish_step="$(
+  workflow_step_block_for_job "${gcc_artifact_job}" \
+    "Publish isolated GCC 16.1 package before source validation"
+)"
+gcc_select_step="$(
+  workflow_step_block_for_job "${gcc_artifact_job}" \
+    "Select captured GCC 16.1 package digest"
 )"
 clang_probe_step="$(
   workflow_step_block_for_job "${clang_artifact_job}" \
@@ -602,28 +673,50 @@ clang_validation_step="$(
   workflow_step_block_for_job "${clang_job}" \
     "Build and validate clang-p2996 without loading it"
 )"
-grep -Fxq '          target: symphony-gcc-runtime' <<<"${gcc_base_step}"
 grep -Fxq '          target: symphony-gcc-validation' <<<"${gcc_validation_step}"
+grep -Fxq \
+  "        if: \${{ steps.gcc-artifact-probe.outputs.hit != 'true' && inputs.seed_gcc_artifact_package }}" \
+  <<<"${gcc_publish_step}"
+grep -Fxq '          target: gcc16-artifact' <<<"${gcc_publish_step}"
 grep -Fxq \
   "        if: \${{ steps.clang-artifact-probe.outputs.hit != 'true' && inputs.seed_clang_artifact_package }}" \
   <<<"${clang_publish_step}"
 grep -Fxq '          target: clang-p2996-artifact' <<<"${clang_publish_step}"
 grep -Fxq '          target: symphony-clang-validation' <<<"${clang_validation_step}"
-for step in "${gcc_base_step}" "${gcc_validation_step}"; do
-  grep -Fxq \
-    '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
-    <<<"${step}"
-  grep -Fxq '          context: .' <<<"${step}"
-  grep -Fxq '          file: containers/Containerfile' <<<"${step}"
-  grep -Fxq '          platforms: ${{ env.TOOLCHAIN_PLATFORM }}' <<<"${step}"
-  grep -Fxq '          outputs: type=cacheonly' <<<"${step}"
-  grep -Fxq '          load: false' <<<"${step}"
-  grep -Fxq '          push: false' <<<"${step}"
-  grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${step}"
-  grep -Fxq \
-    '          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' \
-    <<<"${step}"
-done
+grep -Fxq \
+  '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
+  <<<"${gcc_publish_step}"
+grep -Fxq '          context: .' <<<"${gcc_publish_step}"
+grep -Fxq '          file: containers/Containerfile' <<<"${gcc_publish_step}"
+grep -Fxq '          platforms: ${{ env.TOOLCHAIN_PLATFORM }}' <<<"${gcc_publish_step}"
+grep -Fxq '          push: true' <<<"${gcc_publish_step}"
+grep -Fxq '          provenance: mode=max' <<<"${gcc_publish_step}"
+grep -Fxq '          sbom: true' <<<"${gcc_publish_step}"
+grep -Fxq '          load: false' <<<"${gcc_publish_step}"
+grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${gcc_publish_step}"
+grep -Fxq \
+  '          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' \
+  <<<"${gcc_publish_step}"
+grep -Fq 'echo "digest=${digest}"' <<<"${gcc_probe_step}"
+grep -Fq 'PROBED_DIGEST: ${{ steps.gcc-artifact-probe.outputs.digest }}' \
+  <<<"${gcc_select_step}"
+grep -Fq 'PUBLISHED_DIGEST: ${{ steps.gcc-artifact-publish.outputs.digest }}' \
+  <<<"${gcc_select_step}"
+grep -Fq 'digest="${PROBED_DIGEST}"' <<<"${gcc_select_step}"
+grep -Fq 'digest="${PUBLISHED_DIGEST}"' <<<"${gcc_select_step}"
+grep -Fxq \
+  '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
+  <<<"${gcc_validation_step}"
+grep -Fxq '          context: .' <<<"${gcc_validation_step}"
+grep -Fxq '          file: containers/Containerfile' <<<"${gcc_validation_step}"
+grep -Fxq '          platforms: ${{ env.TOOLCHAIN_PLATFORM }}' <<<"${gcc_validation_step}"
+grep -Fxq '          outputs: type=cacheonly' <<<"${gcc_validation_step}"
+grep -Fxq '          load: false' <<<"${gcc_validation_step}"
+grep -Fxq '          push: false' <<<"${gcc_validation_step}"
+grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${gcc_validation_step}"
+grep -Fq \
+  'gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
+  <<<"${gcc_validation_step}"
 grep -Fxq \
   '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
   <<<"${clang_publish_step}"
@@ -657,9 +750,14 @@ grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${clang_vali
 grep -Fq \
   'clang-p2996-artifact=docker-image://${{ needs.clang-p2996-artifact.outputs.ref }}@${{ needs.clang-p2996-artifact.outputs.digest }}' \
   <<<"${clang_validation_step}"
-grep -Fxq \
-  '          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m,ignore-error=true' \
-  <<<"${gcc_base_step}"
+if grep -Fq '          cache-to:' <<<"${gcc_artifact_job}"; then
+  echo "GCC artifact package must not consume GitHub Actions cache storage" >&2
+  exit 1
+fi
+test "$(
+  grep -Fc 'scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' \
+    <<<"${gcc_artifact_job}"
+)" -eq 1
 if grep -Fq '          cache-to:' <<<"${clang_artifact_job}"; then
   echo "clang artifact package must not consume GitHub Actions cache storage" >&2
   exit 1
@@ -670,13 +768,12 @@ if grep -Fq '          cache-to:' <<<"${gcc_validation_step}" ||
   echo "source validation must not overwrite a stable toolchain cache scope" >&2
   exit 1
 fi
-test "$(
-  grep -Fn '      - name: Persist stable GCC 16.1 base before source validation' \
-    <<<"${gcc_job}" | cut -d: -f1
-)" -lt "$(
-  grep -Fn '      - name: Build and validate GCC toolchain without loading it' \
-    <<<"${gcc_job}" | cut -d: -f1
-)"
+grep -Fq '      packages: write' <<<"${gcc_artifact_job}"
+grep -Fq '      packages: read' <<<"${gcc_job}"
+if grep -Fq '      packages: write' <<<"${gcc_job}"; then
+  echo "GCC source validation must not retain package publication authority" >&2
+  exit 1
+fi
 grep -Fq '      packages: write' <<<"${clang_artifact_job}"
 grep -Fq '      packages: read' <<<"${clang_job}"
 if grep -Fq '      packages: write' <<<"${clang_job}"; then
@@ -686,10 +783,6 @@ fi
 gcc_setup_line="$(
   grep -Fn \
     '      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c' \
-    <<<"${gcc_job}" | cut -d: -f1
-)"
-gcc_base_line="$(
-  grep -Fn '      - name: Persist stable GCC 16.1 base before source validation' \
     <<<"${gcc_job}" | cut -d: -f1
 )"
 gcc_restore_line="$(
@@ -704,10 +797,29 @@ gcc_validation_line="$(
   grep -Fn '      - name: Build and validate GCC toolchain without loading it' \
     <<<"${gcc_job}" | cut -d: -f1
 )"
-test "${gcc_setup_line}" -lt "${gcc_base_line}"
-test "${gcc_base_line}" -lt "${gcc_restore_line}"
+test "${gcc_setup_line}" -lt "${gcc_restore_line}"
 test "${gcc_restore_line}" -lt "${gcc_bridge_line}"
 test "${gcc_bridge_line}" -lt "${gcc_validation_line}"
+gcc_artifact_setup_line="$(
+  grep -Fn \
+    '      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c' \
+    <<<"${gcc_artifact_job}" | cut -d: -f1
+)"
+gcc_probe_line="$(
+  grep -Fn '      - name: Probe immutable GCC 16.1 package' \
+    <<<"${gcc_artifact_job}" | cut -d: -f1
+)"
+gcc_publish_line="$(
+  grep -Fn '      - name: Publish isolated GCC 16.1 package before source validation' \
+    <<<"${gcc_artifact_job}" | cut -d: -f1
+)"
+gcc_select_line="$(
+  grep -Fn '      - name: Select captured GCC 16.1 package digest' \
+    <<<"${gcc_artifact_job}" | cut -d: -f1
+)"
+test "${gcc_artifact_setup_line}" -lt "${gcc_probe_line}"
+test "${gcc_probe_line}" -lt "${gcc_publish_line}"
+test "${gcc_publish_line}" -lt "${gcc_select_line}"
 
 clang_setup_line="$(
   grep -Fn \
@@ -816,9 +928,9 @@ test "${setup_buildx_id_line}" -lt "${base_step_line}"
 test "${base_step_line}" -lt "${restore_ccache_line}"
 test "${restore_ccache_line}" -lt "${bridge_ccache_line}"
 test "${bridge_ccache_line}" -lt "${validation_step_line}"
-test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "5"
+test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "4"
 test "$(grep -Fc 'load: false' "${workflow}")" = "6"
-test "$(grep -Fc 'version: v0.35.0' "${workflow}")" = "4"
+test "$(grep -Fc 'version: v0.35.0' "${workflow}")" = "5"
 grep -Fq \
   'uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723' \
   "${workflow}"
@@ -829,11 +941,11 @@ grep -Fq \
   'utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7' \
   "${workflow}"
 
-test "$(grep -Fc 'push: false' "${workflow}")" = "5"
+test "$(grep -Fc 'push: false' "${workflow}")" = "4"
 test "$(grep -Ec '^permissions:$' "${workflow}")" = "1"
-test "$(grep -Ec '^[[:space:]]*permissions:' "${workflow}")" = "3"
+test "$(grep -Ec '^[[:space:]]*permissions:' "${workflow}")" = "5"
 test "$(grep -Ec '^  contents: read$' "${workflow}")" = "1"
-test "$(grep -Ec '^[[:space:]]+packages: write$' "${workflow}")" = "1"
+test "$(grep -Ec '^[[:space:]]+packages: write$' "${workflow}")" = "2"
 if grep -Eq '(^|[[:space:]])write-all([[:space:]]|$)' "${workflow}"; then
   echo "compiler validation workflow must not request write-all permission" >&2
   exit 1
@@ -843,13 +955,13 @@ if grep -E '^[[:space:]]+[[:alnum:]_-]+:[[:space:]]+write([[:space:]]|$)' "${wor
   echo "compiler workflow requested an unexpected write permission" >&2
   exit 1
 fi
-test "$(grep -Fc '${{ secrets.GITHUB_TOKEN }}' "${workflow}")" = "2"
+test "$(grep -Fc '${{ secrets.GITHUB_TOKEN }}' "${workflow}")" = "4"
 if grep -F '${{ secrets.' "${workflow}" |
   grep -Fqv '${{ secrets.GITHUB_TOKEN }}'; then
   echo "compiler workflow must not consume repository secrets other than its scoped token" >&2
   exit 1
 fi
-test "$(grep -Ec '^[[:space:]]+push:[[:space:]]+true([[:space:]]|$)' "${workflow}")" = "1"
+test "$(grep -Ec '^[[:space:]]+push:[[:space:]]+true([[:space:]]|$)' "${workflow}")" = "2"
 if grep -Eq '(^|[[:space:]])docker[[:space:]]+(buildx[[:space:]]+)?push([[:space:]]|$)|(^|[[:space:]])--push([[:space:]]|$)' \
   "${workflow}"; then
   echo "compiler workflow must not contain raw image-push commands" >&2

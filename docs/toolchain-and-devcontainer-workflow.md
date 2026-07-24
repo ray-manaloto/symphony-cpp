@@ -154,19 +154,20 @@ backend. The matrix therefore bridges only the lineage/architecture-scoped 750 M
 through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installed trees, archives,
 and build trees remain local to one builder.
 
-The first durable implementation exports only a `FROM scratch` OCI artifact containing
-`/opt/clang-p2996` to the separate `symphony-toolchain-clang-p2996` package, keyed by the exact
-compiler commit, architecture, and deterministic SHA-256 of the pinned base, compiler recipe,
-runtime set, and prepublication probe.
-The artifact target runs compiler-integrity, C++26 reflection, LLD-selection, runtime-link, and
-execution probes before it can be pushed. An explicit exact-lane package seed publishes it;
+The durable implementation exports minimal `FROM scratch` OCI artifacts to separate packages:
+`/opt/clang-p2996` to `symphony-toolchain-clang-p2996`, and `/opt/gcc-16.1` to
+`symphony-toolchain-gcc` independently for AMD64 and ARM64. Each lookup tag includes the compiler
+pin, architecture, and deterministic SHA-256 of the pinned base, installer, compiler recipe,
+runtime set, and prepublication probe. The artifact targets run compiler-integrity, C++26
+reflection, linker-selection, exact `/opt` runtime-link, and execution probes before they can be
+pushed. An explicit exact-lane package seed publishes a missing artifact;
 ordinary validation fails closed on a miss and never rewrites it. The artifact job carries the
 manifest digest returned by the initial probe or push directly into validation without re-reading
 the mutable tag. Validation injects `tag@digest` as a BuildKit named context, so later source,
 CMake, vcpkg, or test failures do not discard the expensive compiler. The Codex Universal
-base stays on its authoritative GHCR digest and outside the artifact package. A fresh-builder
-restore-only run must prove that `clang-builder` did not execute before this pattern is extended to
-native GCC 16.1 artifacts.
+base stays on its authoritative GHCR digest and outside the artifact packages. A fresh-builder
+package-hit run must prove that neither `clang-builder` nor `gcc-builder` executes before a
+candidate is treated as reusable.
 
 GCC and LLVM qualification still persist their stable bases before source validation. These are
 failure-ordering boundaries, not final supply: run `30094944459` proved an 11 GB LLVM/GCC result was
@@ -263,10 +264,10 @@ that a new compiler image is publishable.
 ## Cache policy
 
 - Buildx uses a distinct GitHub Actions cache scope per toolchain lineage, architecture, and policy
-  version only for short-lived migration or rebuild acceleration. P2996 keys its durable scratch
-  OCI artifact by compiler commit, architecture, and deterministic recipe hash and writes it only
-  during an explicit package seed. It does not export the multi-gigabyte compiler artifact back to the GitHub
-  Actions cache.
+  version only for short-lived migration or rebuild acceleration. P2996 and GCC key their durable
+  scratch OCI artifacts by compiler pin, architecture, and deterministic recipe hash and write
+  them only during explicit package seeds. Neither exports the multi-gigabyte compiler artifact
+  back to the GitHub Actions cache.
 - Source CI keeps bounded `actions/cache` entries for vcpkg archives and ccache. It does not persist
   configured CI build trees.
 - GitHub workflow artifacts and release ZIP files are not compiler package stores: the former are

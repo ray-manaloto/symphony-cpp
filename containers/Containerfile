@@ -45,8 +45,37 @@ RUN mkdir build \
  && cp /tmp/gcc/gcc-${GCC_VERSION}/COPYING* /opt/gcc-16.1/sources/ \
  && rm -rf /tmp/gcc/build /tmp/gcc/gcc-${GCC_VERSION} /tmp/gcc/gcc.tar.xz /tmp/gcc/gcc.tar.xz.sig /tmp/gcc/signer.asc
 
-FROM compiler-build-base AS symphony-gcc16
+ARG TARGETARCH
+COPY tests/fixtures/p2996_reflection_probe.cpp /tmp/gcc16-reflection-probe.cpp
+RUN case "${TARGETARCH}" in \
+      amd64) expected_arch=amd64 ;; \
+      arm64) expected_arch=arm64 ;; \
+      *) echo "unsupported GCC artifact architecture: ${TARGETARCH}" >&2; exit 64 ;; \
+    esac \
+ && test "$(dpkg --print-architecture)" = "${expected_arch}" \
+ && test "$(/opt/gcc-16.1/bin/g++ -dumpfullversion)" = "16.1.0" \
+ && /opt/gcc-16.1/bin/g++ \
+      -std=c++26 -freflection /tmp/gcc16-reflection-probe.cpp \
+      -Wl,-rpath,/opt/gcc-16.1/lib64 \
+      -o /tmp/gcc16-reflection-probe \
+ && ldd /tmp/gcc16-reflection-probe \
+      | tee /tmp/gcc16-runtime-links \
+      | grep -Fq 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
+ && grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
+      /tmp/gcc16-runtime-links \
+ && /tmp/gcc16-reflection-probe \
+ && rm /tmp/gcc16-reflection-probe /tmp/gcc16-reflection-probe.cpp \
+      /tmp/gcc16-runtime-links
+
+FROM scratch AS gcc16-artifact
+ARG GCC_VERSION=16.1.0
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
+      org.opencontainers.image.version="${GCC_VERSION}" \
+      org.opencontainers.image.description="Content-addressed GCC 16.1 compiler artifact for symphony-cpp"
 COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1
+
+FROM compiler-build-base AS symphony-gcc16
+COPY --from=gcc16-artifact /opt/gcc-16.1 /opt/gcc-16.1
 
 FROM compiler-build-base AS clang-builder
 ARG CLANG_P2996_COMMIT=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
