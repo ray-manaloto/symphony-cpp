@@ -33,7 +33,7 @@ with open(destination, "w", encoding="utf-8") as stream:
 PY
 "${verifier}" "${fixture_root}/valid.json"
 printf '%s\n' \
-  '/opt/clang-p2996/bin/clang++ -stdlib=libc++ -fuse-ld=lld -Wl,-rpath,/opt/clang-p2996/lib tests/p2996_tests.cpp.o -o tests/symphony_p2996_tests' \
+  ': && /opt/clang-p2996/bin/clang++ -stdlib=libc++ -fuse-ld=lld -Wl,-rpath,/opt/clang-p2996/lib tests/p2996_tests.cpp.o -o tests/symphony_p2996_tests && :' \
   >"${fixture_root}/valid-link.txt"
 "${verifier}" "${fixture_root}/valid.json" "${fixture_root}/valid-link.txt"
 
@@ -102,7 +102,14 @@ PY
   fi
 done
 
-for mutation in wrong-driver missing-libcxx missing-lld missing-rpath duplicate-link; do
+for mutation in \
+  wrong-driver \
+  missing-libcxx \
+  missing-lld \
+  missing-rpath \
+  active-prefix \
+  active-suffix \
+  duplicate-link; do
   python3 - \
     "${fixture_root}/valid-link.txt" \
     "${fixture_root}/mutated-link.txt" \
@@ -120,6 +127,10 @@ elif mutation == "missing-lld":
     command = command.replace("-fuse-ld=lld ", "")
 elif mutation == "missing-rpath":
     command = command.replace("-Wl,-rpath,/opt/clang-p2996/lib ", "")
+elif mutation == "active-prefix":
+    command = command.replace(": && ", "false && ", 1)
+elif mutation == "active-suffix":
+    command = command.replace(" && :\n", " && true\n")
 elif mutation == "duplicate-link":
     command = f"{command.rstrip()}\n{command}"
 else:

@@ -205,7 +205,7 @@ if [[ "$*" != "-C build/clang-reflection -t commands symphony_p2996_tests" ]]; t
   exit 67
 fi
 printf '%s\n' \
-  '/opt/clang-p2996/bin/clang++ -stdlib=libc++ -fuse-ld=lld -Wl,-rpath,/opt/clang-p2996/lib -o tests/symphony_p2996_tests'
+  ': && /opt/clang-p2996/bin/clang++ -stdlib=libc++ -fuse-ld=lld -Wl,-rpath,/opt/clang-p2996/lib -o tests/symphony_p2996_tests && :'
 EOF
 chmod +x "${setup_fixture}/bin/ninja"
 test -z "$(

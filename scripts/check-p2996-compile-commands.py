@@ -34,6 +34,14 @@ def validate_link_command(path: Path, failures: list[str]) -> None:
         return
 
     tokens = candidate_commands[0]
+    has_noop_prefix = tokens[:2] == [":", "&&"]
+    has_noop_suffix = tokens[-2:] == ["&&", ":"]
+    if has_noop_prefix != has_noop_suffix:
+        failures.append("link command has a malformed Ninja no-op envelope")
+        return
+    if has_noop_prefix:
+        tokens = tokens[2:-2]
+
     compiler = "/opt/clang-p2996/bin/clang++"
     valid_driver = tokens[:1] == [compiler] or (
         len(tokens) >= 2
