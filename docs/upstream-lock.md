@@ -1,6 +1,6 @@
 # Upstream lock
 
-Accessed 2026-07-22 through 2026-07-23.
+Accessed 2026-07-22 through 2026-07-24.
 
 | Input | Immutable identity | Role |
 | --- | --- | --- |
@@ -28,7 +28,8 @@ Accessed 2026-07-22 through 2026-07-23.
 | Intel cpp-baremetal-concurrency | `b8a486a3bd1d166128ebbdb8e88f7a43443a5e83`; source SHA-512 `6a8dadb52146550699af105c711b0c1c51817479138a7e1d0a3554a2803729661ab171adebaa3965e2576e3a6bc3483924f276d703254544c64564f980dd8c52` | Pinned Intel dependency-closure and hosted compatibility fixture; not the worker executor |
 | Intel cpp-baremetal-senders-and-receivers | `3e3c8aaa1b0aa8035453050997ae25ab08d936f1`; source SHA-512 `96211e240932ffb74c671de3e55bdf7e3327010848732c4dbb45287f5901d4d6ca72448d6651df796ba2d3da31ebb38643f456486a6400e68acbf8200887e53d` | Provider concept fixture only; NVIDIA stdexec remains the hosted execution provider |
 | Dev Container CLI | npm package `@devcontainers/cli@0.88.0`; package integrity `sha512-sMkruPy/icfov20mdQh2EjFYZogxvMEZptDEvg5/eMBIUOr2xr+8wlsI7nvDR6EJxoBjqoasXqgRGbiMqbaJ1w==` | Reference implementation for local development-container build, lifecycle, and execution; the repository wrapper rejects every other version |
-| GitHub workflow actions | `actions/checkout` `v7.0.1` / `3d3c42e5aac5ba805825da76410c181273ba90b1`; `actions/cache` `v5.0.5` / `27d5ce7f107fe9357f9df03efb73ab90386fccae`; `docker/setup-buildx-action` `v4.2.0` / `bb05f3f5519dd87d3ba754cc423b652a5edd6d2c`; `docker/build-push-action` `v7.3.0` / `53b7df96c91f9c12dcc8a07bcb9ccacbed38856a`; `docker/login-action` `v4.4.0` / `af1e73f918a031802d376d3c8bbc3fe56130a9b0` | Immutable Node 24 checkout, cache, and container-build workflow actions |
+| GitHub workflow actions | `actions/checkout` `v7.0.1` / `3d3c42e5aac5ba805825da76410c181273ba90b1`; Source CI `actions/cache` `v5.0.5` / `27d5ce7f107fe9357f9df03efb73ab90386fccae`; cache-dance `actions/cache` `v6.1.0` / `55cc8345863c7cc4c66a329aec7e433d2d1c52a9`; `docker/setup-buildx-action` `v4.2.0` / `bb05f3f5519dd87d3ba754cc423b652a5edd6d2c` with Buildx `v0.35.0`; `docker/build-push-action` `v7.3.0` / `53b7df96c91f9c12dcc8a07bcb9ccacbed38856a`; `jdx/mise-action` `v4.2.1` / `dad1bfd3df957f44999b559dd69dc1671cb4e9ea` with mise `2026.7.12` Linux X64 binary SHA-256 `dad54e0b843908324282b8673f9c0ebc3a4da0c49ad2da309a49bfbc918ba180` | Immutable Node 24 checkout, cache, container-build, and lint-tool workflow actions |
+| BuildKit validation helpers | Dockerfile frontend `docker/dockerfile:1.10` digest `sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5`; `reproducible-containers/buildkit-cache-dance` `v3.4.0` / `5422eac04292c961a382e0f584ea0f03ad9da723`; `containerd/busybox` multi-architecture digest `sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7` | Cache-only Dockerfile evaluation and bounded ccache injection/extraction without publishing validation stages |
 | openai/openai-openapi | `f9400172ebe08522ab228b771d885e3bd5456e42`; `openapi.yaml` SHA-256 `0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7` | OpenAI REST API reference schema |
 | OpenAPI Generator | `v7.24.0`; image digest `sha256:5bf3dc75f764c584da8e3344c51b2f3f1e74703461d46a035b5ac1d31515cc88` | Disposable C++ Boost.Beast reference generation |
 

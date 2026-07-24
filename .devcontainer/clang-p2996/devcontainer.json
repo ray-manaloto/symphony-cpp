@@ -14,9 +14,11 @@
   },
   "mounts": [
     "source=symphony-cpp-clang-p2996-ccache,target=/root/.cache/ccache,type=volume",
-    "source=symphony-cpp-vcpkg-archives,target=/root/.cache/vcpkg/archives,type=volume"
+    "source=symphony-cpp-vcpkg-archives,target=/root/.cache/vcpkg/archives,type=volume",
+    "source=symphony-cpp-mise,target=/root/.local/share/mise,type=volume",
+    "source=symphony-cpp-pre-commit,target=/root/.cache/pre-commit,type=volume"
   ],
-  "postCreateCommand": "./scripts/devcontainer-setup.sh clang-p2996",
+  "postCreateCommand": "./scripts/devcontainer-local-setup.sh clang-p2996",
   "customizations": {
     "vscode": {
       "extensions": [

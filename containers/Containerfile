@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.10
+# syntax=docker/dockerfile:1.10@sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5
 ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304
 
 FROM ${CODEX_BASE} AS compiler-build-base
@@ -154,3 +154,85 @@ LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-
 WORKDIR /workspaces/symphony-cpp
 ENTRYPOINT []
 CMD ["bash"]
+
+FROM symphony-gcc-runtime AS symphony-gcc-validation
+ARG TARGETARCH
+RUN test "$(dpkg --print-architecture)" = "${TARGETARCH}" \
+ && test "$(g++ -dumpfullversion)" = "16.1.0" \
+ && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
+ && command -v ninja \
+ && command -v ccache \
+ && printf '%s\n' '#include <iostream>' \
+      'int main() { std::cout << 16; }' \
+      | g++ -std=c++26 -freflection -x c++ - -o /tmp/gcc-runtime-check \
+ && ldd /tmp/gcc-runtime-check \
+      | grep -F 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
+ && test "$(/tmp/gcc-runtime-check)" = "16" \
+ && rm /tmp/gcc-runtime-check
+RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
+    --mount=type=cache,id=gcc-${TARGETARCH}-ccache,target=/var/cache/ccache,sharing=locked \
+    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-archives,target=/var/cache/vcpkg,sharing=locked \
+    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-root,target=/workspaces/symphony-cpp/.build/vcpkg,sharing=locked \
+    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-installed,target=/workspaces/symphony-cpp/vcpkg_installed,sharing=locked \
+    --mount=type=cache,id=gcc-${TARGETARCH}-build,target=/workspaces/symphony-cpp/build,sharing=locked \
+    cd /workspaces/symphony-cpp \
+ && export CCACHE_DIR=/var/cache/ccache \
+           VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
+ && ccache --max-size=750M \
+ && ccache --zero-stats \
+ && ./scripts/devcontainer-setup.sh gcc \
+ && cmake --workflow --preset gcc-debug \
+ && cmake --workflow --preset gcc-release \
+ && cmake --workflow --preset gcc-sanitizers \
+ && cmake --workflow --preset gcc-tsan \
+ && ccache --show-stats
+
+FROM symphony-ci-clang AS symphony-clang-validation
+RUN test "$(dpkg --print-architecture)" = "amd64" \
+ && test -x /opt/clang-p2996/bin/clang++ \
+ && test -x /opt/clang-p2996/bin/ld.lld \
+ && test -f /opt/clang-p2996/include/c++/v1/meta \
+ && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
+ && command -v ninja \
+ && command -v ccache
+RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
+    --mount=type=cache,id=clang-p2996-ccache,target=/var/cache/ccache,sharing=locked \
+    --mount=type=cache,id=clang-p2996-vcpkg-archives,target=/var/cache/vcpkg,sharing=locked \
+    --mount=type=cache,id=clang-p2996-vcpkg-root,target=/workspaces/symphony-cpp/.build/vcpkg,sharing=locked \
+    --mount=type=cache,id=clang-p2996-vcpkg-installed,target=/workspaces/symphony-cpp/vcpkg_installed,sharing=locked \
+    --mount=type=cache,id=clang-p2996-build,target=/workspaces/symphony-cpp/build,sharing=locked \
+    cd /workspaces/symphony-cpp \
+ && export CCACHE_DIR=/var/cache/ccache \
+           VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
+ && ccache --max-size=750M \
+ && ccache --zero-stats \
+ && ./scripts/devcontainer-setup.sh clang-p2996 \
+ && cmake --workflow --preset clang-reflection \
+ && ccache --show-stats
+
+FROM symphony-analysis AS symphony-analysis-validation
+RUN test "$(dpkg --print-architecture)" = "amd64" \
+ && check-clang-format-version "$(clang-format --version)" \
+ && test "$(clang-tidy --version \
+      | sed -n 's/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p')" = "22.1.8" \
+ && test -x /opt/llvm-22.1.8/bin/run-clang-tidy \
+ && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
+ && test "$(g++ -dumpfullversion)" = "16.1.0" \
+ && command -v ninja \
+ && command -v ccache
+RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
+    --mount=type=cache,id=analysis-ccache,target=/var/cache/ccache,sharing=locked \
+    --mount=type=cache,id=analysis-vcpkg-archives,target=/var/cache/vcpkg,sharing=locked \
+    --mount=type=cache,id=analysis-vcpkg-root,target=/workspaces/symphony-cpp/.build/vcpkg,sharing=locked \
+    --mount=type=cache,id=analysis-vcpkg-installed,target=/workspaces/symphony-cpp/vcpkg_installed,sharing=locked \
+    --mount=type=cache,id=analysis-build,target=/workspaces/symphony-cpp/build,sharing=locked \
+    cd /workspaces/symphony-cpp \
+ && export CCACHE_DIR=/var/cache/ccache \
+           VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
+ && ccache --max-size=750M \
+ && ccache --zero-stats \
+ && ./scripts/devcontainer-setup.sh analysis \
+ && ./scripts/check-format.sh \
+ && cmake --preset clang-analysis \
+ && ./scripts/check-tidy.sh \
+ && ccache --show-stats

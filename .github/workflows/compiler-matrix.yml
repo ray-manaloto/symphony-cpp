@@ -38,6 +38,7 @@ jobs:
   validate-inputs:
     name: Validate dispatch boundary
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Hold publication during native ARM64 qualification
         if: ${{ inputs.publish_images }}
@@ -57,12 +58,9 @@ jobs:
     runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 360
     env:
-      IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-gcc
-      CANDIDATE_TAG: ${{ github.sha }}-${{ inputs.architecture }}
       TOOLCHAIN_ARCH: ${{ inputs.architecture }}
       TOOLCHAIN_PLATFORM: linux/${{ inputs.architecture }}
-      CCACHE_DIR: ${{ github.workspace }}/.build/toolchain-cache/gcc/${{ inputs.architecture }}/ccache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/toolchain-cache/gcc/${{ inputs.architecture }}/vcpkg
+      CCACHE_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/ccache/gcc/${{ inputs.architecture }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -84,69 +82,45 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           df -h /
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-      - name: Restore GCC dependency cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        id: buildx
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: toolchain-gcc16-${{ inputs.architecture }}-source-v2-${{ github.sha }}
-          restore-keys: toolchain-gcc16-${{ inputs.architecture }}-source-v2-
-      - name: Prepare bounded source caches
-        run: |
-          mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
-      - name: Build GCC toolchain base
+          version: v0.35.0
+      - name: Restore bounded GCC compiler cache
+        id: gcc-ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.CCACHE_DANCE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-gcc16-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-gcc16-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
+            ${{ runner.os }}-${{ runner.arch }}-gcc16-ccache-v1-
+      - name: Bridge GCC compiler cache into BuildKit
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-map: |
+            {
+              "${{ env.CCACHE_DANCE_DIR }}": {
+                "target": "/var/cache/ccache",
+                "id": "gcc-${{ inputs.architecture }}-ccache",
+                "sharing": "locked"
+              }
+            }
+          skip-extraction: ${{ steps.gcc-ccache.outputs.cache-hit }}
+          utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7
+      - name: Build and validate GCC toolchain without loading it
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: containers/Containerfile
-          target: symphony-gcc-runtime
+          target: symphony-gcc-validation
           platforms: ${{ env.TOOLCHAIN_PLATFORM }}
-          load: true
+          outputs: type=cacheonly
+          load: false
           push: false
-          tags: ${{ env.IMAGE }}:${{ env.CANDIDATE_TAG }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v2
-          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v2,timeout=30m
-      - name: Verify GCC base contract
-        run: |
-          test "$(docker image inspect "${IMAGE}:${CANDIDATE_TAG}" --format '{{.Architecture}}')" = "${TOOLCHAIN_ARCH}"
-          test "$(docker image inspect "${IMAGE}:${CANDIDATE_TAG}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(
-            docker image inspect "${IMAGE}:${CANDIDATE_TAG}" \
-              --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
-          )" = "${GITHUB_SHA}"
-          docker run --rm --platform "${TOOLCHAIN_PLATFORM}" "${IMAGE}:${CANDIDATE_TAG}" bash -lc '
-            test "$(g++ -dumpfullversion)" = "16.1.0"
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-            command -v ninja
-            command -v ccache
-            printf "%s\n" "#include <iostream>" \
-              "int main() { std::cout << 16; }" |
-              g++ -std=c++26 -freflection -x c++ - -o /tmp/gcc-runtime-check
-            ldd /tmp/gcc-runtime-check |
-              grep -F "libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6"
-            test "$(/tmp/gcc-runtime-check)" = "16"
-          '
-      - name: Run mounted-source GCC workflows
-        run: |
-          docker run --rm \
-            --platform "${TOOLCHAIN_PLATFORM}" \
-            --env "CCACHE_DIR=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/${TOOLCHAIN_ARCH}/ccache" \
-            --env "VCPKG_DEFAULT_BINARY_CACHE=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/${TOOLCHAIN_ARCH}/vcpkg" \
-            --volume "${GITHUB_WORKSPACE}:/workspaces/symphony-cpp" \
-            --workdir /workspaces/symphony-cpp \
-            "${IMAGE}:${CANDIDATE_TAG}" \
-            bash -lc '
-              ccache --max-size=750M
-              ccache --zero-stats
-              ./scripts/devcontainer-setup.sh gcc
-              cmake --workflow --preset gcc-debug
-              cmake --workflow --preset gcc-release
-              cmake --workflow --preset gcc-sanitizers
-              cmake --workflow --preset gcc-tsan
-              ccache --show-stats
-            '
+          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3
+          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m
   clang-p2996:
     name: clang-p2996 base and differential contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'clang-p2996' }}
@@ -154,9 +128,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996
-      CCACHE_DIR: ${{ github.workspace }}/.build/toolchain-cache/clang-p2996/ccache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/toolchain-cache/clang-p2996/vcpkg
+      CCACHE_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/ccache/clang-p2996/amd64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -166,62 +138,45 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           df -h /
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-      - name: Restore clang dependency cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        id: buildx
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: toolchain-clang-p2996-source-v1-${{ github.sha }}
-          restore-keys: toolchain-clang-p2996-source-v1-
-      - name: Prepare bounded source caches
-        run: |
-          mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
-      - name: Build clang-p2996 toolchain base
+          version: v0.35.0
+      - name: Restore bounded clang-p2996 compiler cache
+        id: clang-ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.CCACHE_DANCE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
+            ${{ runner.os }}-${{ runner.arch }}-clang-p2996-ccache-v1-
+      - name: Bridge clang-p2996 compiler cache into BuildKit
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-map: |
+            {
+              "${{ env.CCACHE_DANCE_DIR }}": {
+                "target": "/var/cache/ccache",
+                "id": "clang-p2996-ccache",
+                "sharing": "locked"
+              }
+            }
+          skip-extraction: ${{ steps.clang-ccache.outputs.cache-hit }}
+          utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7
+      - name: Build and validate clang-p2996 without loading it
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: containers/Containerfile
-          target: symphony-ci-clang
+          target: symphony-clang-validation
           platforms: linux/amd64
-          load: true
+          outputs: type=cacheonly
+          load: false
           push: false
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-clang-p2996-min-v1
-          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v1,timeout=30m
-      - name: Verify clang-p2996 base contract
-        run: |
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(
-            docker image inspect "${IMAGE}:${GITHUB_SHA}" \
-              --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
-          )" = "${GITHUB_SHA}"
-          docker run --rm "${IMAGE}:${GITHUB_SHA}" bash -lc '
-            test -x /opt/clang-p2996/bin/clang++
-            test -x /opt/clang-p2996/bin/ld.lld
-            test -f /opt/clang-p2996/include/c++/v1/meta
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-            command -v ninja
-            command -v ccache
-          '
-      - name: Run mounted-source clang differential workflow
-        run: |
-          docker run --rm \
-            --platform linux/amd64 \
-            --env CCACHE_DIR=/workspaces/symphony-cpp/.build/toolchain-cache/clang-p2996/ccache \
-            --env VCPKG_DEFAULT_BINARY_CACHE=/workspaces/symphony-cpp/.build/toolchain-cache/clang-p2996/vcpkg \
-            --volume "${GITHUB_WORKSPACE}:/workspaces/symphony-cpp" \
-            --workdir /workspaces/symphony-cpp \
-            "${IMAGE}:${GITHUB_SHA}" \
-            bash -lc '
-              ccache --max-size=750M
-              ccache --zero-stats
-              ./scripts/devcontainer-setup.sh clang-p2996
-              cmake --workflow --preset clang-reflection
-              ccache --show-stats
-            '
+          cache-from: type=gha,scope=symphony-clang-p2996-min-v2
+          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v2,timeout=30m
   llvm-analysis:
     name: LLVM 22.1.8 analysis base and source-quality contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}
@@ -229,9 +184,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-analysis
-      CCACHE_DIR: ${{ github.workspace }}/.build/toolchain-cache/analysis/ccache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/toolchain-cache/analysis/vcpkg
+      CCACHE_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/ccache/analysis/amd64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -243,186 +196,42 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           df -h /
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-      - name: Restore analysis dependency cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        id: buildx
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: toolchain-analysis-source-v1-${{ github.sha }}
-          restore-keys: toolchain-analysis-source-v1-
-      - name: Prepare bounded source caches
-        run: |
-          mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
-      - name: Build LLVM analysis toolchain base
+          version: v0.35.0
+      - name: Restore bounded analysis compiler cache
+        id: analysis-ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.CCACHE_DANCE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-analysis-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-analysis-ccache-v1-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
+            ${{ runner.os }}-${{ runner.arch }}-analysis-ccache-v1-
+      - name: Bridge analysis compiler cache into BuildKit
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-map: |
+            {
+              "${{ env.CCACHE_DANCE_DIR }}": {
+                "target": "/var/cache/ccache",
+                "id": "analysis-ccache",
+                "sharing": "locked"
+              }
+            }
+          skip-extraction: ${{ steps.analysis-ccache.outputs.cache-hit }}
+          utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7
+      - name: Build and validate LLVM analysis without loading it
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: containers/Containerfile
-          target: symphony-analysis
+          target: symphony-analysis-validation
           platforms: linux/amd64
-          load: true
+          outputs: type=cacheonly
+          load: false
           push: false
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-llvm-analysis-min-v1
-          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v1,timeout=30m
-      - name: Verify analysis base contract
-        run: |
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(
-            docker image inspect "${IMAGE}:${GITHUB_SHA}" \
-              --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
-          )" = "${GITHUB_SHA}"
-          docker run --rm "${IMAGE}:${GITHUB_SHA}" bash -lc '
-            check-clang-format-version "$(clang-format --version)"
-            test "$(clang-tidy --version |
-              sed -n "s/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p")" = "22.1.8"
-            test -x /opt/llvm-22.1.8/bin/run-clang-tidy
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-            test "$(g++ -dumpfullversion)" = "16.1.0"
-            command -v ninja
-            command -v ccache
-          '
-      - name: Run mounted-source analysis workflow
-        run: |
-          docker run --rm \
-            --platform linux/amd64 \
-            --env CCACHE_DIR=/workspaces/symphony-cpp/.build/toolchain-cache/analysis/ccache \
-            --env VCPKG_DEFAULT_BINARY_CACHE=/workspaces/symphony-cpp/.build/toolchain-cache/analysis/vcpkg \
-            --volume "${GITHUB_WORKSPACE}:/workspaces/symphony-cpp" \
-            --workdir /workspaces/symphony-cpp \
-            "${IMAGE}:${GITHUB_SHA}" \
-            bash -lc '
-              ccache --max-size=750M
-              ccache --zero-stats
-              ./scripts/devcontainer-setup.sh analysis
-              ./scripts/check-format.sh
-              cmake --preset clang-analysis
-              ./scripts/check-tidy.sh
-              ccache --show-stats
-            '
-  publish:
-    name: Publish all tested toolchain bases
-    if: ${{ false }}
-    needs:
-      - gcc16
-      - clang-p2996
-      - llvm-analysis
-      - validate-inputs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    concurrency:
-      group: toolchain-base-publication
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - name: Reclaim ephemeral runner disk
-        run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
-          df -h /
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-      - name: Sign in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Reconstruct tested GCC base from validated BuildKit cache
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-gcc-runtime
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: ghcr.io/ray-manaloto/symphony-toolchain-gcc:${{ github.sha }}
-          build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-gcc16-min-v1
-      - name: Reconstruct tested clang-p2996 base from validated BuildKit cache
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-ci-clang
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996:${{ github.sha }}
-          build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-clang-p2996-min-v1
-      - name: Reconstruct tested analysis base from validated BuildKit cache
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: containers/Containerfile
-          target: symphony-analysis
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: ghcr.io/ray-manaloto/symphony-toolchain-analysis:${{ github.sha }}
-          build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-llvm-analysis-min-v1
-      - name: Verify the exact local artifacts selected for publication
-        env:
-          GCC_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-gcc
-          CLANG_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996
-          ANALYSIS_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-analysis
-        run: |
-          test "$(docker image inspect "${GCC_IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${GCC_IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(docker image inspect "${GCC_IMAGE}:${GITHUB_SHA}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "${GITHUB_SHA}"
-          docker run --rm "${GCC_IMAGE}:${GITHUB_SHA}" bash -lc '
-            test "$(g++ -dumpfullversion)" = "16.1.0"
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-            printf "%s\n" "#include <iostream>" \
-              "int main() { std::cout << 16; }" |
-              g++ -std=c++26 -freflection -x c++ - -o /tmp/gcc-runtime-check
-            ldd /tmp/gcc-runtime-check |
-              grep -F "libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6"
-            test "$(/tmp/gcc-runtime-check)" = "16"
-          '
-          test "$(docker image inspect "${CLANG_IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${CLANG_IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(docker image inspect "${CLANG_IMAGE}:${GITHUB_SHA}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "${GITHUB_SHA}"
-          docker run --rm "${CLANG_IMAGE}:${GITHUB_SHA}" bash -lc '
-            test -x /opt/clang-p2996/bin/clang++
-            test -x /opt/clang-p2996/bin/ld.lld
-            test -f /opt/clang-p2996/include/c++/v1/meta
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-          '
-          test "$(docker image inspect "${ANALYSIS_IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${ANALYSIS_IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
-          test "$(docker image inspect "${ANALYSIS_IMAGE}:${GITHUB_SHA}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "${GITHUB_SHA}"
-          docker run --rm "${ANALYSIS_IMAGE}:${GITHUB_SHA}" bash -lc '
-            check-clang-format-version "$(clang-format --version)"
-            test "$(clang-tidy --version |
-              sed -n "s/^[[:space:]]*LLVM version \([^ ]*\).*$/\1/p")" = "22.1.8"
-            test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
-            test "$(g++ -dumpfullversion)" = "16.1.0"
-          '
-      - name: Publish exact verified images by immutable source revision
-        env:
-          GCC_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-gcc
-          CLANG_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996
-          ANALYSIS_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-analysis
-        run: |
-          docker push "${GCC_IMAGE}:${GITHUB_SHA}"
-          docker push "${CLANG_IMAGE}:${GITHUB_SHA}"
-          docker push "${ANALYSIS_IMAGE}:${GITHUB_SHA}"
-      - name: Advance discovery tags only after every exact image is published
-        env:
-          GCC_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-gcc
-          CLANG_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996
-          ANALYSIS_IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-analysis
-        run: |
-          docker buildx imagetools create --tag "${GCC_IMAGE}:edge" "${GCC_IMAGE}:${GITHUB_SHA}"
-          docker buildx imagetools create --tag "${CLANG_IMAGE}:edge" "${CLANG_IMAGE}:${GITHUB_SHA}"
-          docker buildx imagetools create --tag "${ANALYSIS_IMAGE}:edge" "${ANALYSIS_IMAGE}:${GITHUB_SHA}"
+          cache-from: type=gha,scope=symphony-llvm-analysis-min-v2
+          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v2,timeout=30m

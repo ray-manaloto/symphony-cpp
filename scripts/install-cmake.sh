@@ -22,7 +22,8 @@ readonly CMAKE_ROOT="/opt/cmake-${CMAKE_VERSION}"
 readonly CMAKE_EXTRACTED_ROOT="/opt/cmake-${CMAKE_VERSION}-${CMAKE_PLATFORM}"
 
 if [[ ! -x "${CMAKE_EXTRACTED_ROOT}/bin/cmake" ]]; then
-  readonly temporary_directory="$(mktemp -d)"
+  temporary_directory="$(mktemp -d)"
+  readonly temporary_directory
   trap 'rm -rf "${temporary_directory}"' EXIT
   curl --fail --location --proto '=https' --tlsv1.2 \
     --output "${temporary_directory}/${CMAKE_ARCHIVE}" \

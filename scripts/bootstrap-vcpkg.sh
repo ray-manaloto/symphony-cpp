@@ -2,7 +2,8 @@
 set -euo pipefail
 
 readonly VCPKG_COMMIT=4493042c759d3bdff26164695dbee500d1e696c8
-readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPOSITORY_ROOT
 readonly VCPKG_ROOT="${REPOSITORY_ROOT}/.build/vcpkg"
 
 if [[ ! -d "${VCPKG_ROOT}/.git" ]]; then

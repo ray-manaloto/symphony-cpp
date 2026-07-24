@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+# shellcheck disable=SC1007  # Empty CDPATH prevents cd from contaminating command substitution.
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 revision=f9400172ebe08522ab228b771d885e3bd5456e42
 expected=0e6756eca8e097e1738f273d0fa288dd745d75ee298c038a8bc9b8c6301f42d7
@@ -13,7 +14,7 @@ curl --fail --location --silent --show-error \
   "https://raw.githubusercontent.com/openai/openai-openapi/$revision/openapi.yaml" \
   --output "$root/$input"
 printf '%s  %s\n' "$expected" "$root/$input" | sha256sum --check --status
-rm -rf "$root/$output"
+rm -rf "${root:?}/$output"
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \

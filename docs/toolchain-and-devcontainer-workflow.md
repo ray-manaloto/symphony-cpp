@@ -1,8 +1,9 @@
 # Toolchain images and local development containers
 
 This repository separates stable compiler toolchains from the day-to-day development environment.
-GitHub Actions builds and tests immutable Linux AMD64 and ARM64 **toolchain base images** on native
-runners. A developer's
+The end state builds and tests immutable Linux AMD64 and ARM64 **toolchain base images** on native
+GitHub runners. The current workflow selects one architecture per dispatch, with ARM64 restricted
+to GCC 16.1 until that first native phase passes. A developer's
 version-pinned Dev Container CLI then builds and starts a thin local development container from one of
 those bases, applies the checked-in mounts and environment, and runs the repository lifecycle
 setup.
@@ -22,6 +23,8 @@ Primary sources:
 - [GitHub's Docker image publication workflow](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
 - [Docker GitHub Actions cache backend](https://docs.docker.com/build/cache/backends/gha/)
 - [Docker cache optimization](https://docs.docker.com/build/cache/optimize/)
+- [Docker cache-only exporter](https://docs.docker.com/build/exporters/#cache-only-export)
+- [`reproducible-containers/buildkit-cache-dance`](https://github.com/reproducible-containers/buildkit-cache-dance/tree/v3.4.0)
 - [`cppalliance/local-ci-test-system`](https://github.com/cppalliance/local-ci-test-system)
 
 The official guidance also supports publishing a fully prebuilt devcontainer from CI. That is a
@@ -37,11 +40,12 @@ compiler images from mutable ccache, CMake, and dependency caches.
 flowchart LR
     subgraph CI["GitHub Actions — stable toolchain supply"]
         P["Immutable pins<br/>base OS, GCC 16.1,<br/>clang-p2996, LLVM 22.1.8,<br/>CMake 4.4"]
-        B["Native Buildx fan-out<br/>one lineage × architecture"]
-        C["Direct image contract<br/>version, C++26/reflection,<br/>runtime linkage"]
-        T["Mount source and run<br/>the relevant CMake workflows"]
-        G["Guarded GHCR publication<br/>child digests + multi-arch index"]
-        P --> B --> C --> T --> G
+        B["Native Buildx dispatch<br/>one lineage × one architecture"]
+        V["Ephemeral validation descendant<br/>never published"]
+        C["Build-time contracts<br/>version, C++26/reflection,<br/>runtime linkage + source workflows"]
+        K["Cache-only exporter<br/>no Docker Engine import"]
+        G["Future guarded publication<br/>direct child digests + multi-arch index"]
+        P --> B --> V --> C --> K --> G
     end
 
     subgraph Local["Mac — daily development environment"]
@@ -75,6 +79,8 @@ The local development container owns:
 - persistent architecture- and compiler-specific ccache and ABI-keyed vcpkg archive volumes;
 - the bind-mounted source/build tree;
 - `postCreateCommand` dependency bootstrap;
+- locked mise lint-tool installation plus persistent mise/pre-commit caches;
+- pre-commit and pre-push hook installation;
 - editor customizations and other developer-only settings.
 
 ## Publication workflow
@@ -84,17 +90,18 @@ sequenceDiagram
     participant O as Operator
     participant A as GitHub Actions
     participant B as Buildx
-    participant I as Candidate base image
+    participant V as Validation descendant
     participant R as GHCR
     participant P as Reviewable digest pin
 
     O->>A: Dispatch the guarded three-lineage matrix
-    A->>B: Fan out pinned target to native AMD64 and ARM64 runners
-    B-->>I: Load each single-platform candidate on its matching runner
-    A->>I: Verify compiler, CMake, entrypoint, and runtime
-    A->>I: Mount checkout and run required CMake workflows
-    alt every contract is green and publication is enabled
-        A->>R: Push immutable per-architecture child digests
+    A->>B: Select one pinned lineage and native architecture phase
+    B->>V: Build a descendant of each publishable base
+    V->>V: Verify compiler, CMake, C++26/reflection, and runtime
+    V->>V: Bind the checkout and run required CMake workflows
+    V-->>B: Cache-only result; do not import into Docker Engine
+    alt every contract is green and a future ceremony is separately enabled
+        B->>R: Push matching base targets directly by immutable child digest
         A->>R: Assemble the reviewed multi-platform index
         R-->>A: Return index and child manifest digests
         A-->>P: Record digest for a separate reviewed update
@@ -104,7 +111,19 @@ sequenceDiagram
 ```
 
 Each architecture is built and tested on a native GitHub runner; QEMU is not a compiler-building
-strategy. Publication never updates the local devcontainer digest automatically. A separate reviewed commit
+strategy. Validation descendants add only build-time checks and are never tagged or published.
+`type=cacheonly` keeps their result in BuildKit and avoids duplicating the multi-gigabyte toolchain
+inside Docker Engine. BuildKit cache mounts are not exported by the normal GitHub Actions cache
+backend. The matrix therefore bridges only the lineage/architecture-scoped 750 MB ccache mount
+through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installed trees, archives,
+and build trees remain local to one builder. Cross-run compiler-cache reuse remains provisional
+until a two-runner sentinel and nonzero ccache-hit fixture pass.
+
+The obsolete publication job was removed because its older cache scopes and local image-loading
+ceremony could not identify the new cache-only validation result. Publication must be redesigned
+to push architecture-matched base targets directly, record their child digests, and assemble the
+index without loading large images. Publication never updates the local devcontainer digest
+automatically. A separate reviewed commit
 records the resolved manifest and wires the thin local Dockerfiles to it, so a developer cannot
 silently move to a new compiler image through a mutable tag. During the one-time migration, the
 existing local profiles remain on their previous images until that digest-update commit lands; they
@@ -117,6 +136,13 @@ all Debug, Release, ASan/UBSan, and TSan workflows while measuring the hosted AR
 disk envelope. After that exact commit passes on both native architectures, clang-p2996 and LLVM
 analysis can adopt the selector. Only six green lineage/architecture cells permit a later
 two-child-index publication ceremony.
+
+The cache-only redesign changes the immediate evidence order. First require Source CI, then run
+`llvm-analysis` on AMD64 to reproduce the exact former image-import failure boundary without a local
+load. Next run GCC 16.1 on AMD64 as the known-good authoritative baseline, followed by GCC 16.1 on
+native ARM64. Run clang-p2996 on AMD64 after those gates. Every dispatch keeps
+`publish_images=false`; no ARM or publication step may skip ahead because a different lineage was
+green under the removed local-load workflow.
 
 ## Local create and daily loop
 
@@ -147,6 +173,11 @@ base-digest wiring commit it also reports the selected base digest and profile b
 Apple Silicon selects the ARM64 child from the reviewed multi-platform index. An explicit AMD64
 profile remains available for parity reproduction, but it is not the daily compiler loop. The Mac
 host never configures or compiles the C++ project directly.
+
+The three checked-in profiles still reference migration-only mutable `:edge` tags. They are not the
+target invariant and may be unavailable until base publication is authorized. The reviewed
+digest-wiring commit must replace every tag with an immutable multi-platform manifest before these
+profiles are treated as operational evidence.
 
 ## Change routing
 
