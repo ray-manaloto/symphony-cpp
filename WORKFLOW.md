@@ -82,5 +82,25 @@ has recorded an explicit exception.
 
 Start with a deterministic reproduction or failing test, implement the smallest
 complete C++26 slice, run the affected checks, and leave a concise evidence-backed
-result. If two consecutive attempts make no material progress, stop and report a
+result. Before writing, state a task capsule in the first progress report with
+the one acceptance contract, allowed/denied files, shared resources, dependency
+decision, focused command, checkpoint target, stop/split conditions, and next
+atomic action. The controller records that capsule in the native task plan, which
+is the interim authority; the progress report is only its projection. Do not
+overlap another lane's file or resource claim. This is not an atomic lease;
+writable concurrency remains one until the claim schema and fixtures pass.
+
+Every code-bearing or policy/control-document result requires an independent
+normal review against its exact fingerprint. Security, concurrency, persistence,
+credential, workspace cleanup, release, publication, autonomous-merge, and
+policy/control-document changes also require a separate adversarial review;
+unresolved or stale findings block completion. After the distinct last-turn
+context telemetry gate passes, at 60% finish only the active atomic slice and
+prepare the durable handoff; at 65% authorize no continuation. Until that gate
+passes, cumulative-only or missing telemetry pauses percentage-based supervisor
+continuation. Any observed compaction or four completed turns in this session
+also authorizes no continuation and resumes only from a verified checkpoint in a
+fresh session. An issue may use at most four accepted model-backed sessions; that
+issue-wide counter never resets. Never continue a compacted session. If two
+consecutive attempts make no material progress, stop and report a
 stalled/no-progress outcome instead of repeating the same approach.

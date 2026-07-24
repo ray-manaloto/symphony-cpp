@@ -32,23 +32,29 @@ upstream issues before widening autonomous worker or merge authority.
 | Policy | Initial value |
 | --- | --- |
 | Active issues | One |
-| Worker-run budget | Four accepted model-backed `turn/start` events |
+| Per-session turn cap | Four completed model-backed turns; resets only after durable fresh-session reconciliation |
+| Issue-wide worker-session budget | Four accepted model-backed worker sessions; never resets |
 | Wall-clock budget | 90 minutes from the first model-backed run |
 | No-progress budget | Two consecutive post-baseline runs |
 | Repeated-failure budget | Two matching redacted signatures without changed diff/check evidence |
-| Context checkpoint | At 50% of the last-turn input tokens over the reported positive model context window |
+| Context metric gate | Distinct last-turn `tokenUsage.last.inputTokens` decoding must pass before the supervisor uses percentages |
+| Context checkpoint | At 50% of decoded last-turn input tokens over the reported positive model context window |
 | Context handoff | At 60%, finish only the active atomic slice and prepare durable handoff |
 | Context rollover | At 65%, authorize no continuation and resume from durable state in a fresh session |
 | Missing or inconsistent telemetry | Pause; never estimate |
-| Fork/compact failure | Pause and preserve the original thread |
+| Checkpoint, cancellation, or fresh-session reconciliation failure | Pause and preserve the original thread |
 | Pause tracker state | `Backlog`, which is outside the configured active-state set |
 | Operational concurrency | One until the complete isolated-concurrency fixture passes |
 
-Cached input is not added to the last-turn input count again. Cumulative token
-totals are cost evidence, not context utilization. Every accepted model-backed
-turn consumes one worker-run budget even when the run is later cancelled for a
-checkpoint. Restarts, compaction, forks, and process failure never reset a
-counter or deadline.
+Cached input is not added to the last-turn input count again. Cumulative token totals are cost
+evidence, not the target context-utilization metric. Current Codex notification decoding maps
+`tokenUsage.total`; until a distinct `tokenUsage.last` field is decoded and fixture-proven, this
+supervisor percentage policy remains disabled and missing usable telemetry pauses. The issue-wide
+session counter increments only after the launched child and gateway identities are accepted. The
+fourth session may finish; a fifth may not launch. Every accepted model-backed worker session
+consumes that budget even when it is later cancelled for a checkpoint. Fresh-session reconciliation
+resets only `turns_in_session`; restarts, compaction, forks, and process failure never reset
+issue-wide counters or deadlines.
 
 ## State machine
 
@@ -57,24 +63,43 @@ stateDiagram-v2
   [*] --> Disarmed
   Disarmed --> Preflight: operator arms one governed issue
   Preflight --> Launching: policy and persisted state agree
+  Preflight --> Exhausted: four worker sessions already accepted
   Preflight --> Quarantined: missing or contradictory evidence
-  Launching --> ObservingRun: child and gateway identities agree
-  ObservingRun --> Cancelling: context reaches 65 percent
+  Launching --> ObservingRun: identities agree; session counter increments
+  ObservingRun --> ProgressCheckpoint: 50 percent after coherent change
+  ProgressCheckpoint --> ObservingRun: checkpoint persists below handoff
+  ProgressCheckpoint --> PausedNeedsReview: checkpoint persistence or verification fails
+  ObservingRun --> HandoffPending: 60 percent, turn cap, or observed compaction
+  HandoffPending --> CheckpointVerifying: active atomic slice and turn complete
+  ObservingRun --> CheckpointVerifying: context reaches 65 percent between turns
+  CheckpointVerifying --> Cancelling: exact checkpoint commit and clean scope verified
+  CheckpointVerifying --> Quarantined: dirty, untracked, stale, or out-of-scope state
   ObservingRun --> Evaluating: run completes
-  ObservingRun --> Exhausted: four runs or 90 minutes
+  ObservingRun --> Exhausted: 90-minute deadline
   ObservingRun --> Quarantined: event gap or identity conflict
-  Cancelling --> Checkpointing: child stops within grace period
+  Cancelling --> Reaping: child stops within grace period
   Cancelling --> Quarantined: cancellation or reap fails
-  Checkpointing --> Evaluating: fork checkpoint and canonical compaction succeed
-  Checkpointing --> PausedNeedsReview: checkpoint fails
+  Reaping --> FreshSessionReconciling: verified handoff persists
+  Reaping --> PausedNeedsReview: handoff persistence fails
+  FreshSessionReconciling --> Evaluating: Git, tracker, counters, and evidence agree
+  FreshSessionReconciling --> PausedNeedsReview: restored state disagrees
   Evaluating --> ContinueAuthorized: objective evidence changed
+  Evaluating --> Exhausted: four sessions complete and issue remains incomplete
   Evaluating --> PausedNeedsReview: second no-progress or repeated failure
   ContinueAuthorized --> Launching
-  Evaluating --> EvidenceGating: issue work is complete
+  Evaluating --> NormalReview: issue work is complete
+  NormalReview --> AdversarialReview: risk trigger applies
+  NormalReview --> EvidenceGating: exact final head clean and no adversarial trigger
+  NormalReview --> Evaluating: correction changes reviewed fingerprint
+  NormalReview --> PausedNeedsReview: stale review or unresolved finding
+  AdversarialReview --> EvidenceGating: exact final head clean and reruns pass
+  AdversarialReview --> Evaluating: correction changes reviewed fingerprint
+  AdversarialReview --> PausedNeedsReview: unresolved finding or invalid reviewer
   EvidenceGating --> MergeReady: every digest-bound gate passes
   EvidenceGating --> PausedNeedsReview: gate fails or scope is ambiguous
   Exhausted --> PausedNeedsReview
   Quarantined --> PausedNeedsReview
+  PausedNeedsReview --> Preflight: bounded reconciliation resolves evidence
   MergeReady --> [*]
 ```
 
@@ -112,17 +137,24 @@ At 50% the supervisor checkpoints after the next coherent change and accepts no
 new scope. At 60% it finishes only the active atomic slice and prepares durable
 handoff. At the 65% boundary it:
 
-1. persists the observation and requests cancellation;
-2. stops and reaps OpenSymphony within a bounded grace period;
-3. starts a short-lived contained Codex app-server against the same isolated
-   authentication and issue workspace;
-4. forks through the last completed turn as a recovery checkpoint;
-5. compacts the original canonical thread;
-6. records both thread identities and resumes only after reconciliation.
+1. persists the observation after the current turn completes and denies another continuation;
+2. requires that completed worker result to identify its already-created checkpoint commit and
+   task capsule;
+3. verifies within a bounded grace period that every allowed change is committed at that
+   checkpoint; dirty, untracked, or
+   out-of-scope state enters quarantine and is never synthesized into a commit by the supervisor;
+4. stops and reaps OpenSymphony, then persists the verified commit-bound handoff;
+5. preserves the original thread as read-only recovery evidence without requiring compaction;
+6. starts a fresh contained Codex process and thread against the same isolated authentication and
+   issue workspace;
+7. restores only from the durable checkpoint and reconciles Git, tracker, counters, and evidence
+   before authorizing another run.
 
-The fork is recovery state; the compacted original remains canonical. Missing
-`modelContextWindow`, an event gap, a failed fork/compact, or disagreement about
-the last completed turn pauses the issue.
+An optional short-lived recovery fork may preserve the last completed-turn evidence, but no work
+continues in that fork and it is never required to compact the original. An already observed Codex
+compaction is itself a fail-safe rollover signal. Missing `modelContextWindow`, an event gap, a
+failed checkpoint/fresh-session handoff, or disagreement about the last completed turn pauses the
+issue.
 
 ## Autonomous merge contract
 
@@ -133,6 +165,8 @@ authorizes it. The manifest contains:
 - normative specification and approved-plan digests;
 - allowed paths;
 - exact required commands, presets, compiler/container matrix, and review gates;
+- task capsule, file/resource claims, risk triggers, reviewer independence requirements, reviewed
+  SHA, review kinds, findings digest, dispositions, and required reruns;
 - expected publication target and merge strategy;
 - explicit autonomous-merge authorization;
 - excluded change classes.
@@ -142,6 +176,11 @@ may be derived without human intervention when it is a strict subset of the
 approved standalone implementation plan and governing specification. Changing
 the global policy or expanding an issue beyond those sources requires human
 review.
+
+This authority is currently disarmed. No derived manifest or autonomous merge is valid until the
+tracked global policy/schema, verifier fixtures, required checks, selected publisher app, fetched
+ruleset reconciliation, merge-queue fixtures, and explicit protected-base enable flag all exist and
+pass. Descriptive future policy in this document grants no merge or credential authority.
 
 The normative specification and fully researched approved plan are the primary
 decision inputs. A plan-conformant change with complete, fresh evidence proceeds
@@ -218,11 +257,15 @@ authority boundary.
 The supervisor itself is deterministic and uses no model.
 
 - Normal implementation: `gpt-5.6-sol` / `high`.
-- Cross-subsystem or first repeated/no-progress recovery: Sol / `xhigh`.
-- Second matching failure: one short Sol / `max` diagnostic session.
+- Cross-subsystem design or first typed product/test/compiler no-progress result: Sol / `xhigh`.
+- Second matching eligible signature: one short Sol / `max` diagnostic session.
 - Another matching failure or missing evidence: pause.
 - Focused deterministic reproduction may use Terra / `medium`, promoted to
   `high` only when causality remains ambiguous.
+
+Credential, authority, missing-telemetry, external-service, and resource failures are not
+model-effort escalation triggers; they pause or use deterministic recovery. De-escalation requires
+a changed progress fingerprint and fresh green review evidence.
 
 Effort is selected through preapproved, read-only Codex configuration overlays
 between worker runs. OpenSymphony's ignored `codex:` map is not treated as an
@@ -231,12 +274,17 @@ effective control.
 ## Required fixture coverage
 
 - transition-table boundaries and virtual-clock deadlines;
-- four-run and 90-minute persistence across crashes/restarts;
+- fourth-session completion, fifth-session launch rejection, and 90-minute persistence across
+  crashes/restarts;
 - duplicate, missing, and out-of-order events;
-- context values immediately below/at 65%, null windows, and compaction events;
-- fork/compact and cancellation failures;
+- context values immediately below/at 50%, 60%, and 65%, threshold-crossing turns, null/stale
+  windows, and compaction events;
+- checkpoint persistence, fresh-session handoff, optional recovery-fork, and cancellation failures;
 - automatic-continuation races;
 - objective-progress discrimination and repeated failure normalization;
+- stale-SHA review, coauthor-as-reviewer, unresolved finding, and bypassed-adversarial-trigger cases;
+- atomic file/resource claims, canonical path overlap, expiry/crash recovery, conflict
+  repartitioning, cancellation drain, and final integrated evidence;
 - malformed or hostile manifests and structured-event redaction;
 - merge-envelope replay, tampering, stale heads, and disallowed paths;
 - fake Linear pause transitions and conflicts;

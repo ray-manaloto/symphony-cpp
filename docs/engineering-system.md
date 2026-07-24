@@ -79,6 +79,19 @@ A normal lane owns one externally observable behavior or infrastructure invarian
 fixture/reproduction, one provider or seam, and one focused validation command. It should reach a
 coherent checkpoint within the four-turn session.
 
+Before writes, state a task capsule containing:
+
+- the one observable contract and acceptance boundary;
+- allowed and denied files, shared files requiring integration-owner serialization, and owned
+  build/cache/container resources;
+- the failure-first fixture or reproduction and exact focused command;
+- dependency-decision status, provider/seam, checkpoint target, and stop/split conditions;
+- the next atomic action and durable handoff owner.
+
+Until the controller claim schema and atomic acceptance fixtures exist, the integration owner
+records this capsule in the native task plan and OpenSymphony remains at one writable worker. This
+interim planning record is not a lease and cannot authorize parallel writes.
+
 Split work when it:
 
 - crosses more than one subsystem boundary;
@@ -93,6 +106,30 @@ Preferred sequence:
 ```text
 provider gate -> thin adapter -> product wiring -> adversarial fixture -> integrated matrix
 ```
+
+## Review protocol
+
+Every code-bearing or policy/control-document slice receives an independent normal development
+review of the complete current diff. It checks specification and approved-plan conformance,
+dependency-first compliance, correctness, tests, redaction, and evidence freshness. Concurrency,
+persistence, security,
+credentials, workspace deletion/containment, release, publication, autonomous-merge, or
+policy/control-document changes also require a separate adversarial review using hostile,
+malformed, race, crash, replay, and stale-evidence cases appropriate to the boundary. A low-risk
+mechanical or narrative-only change may omit adversarial review only when it cannot change any of
+those controls and the task capsule records why no risk trigger applies.
+
+Both reviews return prioritized findings with file/line evidence. The integration owner records
+each disposition, applies corrections, reruns affected checks, and repeats development review after
+any byte change within the reviewed paths. Autonomous evidence accepts only normal and required
+adversarial attestations bound to the exact final commit after all corrections; an uncommitted diff
+review is never reused as merge evidence. The reviewer record includes identity, review kind,
+reviewed commit, result, and role/contribution history. An independent reviewer did not design,
+author or materially shape its implementation prompt, patch, disposition, or correction; receiving
+a bounded review prompt does not violate independence. Unresolved findings, invalid independence,
+or a stale commit blocks evidence gating. A defect that escapes implementation and is caught in
+review re-enters the closed learning loop with its failure family, correction latency, promoted
+guard, and deletion trigger; review is not a substitute for a deterministic guard.
 
 ## Parallel-agent contract
 
@@ -125,6 +162,9 @@ Interference rules:
 
 - one branch and worktree per writable lane;
 - one writer per file;
+- before writable concurrency exceeds one, every lane must hold a durable atomic claim containing
+  canonical repository/worktree/branch identity, canonicalized allowed paths, shared resources,
+  owner, issue/task capsule, acquisition time, expiry, and recovery state;
 - root CMake/vcpkg files, workflows, lockfiles, public shared headers, generated-fixture inputs,
   architecture ledgers, and integration branches are serialized through the integration owner;
 - build directories, container names, and non-atomic local caches have one owner;
@@ -134,12 +174,27 @@ Interference rules:
 - the independent reviewer reports findings and does not silently co-author;
 - lane-local green evidence does not replace final integrated checks.
 
+Claim admission rejects canonical path intersection, alias/symlink ambiguity, duplicate
+branch/worktree ownership, and shared-resource overlap. Expired or crashed claims remain quarantined
+until the integration owner reconciles their Git state and resources; they are never silently
+stolen. Integration follows an explicit merge order, aborts and repartitions on conflict, drains
+cancelled work before releasing resources, and runs final checks on the integrated SHA.
+
+This admission contract is design-only until a versioned storage path/schema, canonicalization
+algorithm, atomic acquire/release operation, TTL/crash recovery, and hostile fixtures land. No
+manual note or model output substitutes for that gate.
+
 Start with one implementer plus one independent read-only specialist. Increase concurrency only
 after file claims, cancellation, completion drain, merge serialization, and shared-resource
 ownership have deterministic fixtures. Until then, keep OpenSymphony's
 `agent.max_concurrent_agents` at `1`.
 
 ## Context, compaction, and model effort
+
+The percentage rows activate only after the selected worker path supplies the distinct,
+fixture-proven context-pressure telemetry named by its policy. Until then, missing or cumulative-only
+telemetry pauses percentage-based supervisor continuation; observed-compaction and per-session-turn
+rollover remain active.
 
 | Reported context use | Action |
 | --- | --- |
@@ -157,17 +212,24 @@ bloated or compacted session. Neither compaction, forking, nor process exit rese
 retry/no-progress counters.
 
 The default implementer remains Sol/high. Use Sol/xhigh for cross-subsystem architecture, bounded
-primary-source research, or the fresh session after one abnormal/no-progress result. Use one
-Sol/max recovery session only after the same signature repeats, then stop automatic retries and
-perform the bounded research reconciliation if it repeats again. Require Human Review only when
-material ambiguity or a plan/specification conflict remains. Terra/medium is appropriate for
-contained reproduction/CI triage and can move to high when causality remains ambiguous. The
-deterministic controller uses no model.
+primary-source research, or the fresh session after one typed product/test/compiler no-progress
+result. Use one Sol/max recovery session only after the same eligible signature repeats, then stop
+automatic retries and perform the bounded research reconciliation if it repeats again. Credential,
+authority, missing-telemetry, external-service, and resource failures pause or use deterministic
+handling rather than higher model effort. Require Human Review only when material ambiguity or a
+plan/specification conflict remains. Terra/medium is appropriate for contained reproduction/CI
+triage and can move to high when causality remains ambiguous. The deterministic controller uses no
+model.
 
 Monitor model/effort effectiveness through progress fingerprints, recurrence signatures, terminal
 reasons, context/compaction telemetry, correction latency, and defects caught in independent
 review—not by process exit or subjective fluency. Re-probe supported model/effort pairs whenever
 the pinned Codex CLI or image changes.
+
+Track the redacted review-escape family, recurrence, correction latency, deterministic-guard hit
+rate, false-positive rate, and deletion-review outcome. Self-learning means promoting reproducible
+guards, skills, and checklist rules within approved scope; it never authorizes policy expansion,
+issue-content copying, or hidden model-driven mutation.
 
 ### Durable checkpoint fields
 
@@ -202,10 +264,10 @@ requirements pause cleanup for research.
 ## Coding, analysis, and documentation roadmap
 
 The repository enforces C++26/no extensions, GCC warnings as errors, compile-database export, debug
-tests, ASan+UBSan, and separate TSan. Phase 1 now pins a separate stock LLVM 22.1.8 analysis
-devcontainer, an exact formatter gate, and a narrow report-only tidy baseline. Public-header
-self-containment, the zero-noise tidy promotion, a public-API extractor, a documentation site, and
-a rendered-diagram gate remain open.
+tests, ASan+UBSan, separate TSan, and CMake-owned public-header self-containment. Phase 1 now pins a
+separate stock LLVM 22.1.8 analysis devcontainer, an exact formatter gate, and a narrow report-only
+tidy baseline. The zero-noise tidy promotion, a public-API extractor, a documentation site, and a
+rendered-diagram gate remain open.
 
 Dependency-first decisions for these build utilities must be recorded before integration. Stock
 Clang analysis is a third toolchain: it does not define release behavior and must not reuse the
@@ -261,15 +323,15 @@ alternative if its external service and webhook ownership become worthwhile.
 
 ## Near-term C++26 deletion tests
 
-1. Replace the handwritten observability JSON encoder with the already-selected Glaze DTO codec.
-2. Make `symphony_meta` field descriptors compile-time rather than allocating
+1. [x] Replace the handwritten observability JSON encoder with the already-selected Glaze DTO codec.
+2. [x] Make `symphony_meta` field descriptors compile-time rather than allocating
    `std::vector<std::string>` at runtime.
-3. Compile-time structure/name/type checks cover the Codex startup and workflow decode DTOs under
-   authoritative GCC 16.1. Keep the clang-p2996 differential target dependency-free until the
+3. [x] Cover Codex startup and workflow decode DTO structure/name/type contracts at compile time
+   under authoritative GCC 16.1. Keep the clang-p2996 differential target dependency-free until the
    pinned fork can compile Glaze.
-4. Generate exhaustive enum-name tables through the selected reflection seam rather than adding a
+4. [ ] Generate exhaustive enum-name tables through the selected reflection seam rather than adding a
    second enum-reflection library.
-5. Evaluate `stdexec` structured completion only as a deletion test for existing detached-work and
+5. [ ] Evaluate `stdexec` structured completion only as a deletion test for existing detached-work and
    stop bookkeeping; preserve keyed cancellation and exact GCC 16.1 evidence.
 
 Reflection must never become the sole redaction boundary. Secret classification is semantic, and

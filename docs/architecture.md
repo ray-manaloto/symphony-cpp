@@ -82,20 +82,25 @@ repository does not duplicate Codex's evolving enums.
 The worker model and reasoning effort are workflow pass-through strings owned by the targeted Codex
 schema. The contained 0.145.0 catalog verified `gpt-5.6-sol` with `high` effort before both were
 pinned. The model is present on thread and turn startup; effort uses Codex's turn-level `effort`
-field. Between fresh worker sessions, the scheduler may select configured escalation values after
-one abnormal failure or an unchanged progress fingerprint, and a configured ceiling after the same
-failure repeats. A changed progress fingerprint clears that evidence. Neither the standalone
-service nor external OpenSymphony maintains a copied model catalog.
+field. Between fresh worker sessions, the scheduler may select configured escalation values for
+cross-subsystem design or typed product/test/compiler no-progress and repeated-failure results, and
+a configured ceiling after the same eligible failure repeats. Credential, authority,
+missing-telemetry, external-service, and resource failures pause or use deterministic handling
+instead of higher effort. A changed progress fingerprint plus fresh green review clears escalation
+evidence. Neither the standalone service nor external OpenSymphony maintains a copied model catalog.
 
 Codex remains responsible for the compaction mechanism. Symphony preserves the reported model
 context-window size, recognizes both the legacy `thread/compacted` notification and the current
 `contextCompaction` completed item, counts them, and emits an operator event. Once compaction is
 observed, the current worker session exits normally at the next completed turn without requesting a
-continuation; a retry starts from the durable workspace in a fresh process and thread. When Codex
-reports both cumulative tokens and a positive context-window size, the configured
-`codex.context_rollover_percent` stops continuation at or above that utilization between completed
-turns. Missing telemetry is never estimated. This reduces compaction pressure but cannot interrupt
-an internal compaction that Codex performs during a single turn.
+continuation; a retry starts from the durable workspace in a fresh process and thread. The current
+standalone path decodes cumulative `tokenUsage.total` and compares cumulative `total_tokens` with a
+positive model context-window size. That conservative rollover remains executable but is not the
+external supervisor's intended last-turn context-pressure metric. The supervisor percentage policy
+must remain disabled until the Codex adapter separately decodes and fixture-proves
+`tokenUsage.last.inputTokens`; cumulative cached, output, reasoning, and total fields remain cost
+and conservative-rollover evidence. Missing telemetry is never estimated. This reduces compaction
+pressure but cannot interrupt an internal compaction that Codex performs during a single turn.
 
 One worker invocation owns one app-server process and coding-agent thread. After each successful
 turn, a scheduler callback refreshes the issue and routability state. Eligible work receives a

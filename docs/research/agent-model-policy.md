@@ -55,14 +55,23 @@ then expand only after measured throughput and defect-recall evidence.
   both the external OpenSymphony and standalone C++ paths now use Sol/high.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction. End the bounded worker session after any observed compaction,
-  then resume from durable workspace and tracker state in a fresh process and thread. When Codex
-  reports last-turn input tokens and a positive context window, apply the repository's configured 65%
-  between-turn rollover threshold; never estimate missing utilization.
+  then resume from durable workspace and tracker state in a fresh process and thread. Keep the
+  external supervisor's 50/60/65% controls disabled until the adapter distinctly decodes
+  `tokenUsage.last.inputTokens` with a positive context window and that contract passes fixtures;
+  never estimate missing utilization. Observed-compaction and per-session-turn rollover remain
+  active meanwhile.
 - Enforce a turn budget independently of context size. The repository workflow uses four turns per
   session. A compaction is not progress and does not reset retry/no-progress policy.
-- Select Sol/high at baseline, Sol/xhigh for the next session after one abnormal failure or verified
-  no-progress result, and Sol/max only after the same failure repeats. Return to baseline only after
-  the progress fingerprint changes; a clean process exit alone is insufficient.
+- Select Sol/high at baseline. Use Sol/xhigh in the next fresh session for cross-subsystem design or
+  a typed product/test/compiler no-progress result, and Sol/max only after that same eligible
+  signature repeats. Credential, authority, missing-telemetry, external-service, and resource
+  failures pause or use deterministic handling rather than spending more model effort. Return to
+  baseline only after the progress fingerprint changes and fresh review evidence is green; a clean
+  process exit alone is insufficient. Escalation takes effect only in a fresh session restored from
+  a durable checkpoint, never by continuing a bloated or compacted thread.
+- Keep normal independent review on Sol/high. Use Sol/xhigh for adversarial review of security,
+  concurrency, persistence, credentials, workspace deletion/containment, release, publication, or
+  autonomous-merge boundaries; review agents report findings and do not co-author corrections.
 - OpenSymphony v2.10.0 cannot apply an equivalent per-session effort route. Monitor its terminal
   reasons and repeated outcomes, but change its read-only overlay only through an explicit operator
   update until upstream exposes bounded routing.
@@ -70,13 +79,15 @@ then expand only after measured throughput and defect-recall evidence.
   without logging prompts, issue content, credentials, or hidden reasoning.
 
 Use the repository-wide checkpoint and recurrence policy in
-[`../engineering-system.md`](../engineering-system.md). In particular, checkpoint at 50% reported
-context use, prepare a fresh-session handoff at 60%, and make the configured 65% rollover
-mandatory. A second occurrence of one normalized failure family must promote a deterministic guard;
-a third stops automatic retries and triggers bounded reconciliation against the approved plan,
-normative specification, current evidence, upstream reports, and primary sources. Human Review is
-required only if material ambiguity or contradiction remains, with cited options, tradeoffs, and a
-recommendation. Forking and compaction never reset those counters.
+[`../engineering-system.md`](../engineering-system.md). Once the distinct last-turn telemetry gate
+passes, checkpoint at 50% reported context use, prepare a fresh-session handoff at 60%, and make the
+configured 65% rollover mandatory. Until then, pause percentage-based supervisor continuation
+rather than interpreting cumulative totals as last-turn pressure. A second occurrence of one
+normalized failure family must promote a deterministic guard; a third stops automatic retries and
+triggers bounded reconciliation against the approved plan, normative specification, current
+evidence, upstream reports, and primary sources. Human Review is required only if material
+ambiguity or contradiction remains, with cited options, tradeoffs, and a recommendation. Forking
+and compaction never reset those counters.
 
 ## Primary evidence
 
