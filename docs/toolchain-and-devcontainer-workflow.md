@@ -139,17 +139,20 @@ strategy. Validation descendants add only build-time checks and are never tagged
 inside Docker Engine. BuildKit cache mounts are not exported by the normal GitHub Actions cache
 backend. The matrix therefore bridges only the lineage/architecture-scoped 750 MB ccache mount
 through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installed trees, archives,
-and build trees remain local to one builder. Cross-run compiler-cache reuse remains provisional
-until a two-runner sentinel and nonzero ccache-hit fixture pass.
+and build trees remain local to one builder.
 
-Every qualification job now completes a stable-base solve and attempts its cache export before
-binding source or running validation. This prevents a later source failure from suppressing that
-same-job export attempt, but does not prove cross-run preservation. It is a failure-ordering
-boundary, not the final supply chain:
-run `30094944459` proved the preceding 11 GB LLVM/GCC GHA result was not reusable and then failed
-while downloading GCC again. GitHub's default 10 GB cache allowance makes that combined result
-subject to eviction and cache thrashing. Routine validation therefore must consume reviewed GHCR
-digests; it must not reconstruct compilers or depend on compiler-source mirrors.
+The interim p2996 cache exports only a `FROM scratch` artifact containing `/opt/clang-p2996`, keyed
+by the exact compiler commit and cache-recipe revision. An explicit exact-lane refresh seeds it
+fail-closed; ordinary validation reads without rewriting the scope. The Codex Universal base stays
+on its authoritative GHCR digest and outside this artifact cache. Cross-run reuse remains
+provisional until a fresh-builder second run proves that `clang-builder` did not execute.
+
+GCC and LLVM qualification still persist their stable bases before source validation. These are
+failure-ordering boundaries, not final supply: run `30094944459` proved an 11 GB LLVM/GCC result was
+not reusable, and run `30106926105` imported p2996 metadata before three evicted blobs forced a
+72m35s cold compiler build. The pinned Codex Universal AMD64 image alone is 10.17 GiB compressed,
+already beyond GitHub's default repository cache allowance. Routine validation therefore must
+ultimately consume reviewed GHCR digests rather than compiler-source mirrors.
 
 The obsolete publication job was removed because its older cache scopes and local image-loading
 ceremony could not identify the validated result. Its replacement must push one
@@ -239,9 +242,10 @@ that a new compiler image is publishable.
 ## Cache policy
 
 - Buildx uses a distinct GitHub Actions cache scope per toolchain lineage, architecture, and policy
-  version.
-  `mode=min` remains required because this repository already demonstrated that exporting complete
-  intermediate compiler graphs can exhaust hosted-runner disk.
+  version. P2996 additionally keys its scratch artifact by compiler commit and recipe revision and
+  writes it only during an explicit refresh.
+  `mode=min` remains required because exporting complete Codex-derived images causes repository
+  cache eviction and compiler rebuilds.
 - Source CI keeps bounded `actions/cache` entries for vcpkg archives and ccache. It does not persist
   configured CI build trees.
 - Local Docker retains immutable base layers. Named volumes retain architecture/compiler-specific

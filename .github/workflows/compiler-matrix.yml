@@ -26,6 +26,11 @@ on:
         required: false
         default: false
         type: boolean
+      refresh_clang_artifact_cache:
+        description: Explicitly seed the isolated pinned clang-p2996 artifact cache
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -49,6 +54,11 @@ jobs:
         if: ${{ inputs.architecture == 'arm64' && inputs.lineage != 'gcc16' }}
         run: |
           echo "the first ARM64 phase validates only lineage=gcc16" >&2
+          exit 2
+      - name: Restrict clang artifact refresh to its exact lane
+        if: ${{ inputs.refresh_clang_artifact_cache && (inputs.lineage != 'clang-p2996' || inputs.architecture != 'amd64') }}
+        run: |
+          echo "clang artifact refresh requires lineage=clang-p2996 and architecture=amd64" >&2
           exit 2
 
   gcc16:
@@ -154,19 +164,20 @@ jobs:
         id: buildx
         with:
           version: v0.35.0
-      - name: Persist stable clang-p2996 base before source validation
+      - name: Persist isolated clang-p2996 artifact before source validation
+        if: ${{ inputs.refresh_clang_artifact_cache }}
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: containers/Containerfile
-          target: symphony-ci-clang
+          target: clang-p2996-artifact
           platforms: linux/amd64
           outputs: type=cacheonly
           load: false
           push: false
           builder: ${{ steps.buildx.outputs.name }}
-          cache-from: type=gha,scope=symphony-clang-p2996-min-v2
-          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v2,timeout=30m,ignore-error=true
+          cache-from: type=gha,scope=symphony-clang-p2996-artifact-7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-v1
+          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-artifact-7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-v1,timeout=30m
       - name: Restore bounded clang-p2996 compiler cache
         id: clang-ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -202,7 +213,7 @@ jobs:
           push: false
           builder: ${{ steps.buildx.outputs.name }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-clang-p2996-min-v2
+          cache-from: type=gha,scope=symphony-clang-p2996-artifact-7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-v1
   llvm-analysis:
     name: LLVM 22.1.8 analysis base and source-quality contract
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}

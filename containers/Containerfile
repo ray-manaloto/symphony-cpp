@@ -78,8 +78,11 @@ RUN compile_jobs="$(nproc)" \
  && test -f /opt/clang-p2996/include/c++/v1/meta \
  && rm -rf /tmp/llvm-build /tmp/llvm-project
 
-FROM compiler-build-base AS symphony-clang-p2996
+FROM scratch AS clang-p2996-artifact
 COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
+
+FROM compiler-build-base AS symphony-clang-p2996
+COPY --from=clang-p2996-artifact /opt/clang-p2996 /opt/clang-p2996
 
 FROM compiler-build-base AS llvm-analysis-tools
 ARG LLVM_VERSION=22.1.8

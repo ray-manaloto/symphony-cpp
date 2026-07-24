@@ -252,6 +252,26 @@ workflow_job_block() {
   ' "${workflow}"
 }
 
+workflow_input_block() {
+  local input="$1"
+  awk -v target="${input}" '
+    $0 == "      " target ":" {
+      printing = 1
+    }
+    printing && seen &&
+      (/^      [[:alnum:]_-]+:/ || /^[^[:space:]]/) {
+      exit
+    }
+    printing {
+      print
+      seen = 1
+    }
+  ' "${workflow}"
+}
+
+readonly clang_commit=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
+readonly clang_artifact_scope="symphony-clang-p2996-artifact-${clang_commit}-v1"
+
 grep -Fq \
   'ARG CODEX_BASE=ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304' \
   "${containerfile}"
@@ -284,6 +304,8 @@ test "$(
 )" = "1"
 grep -Fq 'LLVM_PARALLEL_COMPILE_JOBS="${compile_jobs}"' "${containerfile}"
 grep -Fq 'LLVM_PARALLEL_LINK_JOBS=1' "${containerfile}"
+test "$(grep -Fc "ARG CLANG_P2996_COMMIT=${clang_commit}" "${containerfile}")" -eq 1
+grep -Fq "| bloomberg/clang-p2996 | \`${clang_commit}\`" "${upstream_lock}"
 grep -Fq 'cmake --build /tmp/llvm-build --target install-distribution-stripped -j "${compile_jobs}"' \
   "${containerfile}"
 grep -Fq 'https://ftpmirror.gnu.org/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz' \
@@ -325,7 +347,21 @@ grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${clang_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${clang_runtime}"
 grep -Fq 'ENTRYPOINT []' <<<"${clang_runtime}"
 
+clang_artifact="$(stage_block clang-p2996-artifact)"
+grep -Fq 'FROM scratch AS clang-p2996-artifact' <<<"${clang_artifact}"
+grep -Fq 'COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996' \
+  <<<"${clang_artifact}"
+
+clang_package="$(stage_block symphony-clang-p2996)"
+grep -Fq 'FROM compiler-build-base AS symphony-clang-p2996' <<<"${clang_package}"
+grep -Fq 'COPY --from=clang-p2996-artifact /opt/clang-p2996 /opt/clang-p2996' \
+  <<<"${clang_package}"
+
 grep -Fq 'default: amd64' "${workflow}"
+refresh_input="$(workflow_input_block refresh_clang_artifact_cache)"
+grep -Fxq '        required: false' <<<"${refresh_input}"
+grep -Fxq '        default: false' <<<"${refresh_input}"
+grep -Fxq '        type: boolean' <<<"${refresh_input}"
 grep -Fq "runs-on: \${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}" \
   "${workflow}"
 grep -Fq 'platforms: ${{ env.TOOLCHAIN_PLATFORM }}' "${workflow}"
@@ -336,6 +372,17 @@ grep -Fq 'target: symphony-gcc-validation' "${workflow}"
 grep -Fq 'target: symphony-clang-validation' "${workflow}"
 gcc_job="$(workflow_job_block gcc16)"
 clang_job="$(workflow_job_block clang-p2996)"
+validate_job="$(workflow_job_block validate-inputs)"
+refresh_boundary_step="$(
+  workflow_step_block_for_job "${validate_job}" \
+    "Restrict clang artifact refresh to its exact lane"
+)"
+grep -Fxq \
+  "        if: \${{ inputs.refresh_clang_artifact_cache && (inputs.lineage != 'clang-p2996' || inputs.architecture != 'amd64') }}" \
+  <<<"${refresh_boundary_step}"
+grep -Fq \
+  'clang artifact refresh requires lineage=clang-p2996 and architecture=amd64' \
+  <<<"${refresh_boundary_step}"
 gcc_base_step="$(
   workflow_step_block_for_job "${gcc_job}" \
     "Persist stable GCC 16.1 base before source validation"
@@ -346,7 +393,7 @@ gcc_validation_step="$(
 )"
 clang_base_step="$(
   workflow_step_block_for_job "${clang_job}" \
-    "Persist stable clang-p2996 base before source validation"
+    "Persist isolated clang-p2996 artifact before source validation"
 )"
 clang_validation_step="$(
   workflow_step_block_for_job "${clang_job}" \
@@ -354,7 +401,8 @@ clang_validation_step="$(
 )"
 grep -Fxq '          target: symphony-gcc-runtime' <<<"${gcc_base_step}"
 grep -Fxq '          target: symphony-gcc-validation' <<<"${gcc_validation_step}"
-grep -Fxq '          target: symphony-ci-clang' <<<"${clang_base_step}"
+grep -Fxq '        if: ${{ inputs.refresh_clang_artifact_cache }}' <<<"${clang_base_step}"
+grep -Fxq '          target: clang-p2996-artifact' <<<"${clang_base_step}"
 grep -Fxq '          target: symphony-clang-validation' <<<"${clang_validation_step}"
 for step in "${gcc_base_step}" "${gcc_validation_step}"; do
   grep -Fxq \
@@ -382,16 +430,20 @@ for step in "${clang_base_step}" "${clang_validation_step}"; do
   grep -Fxq '          load: false' <<<"${step}"
   grep -Fxq '          push: false' <<<"${step}"
   grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${step}"
-  grep -Fxq \
-    '          cache-from: type=gha,scope=symphony-clang-p2996-min-v2' \
-    <<<"${step}"
+  grep -Fxq "          cache-from: type=gha,scope=${clang_artifact_scope}" <<<"${step}"
 done
 grep -Fxq \
   '          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v3,timeout=30m,ignore-error=true' \
   <<<"${gcc_base_step}"
 grep -Fxq \
-  '          cache-to: type=gha,mode=min,scope=symphony-clang-p2996-min-v2,timeout=30m,ignore-error=true' \
+  "          cache-to: type=gha,mode=min,scope=${clang_artifact_scope},timeout=30m" \
   <<<"${clang_base_step}"
+test "$(grep -Fc '          cache-to:' <<<"${clang_job}")" -eq 1
+if grep -Fq 'ignore-error' <<<"${clang_base_step}"; then
+  echo "clang artifact persistence must fail closed" >&2
+  exit 1
+fi
+test "$(grep -Fc "scope=${clang_artifact_scope}" <<<"${clang_job}")" -eq 3
 if grep -Fq '          cache-to:' <<<"${gcc_validation_step}" ||
   grep -Fq '          cache-to:' <<<"${clang_validation_step}"; then
   echo "source validation must not overwrite a stable toolchain cache scope" >&2
@@ -405,7 +457,7 @@ test "$(
     <<<"${gcc_job}" | cut -d: -f1
 )"
 test "$(
-  grep -Fn '      - name: Persist stable clang-p2996 base before source validation' \
+  grep -Fn '      - name: Persist isolated clang-p2996 artifact before source validation' \
     <<<"${clang_job}" | cut -d: -f1
 )" -lt "$(
   grep -Fn '      - name: Build and validate clang-p2996 without loading it' \
@@ -443,7 +495,7 @@ clang_setup_line="$(
     <<<"${clang_job}" | cut -d: -f1
 )"
 clang_base_line="$(
-  grep -Fn '      - name: Persist stable clang-p2996 base before source validation' \
+  grep -Fn '      - name: Persist isolated clang-p2996 artifact before source validation' \
     <<<"${clang_job}" | cut -d: -f1
 )"
 clang_restore_line="$(
