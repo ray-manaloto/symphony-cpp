@@ -202,6 +202,22 @@ static ut::suite codex_tests = [] {
     ut::expect(limits.rate_limits->limit_id == std::optional<std::string>{"codex"});
     ut::expect(limits.rate_limits->primary.has_value());
     ut::expect(limits.rate_limits->primary->used_percent == 42);
+
+    const auto empty_window = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":{},"secondary":{"windowDurationMins":60}}}})");
+    ut::expect(empty_window.rate_limits->primary.has_value());
+    ut::expect(empty_window.rate_limits->primary->used_percent == 0);
+    ut::expect(!empty_window.rate_limits->primary->window_duration_minutes.has_value());
+    ut::expect(!empty_window.rate_limits->primary->resets_at.has_value());
+    ut::expect(empty_window.rate_limits->secondary.has_value());
+    ut::expect(empty_window.rate_limits->secondary->used_percent == 0);
+    ut::expect(empty_window.rate_limits->secondary->window_duration_minutes ==
+               std::optional<std::int64_t>{60});
+
+    const auto null_window = symphony::codex::AppServerProtocol::decode(
+        R"({"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":null}}})");
+    ut::expect(null_window.rate_limits.has_value());
+    ut::expect(!null_window.rate_limits->primary.has_value());
   };
 
   ut::test("app-server protocol recognizes both compaction event shapes") = [] {

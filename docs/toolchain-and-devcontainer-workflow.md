@@ -131,6 +131,14 @@ through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installe
 and build trees remain local to one builder. Cross-run compiler-cache reuse remains provisional
 until a two-runner sentinel and nonzero ccache-hit fixture pass.
 
+The LLVM-analysis job first solves the stable `symphony-analysis` ancestor with cache-only output
+and exports the existing `mode=min` scope before binding source or running validation. The source
+validation solve uses the same named Buildx builder and imports that scope. This boundary ensures a
+later formatter, dependency, compiler, or clang-tidy failure cannot prevent the expensive GCC 16.1
+and LLVM 22.1.8 ancestry from reaching the cache. It does not load or publish an image, and the
+first cold solve remains intentionally expensive; the following exact run must prove the GCC build
+step is cached before the optimization is considered effective.
+
 The obsolete publication job was removed because its older cache scopes and local image-loading
 ceremony could not identify the new cache-only validation result. Publication must be redesigned
 to push architecture-matched base targets directly, record their child digests, and assemble the

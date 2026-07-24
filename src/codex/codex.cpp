@@ -4,9 +4,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <thread>
+#include <type_traits>
 
 #include <boost/asio.hpp>
 #include <boost/filesystem/path.hpp>
@@ -36,6 +39,16 @@ struct Identity {
   std::string id;
 };
 
+struct RateLimitWindowBody {
+  std::int32_t usedPercent{0};
+  std::optional<std::int64_t> windowDurationMins;
+  std::optional<std::int64_t> resetsAt;
+};
+
+static_assert(std::is_aggregate_v<RateLimitWindowBody>);
+static_assert(std::is_default_constructible_v<RateLimitWindowBody>);
+static_assert(requires(std::optional<RateLimitWindowBody>& value) { value.emplace(); });
+
 struct ResultBody {
   struct ThreadItem {
     std::optional<std::string> type;
@@ -57,11 +70,6 @@ struct ResultBody {
     LastTokenUsageBreakdown last;
     TokenUsageBreakdown total;
     std::optional<std::int64_t> modelContextWindow;
-  };
-  struct RateLimitWindowBody {
-    std::int32_t usedPercent{0};
-    std::optional<std::int64_t> windowDurationMins;
-    std::optional<std::int64_t> resetsAt;
   };
   struct RateLimitSnapshotBody {
     std::optional<std::string> limitId;
