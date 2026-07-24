@@ -39,20 +39,18 @@ ut::suite workflow_dto_reflection_tests = [] {
   ut::test("workflow DTOs retain exact known decoded fields") = [] {
     using namespace workflow::detail;
 
-    static_assert(has_exact_fields<RawPolling>(
-        std::array<std::string_view, 1>{"interval_ms"}));
-    static_assert(has_exact_fields<RawWorkspace>(
-        std::array<std::string_view, 1>{"root"}));
-    static_assert(has_exact_fields<RawAgent>(std::array<std::string_view, 4>{
-        "max_concurrent_agents", "max_turns", "max_retry_backoff_ms",
-        "max_concurrent_agents_by_state"}));
+    static_assert(has_exact_fields<RawPolling>(std::array<std::string_view, 1>{"interval_ms"}));
+    static_assert(has_exact_fields<RawWorkspace>(std::array<std::string_view, 1>{"root"}));
+    static_assert(has_exact_fields<RawAgent>(
+        std::array<std::string_view, 4>{"max_concurrent_agents", "max_turns",
+                                        "max_retry_backoff_ms", "max_concurrent_agents_by_state"}));
     static_assert(has_exact_fields<RawHooks>(std::array<std::string_view, 5>{
         "timeout_ms", "after_create", "before_run", "after_run", "before_remove"}));
     static_assert(has_exact_fields<RawCodex>(std::array<std::string_view, 13>{
-        "command", "model", "reasoning_effort", "escalation_model",
-        "escalation_reasoning_effort", "repeated_failure_reasoning_effort",
-        "context_rollover_percent", "approval_policy", "thread_sandbox",
-        "turn_sandbox_policy", "turn_timeout_ms", "read_timeout_ms", "stall_timeout_ms"}));
+        "command", "model", "reasoning_effort", "escalation_model", "escalation_reasoning_effort",
+        "repeated_failure_reasoning_effort", "context_rollover_percent", "approval_policy",
+        "thread_sandbox", "turn_sandbox_policy", "turn_timeout_ms", "read_timeout_ms",
+        "stall_timeout_ms"}));
     static_assert(has_exact_fields<RawTracker>(std::array<std::string_view, 5>{
         "kind", "provider", "required_labels", "active_states", "terminal_states"}));
     static_assert(has_exact_fields<RawWorkflow>(std::array<std::string_view, 6>{
@@ -82,15 +80,13 @@ ut::suite workflow_dto_reflection_tests = [] {
     static_assert(OptionalString<decltype(RawCodex::turn_sandbox_policy)>);
     static_assert(OptionalUnsigned<decltype(RawCodex::turn_timeout_ms)>);
     static_assert(OptionalUnsigned<decltype(RawCodex::read_timeout_ms)>);
-    static_assert(
-        std::same_as<decltype(RawCodex::stall_timeout_ms), std::optional<std::int64_t>>);
+    static_assert(std::same_as<decltype(RawCodex::stall_timeout_ms), std::optional<std::int64_t>>);
     static_assert(OptionalString<decltype(RawTracker::kind)>);
-    static_assert(
-        std::same_as<decltype(RawTracker::provider), std::optional<glz::generic_u64>>);
+    static_assert(std::same_as<decltype(RawTracker::provider), std::optional<glz::generic_u64>>);
     static_assert(std::same_as<decltype(RawTracker::required_labels),
                                std::optional<std::vector<std::string>>>);
-    static_assert(std::same_as<decltype(RawTracker::active_states),
-                               std::optional<std::vector<std::string>>>);
+    static_assert(
+        std::same_as<decltype(RawTracker::active_states), std::optional<std::vector<std::string>>>);
     static_assert(std::same_as<decltype(RawTracker::terminal_states),
                                std::optional<std::vector<std::string>>>);
     static_assert(std::same_as<decltype(RawWorkflow::tracker), std::optional<RawTracker>>);

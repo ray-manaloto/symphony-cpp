@@ -33,14 +33,13 @@ ut::suite codex_protocol_reflection_tests = [] {
   ut::test("Codex startup DTOs retain their exact declared field order") = [] {
     using namespace codex::protocol_detail;
 
-    static_assert(has_exact_fields<ClientInfo>(
-        std::array<std::string_view, 3>{"name", "title", "version"}));
-    static_assert(has_exact_fields<InitializeParams>(
-        std::array<std::string_view, 1>{"clientInfo"}));
+    static_assert(
+        has_exact_fields<ClientInfo>(std::array<std::string_view, 3>{"name", "title", "version"}));
+    static_assert(
+        has_exact_fields<InitializeParams>(std::array<std::string_view, 1>{"clientInfo"}));
     static_assert(has_exact_fields<ThreadStartParams>(
         std::array<std::string_view, 4>{"cwd", "approvalPolicy", "sandbox", "model"}));
-    static_assert(has_exact_fields<TurnInput>(
-        std::array<std::string_view, 2>{"type", "text"}));
+    static_assert(has_exact_fields<TurnInput>(std::array<std::string_view, 2>{"type", "text"}));
     static_assert(has_exact_fields<TurnStartParams>(std::array<std::string_view, 7>{
         "threadId", "cwd", "input", "approvalPolicy", "sandboxPolicy", "model", "effort"}));
 

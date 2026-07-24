@@ -128,8 +128,7 @@ static ut::suite workflow_tests = [] {
     for (const auto& front_matter : {
              "agent:\n  max_concurrent_agents: " + std::to_string(too_large),
              "agent:\n  max_turns: " + std::to_string(too_large),
-             "agent:\n  max_concurrent_agents_by_state:\n    Todo: " +
-                 std::to_string(too_large),
+             "agent:\n  max_concurrent_agents_by_state:\n    Todo: " + std::to_string(too_large),
          }) {
       const auto path = temp_workflow("---\n" + front_matter + "\n---\nprompt\n");
       ut::expect(ut::throws(
@@ -144,8 +143,8 @@ static ut::suite workflow_tests = [] {
     const auto path =
         temp_workflow("---\nagent:\n  max_concurrent_agents: " + std::to_string(maximum) +
                       "\n  max_turns: " + std::to_string(maximum) +
-                      "\n  max_concurrent_agents_by_state:\n    Todo: " +
-                      std::to_string(maximum) + "\n---\nprompt\n");
+                      "\n  max_concurrent_agents_by_state:\n    Todo: " + std::to_string(maximum) +
+                      "\n---\nprompt\n");
     const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
     ut::expect(document.config.agent.max_concurrent_agents == maximum);
     ut::expect(document.config.agent.max_turns == maximum);
