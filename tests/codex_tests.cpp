@@ -89,16 +89,34 @@ static ut::suite codex_tests = [] {
   ut::test("app-server protocol follows initialize thread and turn schema") = [] {
     const auto initialize = parse_json(symphony::codex::JsonLineCodec::parse(
         symphony::codex::AppServerProtocol::initialize_request()));
+    ut::expect(initialize.size() == std::size_t{3});
+    ut::expect(initialize.at("id").get<std::uint64_t>() == std::uint64_t{0});
     ut::expect(initialize.at("method").get<std::string>() == "initialize");
-    ut::expect(initialize.at("params").at("clientInfo").at("name").get<std::string>() ==
-               "symphony_cpp");
+    const auto& client_info = initialize.at("params").at("clientInfo");
+    ut::expect(client_info.size() == std::size_t{3});
+    ut::expect(client_info.at("name").get<std::string>() == "symphony_cpp");
+    ut::expect(client_info.at("title").get<std::string>() == "Symphony C++");
+    ut::expect(client_info.at("version").get<std::string>() == "0.1.0");
 
     const auto turn = parse_json(symphony::codex::JsonLineCodec::parse(
         symphony::codex::AppServerProtocol::turn_start_request(2, "thr_1", "/tmp/work",
                                                                "Do work")));
+    ut::expect(turn.size() == std::size_t{3});
+    ut::expect(turn.at("id").get<std::uint64_t>() == std::uint64_t{2});
     ut::expect(turn.at("method").get<std::string>() == "turn/start");
-    ut::expect(turn.at("params").at("threadId").get<std::string>() == "thr_1");
-    ut::expect(turn.at("params").at("input")[0].at("text").get<std::string>() == "Do work");
+    const auto& turn_params = turn.at("params");
+    ut::expect(turn_params.size() == std::size_t{3});
+    ut::expect(turn_params.at("threadId").get<std::string>() == "thr_1");
+    ut::expect(turn_params.at("cwd").get<std::string>() == "/tmp/work");
+    ut::expect(turn_params.at("input").size() == std::size_t{1});
+    ut::expect(turn_params.at("input")[0].size() == std::size_t{2});
+    ut::expect(turn_params.at("input")[0].at("type").get<std::string>() == "text");
+    ut::expect(turn_params.at("input")[0].at("text").get<std::string>() == "Do work");
+
+    const auto default_thread = parse_json(symphony::codex::JsonLineCodec::parse(
+        symphony::codex::AppServerProtocol::thread_start_request(1, "/tmp/work")));
+    ut::expect(default_thread.at("params").size() == std::size_t{1});
+    ut::expect(default_thread.at("params").at("cwd").get<std::string>() == "/tmp/work");
 
     symphony::codex::AppServerPolicy configured_policy;
     configured_policy.approval_policy = "never";
@@ -110,6 +128,7 @@ static ut::suite codex_tests = [] {
     const auto configured_thread = parse_json(symphony::codex::JsonLineCodec::parse(
         symphony::codex::AppServerProtocol::thread_start_request(1, "/tmp/work",
                                                                  configured_policy)));
+    ut::expect(configured_thread.at("params").size() == std::size_t{4});
     ut::expect(configured_thread.at("params").at("approvalPolicy").get<std::string>() == "never");
     ut::expect(configured_thread.at("params").at("sandbox").get<std::string>() ==
                "workspace-write");
@@ -118,9 +137,13 @@ static ut::suite codex_tests = [] {
     const auto configured_turn = parse_json(symphony::codex::JsonLineCodec::parse(
         symphony::codex::AppServerProtocol::turn_start_request(2, "thr_1", "/tmp/work", "Do work",
                                                                configured_policy)));
+    ut::expect(configured_turn.at("params").size() == std::size_t{7});
     ut::expect(configured_turn.at("params").at("approvalPolicy").get<std::string>() == "never");
     ut::expect(configured_turn.at("params").at("sandboxPolicy").at("type").get<std::string>() ==
                "workspaceWrite");
+    ut::expect(!configured_turn.at("params").at("sandboxPolicy").at("networkAccess").get<bool>());
+    ut::expect(configured_turn.at("params").at("sandboxPolicy").at("writableRoots").size() ==
+               std::size_t{0});
     ut::expect(configured_turn.at("params").at("model").get<std::string>() == "gpt-5.6-sol");
     ut::expect(configured_turn.at("params").at("effort").get<std::string>() == "high");
   };

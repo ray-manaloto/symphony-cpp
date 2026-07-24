@@ -9,9 +9,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
-      - id: symphony-dockerfile-preflight
-        name: symphony Dockerfile and platform preflight
-        entry: ./scripts/check-local-preflight.sh docker
+      - id: symphony-push-preflight
+        name: symphony push preflight
+        entry: ./scripts/check-local-preflight.sh pre-push
         language: system
         pass_filenames: false
         require_serial: true

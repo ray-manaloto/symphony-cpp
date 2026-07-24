@@ -76,3 +76,15 @@ add_executable(symphony_p2996_tests test_main.cpp p2996_tests.cpp)
 target_link_libraries(symphony_p2996_tests PRIVATE
   symphony_reflection symphony_reflection_options ut::ut)
 add_test(NAME symphony_p2996_tests COMMAND symphony_p2996_tests)
+
+if(SYMPHONY_ENABLE_REFLECTION)
+  add_executable(symphony_codex_protocol_reflection_tests
+    test_main.cpp
+    codex_protocol_reflection_tests.cpp)
+  target_include_directories(symphony_codex_protocol_reflection_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/codex)
+  target_link_libraries(symphony_codex_protocol_reflection_tests PRIVATE
+    symphony_meta symphony_reflection_options ut::ut)
+  add_test(NAME symphony_codex_protocol_reflection_tests
+    COMMAND symphony_codex_protocol_reflection_tests)
+endif()

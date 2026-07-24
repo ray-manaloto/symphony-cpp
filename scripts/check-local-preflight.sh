@@ -3,9 +3,9 @@ set -euo pipefail
 
 readonly mode="${1:-quick}"
 case "${mode}" in
-  quick | docker) ;;
+  quick | pre-push | docker) ;;
   *)
-    echo "usage: $0 [quick|docker]" >&2
+    echo "usage: $0 [quick|pre-push|docker]" >&2
     exit 64
     ;;
 esac
@@ -50,7 +50,22 @@ while IFS= read -r json_file; do
   ' "${json_file}"
 done < <(git ls-files '*.json')
 
+run_docker_checks=false
 if [[ "${mode}" == "docker" ]]; then
+  if ! command -v docker >/dev/null || ! docker buildx version >/dev/null 2>&1; then
+    echo "Docker Buildx is required for strict docker preflight" >&2
+    exit 1
+  fi
+  run_docker_checks=true
+elif [[ "${mode}" == "pre-push" ]]; then
+  if command -v docker >/dev/null && docker buildx version >/dev/null 2>&1; then
+    run_docker_checks=true
+  else
+    echo "Docker Buildx unavailable; completed non-Docker push checks" >&2
+  fi
+fi
+
+if [[ "${run_docker_checks}" == true ]]; then
   readonly containerfile=containers/Containerfile
   for target in \
     symphony-gcc-validation \

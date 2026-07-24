@@ -264,7 +264,9 @@ alternative if its external service and webhook ownership become worthwhile.
 1. Replace the handwritten observability JSON encoder with the already-selected Glaze DTO codec.
 2. Make `symphony_meta` field descriptors compile-time rather than allocating
    `std::vector<std::string>` at runtime.
-3. Add compile-time structure/name checks for Codex protocol and workflow DTOs.
+3. Add compile-time structure/name checks for Codex protocol and workflow DTOs. The GCC-authoritative
+   Codex startup DTO contract is complete; workflow DTOs remain the next separate slice. Keep the
+   clang-p2996 differential target dependency-free until the pinned fork can compile Glaze.
 4. Generate exhaustive enum-name tables through the selected reflection seam rather than adding a
    second enum-reflection library.
 5. Evaluate `stdexec` structured completion only as a deletion test for existing detached-work and

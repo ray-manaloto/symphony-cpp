@@ -1,5 +1,7 @@
 #include "symphony/codex/codex.hpp"
 
+#include "protocol_detail.hpp"
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -17,39 +19,7 @@
 
 namespace symphony::codex {
 namespace protocol_detail {
-struct ClientInfo {
-  std::string name;
-  std::string title;
-  std::string version;
-};
-
-struct InitializeParams {
-  ClientInfo clientInfo;
-};
-
 struct EmptyParams {};
-
-struct ThreadStartParams {
-  std::string cwd;
-  std::optional<std::string> approvalPolicy;
-  std::optional<std::string> sandbox;
-  std::optional<std::string> model;
-};
-
-struct TurnInput {
-  std::string type;
-  std::string text;
-};
-
-struct TurnStartParams {
-  std::string threadId;
-  std::string cwd;
-  std::vector<TurnInput> input;
-  std::optional<std::string> approvalPolicy;
-  std::optional<glz::raw_json> sandboxPolicy;
-  std::optional<std::string> model;
-  std::optional<std::string> effort;
-};
 
 template <typename Params> struct Request {
   std::string method;
