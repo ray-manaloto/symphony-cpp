@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly containerfile=containers/Containerfile
 readonly cmake_installer=scripts/install-cmake.sh
+readonly workflow=.github/workflows/compiler-matrix.yml
 
 bash -n "${cmake_installer}"
 
@@ -32,5 +33,19 @@ grep -Fq \
 
 if grep -Fq 'libc6,x86-64' "${containerfile}"; then
   echo "toolchain runtime contract still depends on an AMD64 ldconfig presentation string" >&2
+  exit 1
+fi
+
+grep -Fq 'default: amd64' "${workflow}"
+grep -Fq "runs-on: \${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}" \
+  "${workflow}"
+grep -Fq 'platforms: ${{ env.TOOLCHAIN_PLATFORM }}' "${workflow}"
+grep -Fq 'scope=symphony-gcc16-${{ inputs.architecture }}-min-v2' "${workflow}"
+grep -Fq 'if: ${{ inputs.architecture == '\''arm64'\'' && inputs.lineage != '\''gcc16'\'' }}' \
+  "${workflow}"
+grep -Fq 'if: ${{ false }}' "${workflow}"
+
+if grep -Fq 'setup-qemu-action' "${workflow}"; then
+  echo "native compiler qualification must not install QEMU" >&2
   exit 1
 fi

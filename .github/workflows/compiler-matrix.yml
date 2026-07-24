@@ -13,8 +13,16 @@ on:
           - gcc16
           - clang-p2996
           - llvm-analysis
+      architecture:
+        description: Native architecture to validate
+        required: true
+        default: amd64
+        type: choice
+        options:
+          - amd64
+          - arm64
       publish_images:
-        description: Publish all tested toolchain bases to GHCR (requires lineage=all)
+        description: Reserved for the future two-architecture publication ceremony
         required: false
         default: false
         type: boolean
@@ -31,26 +39,46 @@ jobs:
     name: Validate dispatch boundary
     runs-on: ubuntu-24.04
     steps:
-      - name: Require the complete matrix for publication
-        if: ${{ inputs.publish_images && inputs.lineage != 'all' }}
+      - name: Hold publication during native ARM64 qualification
+        if: ${{ inputs.publish_images }}
         run: |
-          echo "publish_images requires lineage=all" >&2
+          echo "publication is disabled during native ARM64 qualification" >&2
+          exit 2
+      - name: Restrict the first ARM64 phase to GCC
+        if: ${{ inputs.architecture == 'arm64' && inputs.lineage != 'gcc16' }}
+        run: |
+          echo "the first ARM64 phase validates only lineage=gcc16" >&2
           exit 2
 
   gcc16:
-    name: GCC 16.1 base and source contracts
+    name: GCC 16.1 ${{ inputs.architecture }} base and source contracts
     if: ${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' }}
     needs: validate-inputs
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 360
     env:
       IMAGE: ghcr.io/ray-manaloto/symphony-toolchain-gcc
-      CCACHE_DIR: ${{ github.workspace }}/.build/toolchain-cache/gcc/ccache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/toolchain-cache/gcc/vcpkg
+      CANDIDATE_TAG: ${{ github.sha }}-${{ inputs.architecture }}
+      TOOLCHAIN_ARCH: ${{ inputs.architecture }}
+      TOOLCHAIN_PLATFORM: linux/${{ inputs.architecture }}
+      CCACHE_DIR: ${{ github.workspace }}/.build/toolchain-cache/gcc/${{ inputs.architecture }}/ccache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.build/toolchain-cache/gcc/${{ inputs.architecture }}/vcpkg
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Verify native runner architecture and capacity
+        run: |
+          test "$(dpkg --print-architecture)" = "${TOOLCHAIN_ARCH}"
+          case "${TOOLCHAIN_ARCH}" in
+            amd64) expected_machine=x86_64 ;;
+            arm64) expected_machine=aarch64 ;;
+            *) echo "unsupported toolchain architecture: ${TOOLCHAIN_ARCH}" >&2; exit 64 ;;
+          esac
+          test "$(uname -m)" = "${expected_machine}"
+          df -h /
+          df -i /
+          docker system df
       - name: Reclaim ephemeral runner disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
@@ -62,8 +90,8 @@ jobs:
           path: |
             ${{ env.CCACHE_DIR }}
             ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: toolchain-gcc16-source-v1-${{ github.sha }}
-          restore-keys: toolchain-gcc16-source-v1-
+          key: toolchain-gcc16-${{ inputs.architecture }}-source-v2-${{ github.sha }}
+          restore-keys: toolchain-gcc16-${{ inputs.architecture }}-source-v2-
       - name: Prepare bounded source caches
         run: |
           mkdir -p "${CCACHE_DIR}" "${VCPKG_DEFAULT_BINARY_CACHE}"
@@ -73,22 +101,22 @@ jobs:
           context: .
           file: containers/Containerfile
           target: symphony-gcc-runtime
-          platforms: linux/amd64
+          platforms: ${{ env.TOOLCHAIN_PLATFORM }}
           load: true
           push: false
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ env.IMAGE }}:${{ env.CANDIDATE_TAG }}
           build-args: SOURCE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=symphony-gcc16-min-v1
-          cache-to: type=gha,mode=min,scope=symphony-gcc16-min-v1,timeout=30m
+          cache-from: type=gha,scope=symphony-gcc16-${{ inputs.architecture }}-min-v2
+          cache-to: type=gha,mode=min,scope=symphony-gcc16-${{ inputs.architecture }}-min-v2,timeout=30m
       - name: Verify GCC base contract
         run: |
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect "${IMAGE}:${GITHUB_SHA}" --format '{{len .Config.Entrypoint}}')" = "0"
+          test "$(docker image inspect "${IMAGE}:${CANDIDATE_TAG}" --format '{{.Architecture}}')" = "${TOOLCHAIN_ARCH}"
+          test "$(docker image inspect "${IMAGE}:${CANDIDATE_TAG}" --format '{{len .Config.Entrypoint}}')" = "0"
           test "$(
-            docker image inspect "${IMAGE}:${GITHUB_SHA}" \
+            docker image inspect "${IMAGE}:${CANDIDATE_TAG}" \
               --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
           )" = "${GITHUB_SHA}"
-          docker run --rm "${IMAGE}:${GITHUB_SHA}" bash -lc '
+          docker run --rm --platform "${TOOLCHAIN_PLATFORM}" "${IMAGE}:${CANDIDATE_TAG}" bash -lc '
             test "$(g++ -dumpfullversion)" = "16.1.0"
             test "$(cmake --version | head -n 1)" = "cmake version 4.4.0"
             command -v ninja
@@ -103,12 +131,12 @@ jobs:
       - name: Run mounted-source GCC workflows
         run: |
           docker run --rm \
-            --platform linux/amd64 \
-            --env CCACHE_DIR=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/ccache \
-            --env VCPKG_DEFAULT_BINARY_CACHE=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/vcpkg \
+            --platform "${TOOLCHAIN_PLATFORM}" \
+            --env "CCACHE_DIR=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/${TOOLCHAIN_ARCH}/ccache" \
+            --env "VCPKG_DEFAULT_BINARY_CACHE=/workspaces/symphony-cpp/.build/toolchain-cache/gcc/${TOOLCHAIN_ARCH}/vcpkg" \
             --volume "${GITHUB_WORKSPACE}:/workspaces/symphony-cpp" \
             --workdir /workspaces/symphony-cpp \
-            "${IMAGE}:${GITHUB_SHA}" \
+            "${IMAGE}:${CANDIDATE_TAG}" \
             bash -lc '
               ccache --max-size=750M
               ccache --zero-stats
@@ -277,7 +305,7 @@ jobs:
             '
   publish:
     name: Publish all tested toolchain bases
-    if: ${{ inputs.publish_images && github.ref == 'refs/heads/codex/implementation' }}
+    if: ${{ false }}
     needs:
       - gcc16
       - clang-p2996

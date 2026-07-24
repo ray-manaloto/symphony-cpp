@@ -110,6 +110,14 @@ silently move to a new compiler image through a mutable tag. During the one-time
 existing local profiles remain on their previous images until that digest-update commit lands; they
 are not evidence for the new base lineages.
 
+Native qualification is intentionally phased before the end-state fan-out above is enabled. One
+typed dispatch selects exactly one architecture, defaulting to AMD64. The first ARM64 dispatch is
+restricted to GCC 16.1 and keeps publication disabled; it must preserve the reflection smoke and
+all Debug, Release, ASan/UBSan, and TSan workflows while measuring the hosted ARM runner's 14 GB
+disk envelope. After that exact commit passes on both native architectures, clang-p2996 and LLVM
+analysis can adopt the selector. Only six green lineage/architecture cells permit a later
+two-child-index publication ceremony.
+
 ## Local create and daily loop
 
 ```mermaid
