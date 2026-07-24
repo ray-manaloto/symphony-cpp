@@ -9,9 +9,16 @@ The agent model and effort recommendation additionally uses the current
 [Codex configuration schema](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json).
 
 - [x] [OpenAI Symphony repository and Draft v1 specification](https://github.com/openai/symphony), pinned at `1f3219b`
+- [x] [OpenAI Symphony v0.0.2 release](https://github.com/openai/symphony/releases/tag/v0.0.2),
+      assessed in [`../upstream-evolution-watch.md`](../upstream-evolution-watch.md)
 - [x] [GCC 16.1 release sources](https://ftp.gnu.org/gnu/gcc/gcc-16.1.0/)
 - [x] [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996), pinned at `7220baff`
 - [x] [OpenAI codex-universal](https://github.com/openai/codex-universal), image digest pinned separately
+- [x] OpenAI Codex
+      [local](https://learn.chatgpt.com/docs/environments/local-environment) and
+      [cloud](https://learn.chatgpt.com/docs/environments/cloud-environment) environment guidance
+- [x] OpenAI [plugin architecture and packaging](https://developers.openai.com/plugins) and
+      [Codex plugin workflow](https://learn.chatgpt.com/docs/build-plugins)
 - [x] [OpenSymphony](https://github.com/kumanday/OpenSymphony), comparative only, pinned at `0cc21ddd` (`v2.10.0`)
 - [x] [Verdent Symphony architecture deep dive](https://www.verdent.ai/guides/openai-symphony-architecture-deep-dive), comparative only
 - [x] [OpenAI Tart](https://github.com/openai/tart), deferred Apple-Silicon executor
@@ -37,6 +44,11 @@ The agent model and effort recommendation additionally uses the current
 - [x] [Development Containers specification](https://github.com/devcontainers/spec), [reference CLI](https://github.com/devcontainers/cli), and [CI action](https://github.com/devcontainers/ci)
 - [x] Native multi-architecture toolchains: [GCC configure](https://gcc.gnu.org/install/configure.html), [AArch64 target notes](https://gcc.gnu.org/install/specific.html), [GCC 16 changes](https://gcc.gnu.org/gcc-16/changes.html), [LLVM host/target build guidance](https://llvm.org/docs/GettingStarted.html), [LLVM 22.1.8 release assets and attestations](https://github.com/llvm/llvm-project/releases/tag/llvmorg-22.1.8), [GitHub-hosted ARM64 runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), and Docker's [native multi-platform CI architecture](https://docs.docker.com/build/ci/github-actions/github-builder/architecture/) and [multi-platform build guidance](https://docs.docker.com/build/building/multi-platform/)
 - [x] Architecture-scoped caches: Docker [GitHub Actions cache backend](https://docs.docker.com/build/cache/backends/gha/) and the [ccache manual](https://ccache.dev/manual/4.13.6.html)
+- [ ] [`jdx/hk`](https://github.com/jdx/hk) migration evaluation against the existing locked mise and
+      pre-commit ownership
+- [ ] [`ray-manaloto/dotfiles` compiler CI](https://github.com/ray-manaloto/dotfiles/blob/main/.github/workflows/ci.yml),
+      its [devcontainer guidance](https://github.com/ray-manaloto/dotfiles/blob/main/.devcontainer/AGENTS.md),
+      and [`bloomberg/clang-p2996` Actions](https://github.com/bloomberg/clang-p2996/actions)
 - [x] [LLVM clang-tidy](https://clang.llvm.org/extra/clang-tidy/) and [Include-What-You-Use](https://include-what-you-use.org/)
 - [x] CMake 4.4 [`FILE_SET HEADERS`](https://cmake.org/cmake/help/latest/command/target_sources.html#file-sets) and [`VERIFY_INTERFACE_HEADER_SETS`](https://cmake.org/cmake/help/latest/prop_tgt/VERIFY_INTERFACE_HEADER_SETS.html) for compiler-owned public-header self-containment checks
 - [x] [r/cpp](https://www.reddit.com/r/cpp/), practitioner discovery only; consequential claims require primary-source verification

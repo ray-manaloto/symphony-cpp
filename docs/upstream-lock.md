@@ -4,7 +4,7 @@ Accessed 2026-07-22 through 2026-07-24.
 
 | Input | Immutable identity | Role |
 | --- | --- | --- |
-| OpenAI Symphony | `1f3219bb1ea5f69a1305dc594e79b0db57c113c5` | Normative Draft v1 specification |
+| OpenAI Symphony | `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`; latest assessed release `v0.0.2` at commit `653f8b3cc476db03420479ba6f95b2ed7281c401`; identical `SPEC.md` blob `a6b44e162383e7241a76bce85afb7a8e8d704c45` | Normative Draft v1 specification; release evolution is tracked without moving the conformance pin automatically |
 | OpenSymphony | `v2.10.0` / `0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb`; ceremony-proven GHCR manifest `sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982`; smoke-only current `edge` manifest `sha256:56d7fd2274e2d7eda4ff1d3556a6a9315014e3a05055422e9c4c68849be36911` | External contained development orchestrator; never a C++ runtime dependency or conformance authority |
 | OpenSymphony template | commit `84a6c1d49926ccc663c5ad8018d2742f777917e3`; root tree `7960ff709b1c372cf9397f270203d3154d8fd03b` | Immutable disposable `init` acceptance input; the canonical checkout is never initialized from mutable template state |
 | OpenSymphony build/runtime bases | `rust:1.93.0-bookworm` AMD64 manifest `sha256:d0a4aa3ca2e1088ac0c81690914a0d810f2eee188197034edf366ed010a2b382`; `debian:bookworm-slim` AMD64 manifest `sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818`; Codex CLI `0.145.0` | Pinned external-orchestrator build and contained runtime inputs |
