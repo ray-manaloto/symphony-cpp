@@ -39,11 +39,21 @@ Run the differential reflection suite in the separate Bloomberg clang-p2996 devc
 ```
 
 Run the exact LLVM 22.1.8 formatting gate and the initial reflection-disabled static-analysis
-report in the dedicated analysis devcontainer:
+report in the dedicated analysis devcontainer once its reviewed immutable base digest replaces the
+currently unavailable migration tag:
 
 ```sh
 ./scripts/devcontainer-build.sh analysis
 ```
+
+Run the fixture-only LLVM 22.1.8 Function Effect Analysis and RealtimeSanitizer gate:
+
+```sh
+./scripts/devcontainer-build.sh analysis-rtsan
+```
+
+Until that digest-wiring change, use the publish-disabled `llvm-analysis` compiler-matrix dispatch
+for Linux evidence; both local analysis commands fail closed instead of falling back to host tools.
 
 The official Dev Container CLI starts or reuses the container, applies its lifecycle setup, and
 runs configure, build, and CTest inside it. The bind-mounted repository retains `build/` and

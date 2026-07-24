@@ -280,6 +280,12 @@ experimental clang-p2996 fork.
 - [x] Commit a narrow `.clang-tidy`; verify its configuration, use a reflection-disabled compile
   database, exclude third-party headers, and start with analyzer, bug-prone, performance,
   portability, selected concurrency/CERT, and include-cleaner checks.
+- [ ] Prove the added `string_view`, optional, condition-variable, coroutine/lock, exception, and
+  performance checks have a zero-warning project baseline in the exact LLVM 22.1.8 Linux image;
+  promote only that exact zero-noise subset through a source-controlled `WarningsAsErrors`
+  allowlist.
+- [ ] Pass the fixture-only `clang-rtsan` workflow in the exact LLVM 22.1.8 Linux image before
+  considering any product `nonblocking` annotation.
 - Run IWYU report-only with a compatible pinned LLVM build; promote only stable project-header
   findings and never auto-rewrite includes in CI.
 - [x] Add self-contained compilation fixtures for every public header and compile-time/static-assert

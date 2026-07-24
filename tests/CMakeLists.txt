@@ -67,6 +67,33 @@ target_link_libraries(symphony_persistence_tests PRIVATE
   symphony_persistence_events ut::ut Boost::sqlite)
 add_test(NAME symphony_persistence_tests COMMAND symphony_persistence_tests)
 
+if(SYMPHONY_ENABLE_RTSAN)
+  add_executable(symphony_rtsan_safe_fixture rtsan_safe_fixture.cpp)
+  target_link_libraries(symphony_rtsan_safe_fixture PRIVATE
+    symphony_options symphony_rtsan_options)
+  add_test(
+    NAME symphony_rtsan_safe
+    COMMAND symphony_rtsan_safe_fixture)
+
+  add_executable(symphony_rtsan_violation_fixture rtsan_violation_fixture.cpp)
+  target_link_libraries(symphony_rtsan_violation_fixture PRIVATE
+    symphony_options symphony_rtsan_options)
+  add_test(
+    NAME symphony_rtsan_allocation_violation
+    COMMAND ${CMAKE_COMMAND}
+      -DPROGRAM=$<TARGET_FILE:symphony_rtsan_violation_fixture>
+      -DMODE=allocation
+      "-DEXPECTED_REPORT=RealtimeSanitizer: unsafe-library-call"
+      -P ${PROJECT_SOURCE_DIR}/cmake/ExpectRtsanFailure.cmake)
+  add_test(
+    NAME symphony_rtsan_blocking_violation
+    COMMAND ${CMAKE_COMMAND}
+      -DPROGRAM=$<TARGET_FILE:symphony_rtsan_violation_fixture>
+      -DMODE=blocking
+      "-DEXPECTED_REPORT=RealtimeSanitizer: blocking-call"
+      -P ${PROJECT_SOURCE_DIR}/cmake/ExpectRtsanFailure.cmake)
+endif()
+
 add_executable(symphony_reflection_tests test_main.cpp reflection_tests.cpp)
 target_link_libraries(symphony_reflection_tests PRIVATE
   symphony_options symphony_reflection_options symphony_meta ut::ut)

@@ -81,6 +81,15 @@ dependency installation. Warning diagnostics remain report-only at this phase; b
 reject nested or runner-supplied configuration and warning promotion, while compiler, configuration,
 and toolchain-selection errors remain fatal.
 
+The sibling `clang-rtsan` preset enables Clang 22.1.8 Function Effect Analysis and compiler-rt
+RealtimeSanitizer only for explicit provider fixtures. Configure first proves the compiler-rt
+interface and runtime by compiling and linking with `-fsanitize=realtime`; the fixture target makes
+`-Wfunction-effects` and `-Wperf-constraint-implies-noexcept` fatal. CTest then requires one safe
+`nonblocking` call to pass and requires allocation and explicitly blocking controls to emit their
+exact RTSan report classes. The sanitizer options target is not linked to product targets. GCC 16.1
+continues to define executable semantics, and no product function is called real-time-safe until it
+has a documented deadline, preallocation/lifetime contract, nonblocking call graph, and benchmark.
+
 They do not contain the source tree, a configured build tree, the repository's installed vcpkg
 graph, editor settings, named local volumes, or a Dev Container lifecycle result.
 

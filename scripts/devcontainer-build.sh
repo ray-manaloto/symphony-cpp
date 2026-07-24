@@ -26,8 +26,12 @@ case "${profile}" in
     readonly config="${repository_root}/.devcontainer/analysis/devcontainer.json"
     readonly preset="clang-analysis"
     ;;
+  analysis-rtsan)
+    readonly config="${repository_root}/.devcontainer/analysis/devcontainer.json"
+    readonly preset="clang-rtsan"
+    ;;
   *)
-    echo "usage: $0 {gcc|gcc-release|gcc-sanitizers|clang-p2996|analysis}" >&2
+    echo "usage: $0 {gcc|gcc-release|gcc-sanitizers|clang-p2996|analysis|analysis-rtsan}" >&2
     exit 2
     ;;
 esac
@@ -59,6 +63,13 @@ if [[ "${profile}" == "analysis" ]]; then
     bash -lc "./scripts/check-format.sh \
       && cmake --fresh --preset ${preset} \
       && ./scripts/check-tidy.sh"
+elif [[ "${profile}" == "analysis-rtsan" ]]; then
+  devcontainer exec \
+    --workspace-folder "${repository_root}" \
+    --config "${config}" \
+    bash -lc "cmake --workflow --fresh --preset ${preset} \
+      && python3 ./scripts/check-analysis-compile-commands.py \
+        build/clang-rtsan/compile_commands.json --require-rtsan-fixtures"
 else
   devcontainer exec \
     --workspace-folder "${repository_root}" \

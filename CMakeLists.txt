@@ -6,6 +6,7 @@ include(cmake/Dependencies.cmake)
 option(SYMPHONY_ENABLE_REFLECTION "Compile C++26 reflection facilities" OFF)
 option(SYMPHONY_ENABLE_ASAN_UBSAN "Instrument with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(SYMPHONY_ENABLE_TSAN "Instrument with ThreadSanitizer" OFF)
+option(SYMPHONY_ENABLE_RTSAN "Instrument Clang nonblocking functions with RealtimeSanitizer" OFF)
 option(SYMPHONY_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -56,6 +57,28 @@ if(SYMPHONY_ENABLE_TSAN)
     $<$<CXX_COMPILER_ID:GNU>:-Wno-error=tsan>)
   target_link_options(symphony_options INTERFACE
     -fsanitize=thread
+    -fno-omit-frame-pointer)
+endif()
+if(SYMPHONY_ENABLE_RTSAN)
+  if(SYMPHONY_ENABLE_ASAN_UBSAN OR SYMPHONY_ENABLE_TSAN)
+    message(FATAL_ERROR "RTSan must run separately from ASan, UBSan, and TSan")
+  endif()
+  if(SYMPHONY_ENABLE_REFLECTION)
+    message(FATAL_ERROR "RTSan is a stock-Clang, reflection-disabled analysis lane")
+  endif()
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
+     NOT CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "22.1.8")
+    message(FATAL_ERROR "RTSan requires the pinned Clang 22.1.8 analysis compiler")
+  endif()
+  include(cmake/CheckRealtimeSanitizer.cmake)
+  add_library(symphony_rtsan_options INTERFACE)
+  target_compile_options(symphony_rtsan_options INTERFACE
+    -fsanitize=realtime
+    -fno-omit-frame-pointer
+    -Werror=function-effects
+    -Werror=perf-constraint-implies-noexcept)
+  target_link_options(symphony_rtsan_options INTERFACE
+    -fsanitize=realtime
     -fno-omit-frame-pointer)
 endif()
 

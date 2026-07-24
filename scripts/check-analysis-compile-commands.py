@@ -16,11 +16,73 @@ def command_tokens(entry: dict[str, object]) -> list[str]:
     raise ValueError("compile command has neither string arguments nor command")
 
 
+def validate_toolchain(
+    relative_source: Path, tokens: list[str], failures: list[str]
+) -> None:
+    compiler = "/opt/llvm-22.1.8/bin/clang++"
+    valid_driver = tokens[:1] == [compiler] or (
+        len(tokens) >= 2
+        and Path(tokens[0]).name == "ccache"
+        and tokens[1] == compiler
+    )
+    if not valid_driver:
+        failures.append(
+            f"{relative_source}: command does not invoke pinned Clang through ccache"
+        )
+
+    gcc_selectors = [
+        token
+        for token in tokens
+        if token.startswith(("--gcc-install-dir", "--gcc-toolchain", "--gcc-triple"))
+    ]
+    if gcc_selectors != ["--gcc-toolchain=/opt/gcc-16.1"]:
+        failures.append(
+            f"{relative_source}: invalid GCC selectors "
+            f"{', '.join(gcc_selectors) or '<none>'}"
+        )
+
+    language_standards = [token for token in tokens if token.startswith("-std=")]
+    if language_standards != ["-std=c++26"]:
+        failures.append(
+            f"{relative_source}: invalid language standards "
+            f"{', '.join(language_standards) or '<none>'}"
+        )
+    if any(token.startswith("-stdlib=") and token != "-stdlib=libstdc++" for token in tokens):
+        failures.append(f"{relative_source}: conflicting C++ standard library")
+    header_redirection_options = (
+        "--sysroot",
+        "-isysroot",
+        "-cxx-isystem",
+        "-stdlib++-isystem",
+        "--target",
+        "-target",
+    )
+    if (
+        any(
+            token in {"-nostdinc", "-nostdinc++", "-nostdlibinc"}
+            or any(
+                token == option or token.startswith(f"{option}=")
+                for option in header_redirection_options
+            )
+            for token in tokens
+        )
+        or any("/usr/include/c++" in token for token in tokens)
+    ):
+        failures.append(f"{relative_source}: conflicting C++ include search path")
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print(f"usage: {Path(sys.argv[0]).name} COMPILE_COMMANDS", file=sys.stderr)
+    if len(sys.argv) not in {2, 3} or (
+        len(sys.argv) == 3 and sys.argv[2] != "--require-rtsan-fixtures"
+    ):
+        print(
+            f"usage: {Path(sys.argv[0]).name} COMPILE_COMMANDS "
+            "[--require-rtsan-fixtures]",
+            file=sys.stderr,
+        )
         return 64
 
+    require_rtsan_fixtures = len(sys.argv) == 3
     database_path = Path(sys.argv[1])
     repository_root = Path.cwd().resolve()
     entries = json.loads(database_path.read_text(encoding="utf-8"))
@@ -33,6 +95,11 @@ def main() -> int:
         if source.is_file() and source.suffix in {".cc", ".cpp", ".cxx"}
     }
     analyzed_sources: set[Path] = set()
+    expected_rtsan_fixtures = {
+        Path("tests/rtsan_safe_fixture.cpp"),
+        Path("tests/rtsan_violation_fixture.cpp"),
+    }
+    validated_rtsan_fixtures: set[Path] = set()
     analyzed = 0
     failures: list[str] = []
     for entry in entries:
@@ -49,6 +116,62 @@ def main() -> int:
             relative_source = source_path.resolve().relative_to(repository_root)
         except ValueError:
             continue
+        tokens = command_tokens(entry)
+        if require_rtsan_fixtures:
+            controlled_rtsan_flags = {
+                "-fsanitize=realtime",
+                "-Werror=function-effects",
+                "-Werror=perf-constraint-implies-noexcept",
+            }
+            escaped_rtsan_flags = sorted(controlled_rtsan_flags.intersection(tokens))
+            if (
+                relative_source not in expected_rtsan_fixtures
+                and escaped_rtsan_flags
+            ):
+                failures.append(
+                    f"{relative_source}: RTSan flags escaped fixture allowlist "
+                    f"{', '.join(escaped_rtsan_flags)}"
+                )
+            disabled_effect_flags = [
+                token
+                for token in tokens
+                if token
+                in {
+                    "-Wno-function-effects",
+                    "-Wno-error=function-effects",
+                    "-Wno-perf-constraint-implies-noexcept",
+                    "-Wno-error=perf-constraint-implies-noexcept",
+                }
+            ]
+            if disabled_effect_flags:
+                failures.append(
+                    f"{relative_source}: disabled function-effect enforcement "
+                    f"{', '.join(disabled_effect_flags)}"
+                )
+        if require_rtsan_fixtures and relative_source in expected_rtsan_fixtures:
+            validated_rtsan_fixtures.add(relative_source)
+            validate_toolchain(relative_source, tokens, failures)
+            required_rtsan_flags = {
+                "-fsanitize=realtime",
+                "-fno-omit-frame-pointer",
+                "-Werror=function-effects",
+                "-Werror=perf-constraint-implies-noexcept",
+            }
+            for required_flag in sorted(required_rtsan_flags):
+                if tokens.count(required_flag) != 1:
+                    failures.append(
+                        f"{relative_source}: expected exactly one {required_flag}"
+                    )
+            other_sanitizers = [
+                token
+                for token in tokens
+                if token.startswith("-fsanitize=") and token != "-fsanitize=realtime"
+            ]
+            if other_sanitizers:
+                failures.append(
+                    f"{relative_source}: conflicting sanitizers "
+                    f"{', '.join(other_sanitizers)}"
+                )
         if relative_source.parent.parts[:1] != ("src",) or relative_source.suffix not in {
             ".cc",
             ".cpp",
@@ -58,54 +181,7 @@ def main() -> int:
 
         analyzed += 1
         analyzed_sources.add(source_path.resolve())
-        tokens = command_tokens(entry)
-        compiler = "/opt/llvm-22.1.8/bin/clang++"
-        valid_driver = tokens[:1] == [compiler] or (
-            len(tokens) >= 2
-            and Path(tokens[0]).name == "ccache"
-            and tokens[1] == compiler
-        )
-        if not valid_driver:
-            failures.append(f"{relative_source}: command does not invoke pinned Clang through ccache")
-
-        gcc_selectors = [
-            token
-            for token in tokens
-            if token.startswith(("--gcc-install-dir", "--gcc-toolchain", "--gcc-triple"))
-        ]
-        if gcc_selectors != ["--gcc-toolchain=/opt/gcc-16.1"]:
-            failures.append(
-                f"{relative_source}: invalid GCC selectors {', '.join(gcc_selectors) or '<none>'}"
-            )
-
-        language_standards = [token for token in tokens if token.startswith("-std=")]
-        if language_standards != ["-std=c++26"]:
-            failures.append(
-                f"{relative_source}: invalid language standards "
-                f"{', '.join(language_standards) or '<none>'}"
-            )
-        if any(token.startswith("-stdlib=") and token != "-stdlib=libstdc++" for token in tokens):
-            failures.append(f"{relative_source}: conflicting C++ standard library")
-        header_redirection_options = (
-            "--sysroot",
-            "-isysroot",
-            "-cxx-isystem",
-            "-stdlib++-isystem",
-            "--target",
-            "-target",
-        )
-        if (
-            any(
-                token in {"-nostdinc", "-nostdinc++", "-nostdlibinc"}
-                or any(
-                    token == option or token.startswith(f"{option}=")
-                    for option in header_redirection_options
-                )
-                for token in tokens
-            )
-            or any("/usr/include/c++" in token for token in tokens)
-        ):
-            failures.append(f"{relative_source}: conflicting C++ include search path")
+        validate_toolchain(relative_source, tokens, failures)
 
     if analyzed == 0:
         failures.append("no project src/*.{cc,cpp,cxx} compile commands found")
@@ -113,6 +189,11 @@ def main() -> int:
         failures.append(
             f"{missing_source.relative_to(repository_root)}: no compile command"
         )
+    if require_rtsan_fixtures:
+        for missing_fixture in sorted(
+            expected_rtsan_fixtures.difference(validated_rtsan_fixtures)
+        ):
+            failures.append(f"{missing_fixture}: no RTSan compile command")
     if failures:
         print("invalid analysis compilation database:", file=sys.stderr)
         for failure in failures:

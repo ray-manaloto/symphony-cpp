@@ -239,4 +239,7 @@ RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
           -std=c++26 -dM -E -x c++ - \
       | grep -Fx '#define _GLIBCXX_RELEASE 16' \
  && ./scripts/check-tidy.sh \
+ && cmake --workflow --fresh --preset clang-rtsan \
+ && python3 ./scripts/check-analysis-compile-commands.py \
+      build/clang-rtsan/compile_commands.json --require-rtsan-fixtures \
  && ccache --show-stats

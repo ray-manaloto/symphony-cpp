@@ -80,6 +80,16 @@
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/clang-analysis.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-analysis"
       }
+    },
+    {
+      "name": "clang-rtsan",
+      "inherits": "clang-analysis",
+      "binaryDir": "${sourceDir}/build/clang-rtsan",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "SYMPHONY_ENABLE_RTSAN": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -131,6 +141,15 @@
       "name": "clang-analysis",
       "configurePreset": "clang-analysis",
       "jobs": 4
+    },
+    {
+      "name": "clang-rtsan",
+      "configurePreset": "clang-rtsan",
+      "jobs": 2,
+      "targets": [
+        "symphony_rtsan_safe_fixture",
+        "symphony_rtsan_violation_fixture"
+      ]
     }
   ],
   "testPresets": [
@@ -192,6 +211,26 @@
         "include": {
           "name": "symphony_p2996_tests"
         }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 1,
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "clang-rtsan",
+      "configurePreset": "clang-rtsan",
+      "filter": {
+        "include": {
+          "name": "^symphony_rtsan_"
+        }
+      },
+      "environment": {
+        "LLVM_SYMBOLIZER_PATH": "/opt/llvm-22.1.8/bin/llvm-symbolizer",
+        "RTSAN_OPTIONS": "halt_on_error=true:abort_on_error=false:verify_interceptors=true:symbolize=true:fast_unwind_on_fatal=true:color=never"
       },
       "output": {
         "outputOnFailure": true
@@ -285,6 +324,23 @@
         {
           "type": "test",
           "name": "clang-reflection"
+        }
+      ]
+    },
+    {
+      "name": "clang-rtsan",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "clang-rtsan"
+        },
+        {
+          "type": "build",
+          "name": "clang-rtsan"
+        },
+        {
+          "type": "test",
+          "name": "clang-rtsan"
         }
       ]
     }

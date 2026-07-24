@@ -23,8 +23,38 @@ fi
 grep -Fq \
   'cmake --fresh --preset clang-analysis' \
   "${containerfile}"
+grep -Fq 'cmake --workflow --fresh --preset clang-rtsan' "${containerfile}"
 grep -Fq 'cmake --fresh --preset ${preset}' "${devcontainer_runner}"
+grep -Fq 'readonly preset="clang-rtsan"' "${devcontainer_runner}"
 grep -Fq "grep -Fx '#define _GLIBCXX_RELEASE 16'" "${containerfile}"
+grep -Fq '"name": "clang-rtsan"' "${presets}"
+grep -Fq '"SYMPHONY_ENABLE_RTSAN": "ON"' "${presets}"
+grep -Fq '"symphony_rtsan_safe_fixture"' "${presets}"
+grep -Fq '"symphony_rtsan_violation_fixture"' "${presets}"
+grep -Fq '"name": "^symphony_rtsan_"' "${presets}"
+grep -Fq \
+  '"RTSAN_OPTIONS": "halt_on_error=true:abort_on_error=false:verify_interceptors=true:symbolize=true:fast_unwind_on_fatal=true:color=never"' \
+  "${presets}"
+
+readonly project_cmake=CMakeLists.txt
+readonly rtsan_probe=cmake/CheckRealtimeSanitizer.cmake
+readonly rtsan_failure_driver=cmake/ExpectRtsanFailure.cmake
+readonly test_cmake=tests/CMakeLists.txt
+grep -Fq 'add_library(symphony_rtsan_options INTERFACE)' "${project_cmake}"
+grep -Fq -- '-Werror=function-effects' "${project_cmake}"
+grep -Fq -- '-Werror=perf-constraint-implies-noexcept' "${project_cmake}"
+grep -Fq '__has_feature(realtime_sanitizer)' "${rtsan_probe}"
+grep -Fq '#include <sanitizer/rtsan_interface.h>' "${rtsan_probe}"
+grep -Fq 'SYMPHONY_RTSAN_ACCEPTED_MISSING_NOEXCEPT' "${rtsan_probe}"
+grep -Fq 'SYMPHONY_RTSAN_ACCEPTED_ALLOCATION' "${rtsan_probe}"
+grep -Fq 'if("${program_result}" STREQUAL "0")' "${rtsan_failure_driver}"
+grep -Fq 'program_output MATCHES "${EXPECTED_REPORT}"' "${rtsan_failure_driver}"
+test "$(grep -Foc 'symphony_rtsan_options)' "${test_cmake}")" -eq 2
+if grep -A8 -F 'target_compile_options(symphony_options INTERFACE' \
+    "${project_cmake}" | grep -Fq -- '-fsanitize=realtime'; then
+  echo "RTSan instrumentation escaped the fixture-only options target" >&2
+  exit 1
+fi
 
 "${verifier}" "clang-format version 22.1.8"
 "${verifier}" \
@@ -113,6 +143,90 @@ EOF
   "${compile_commands_verifier}" compile_commands.json
 )
 cp "${fixture_root}/compile_commands.json" "${fixture_root}/compile_commands.valid.json"
+
+mkdir -p "${fixture_root}/tests"
+touch "${fixture_root}/tests/rtsan_safe_fixture.cpp" \
+  "${fixture_root}/tests/rtsan_violation_fixture.cpp"
+python3 - \
+  "${fixture_root}/compile_commands.valid.json" \
+  "${fixture_root}/compile_commands.rtsan.json" <<'PY'
+import json
+import sys
+
+source, destination = sys.argv[1:]
+with open(source, encoding="utf-8") as stream:
+    database = json.load(stream)
+root = database[0]["directory"]
+for fixture in ("rtsan_safe_fixture.cpp", "rtsan_violation_fixture.cpp"):
+    path = f"{root}/tests/{fixture}"
+    database.append(
+        {
+            "directory": root,
+            "file": path,
+            "arguments": [
+                "/opt/llvm-22.1.8/bin/clang++",
+                "--gcc-toolchain=/opt/gcc-16.1",
+                "-std=c++26",
+                "-fsanitize=realtime",
+                "-fno-omit-frame-pointer",
+                "-Werror=function-effects",
+                "-Werror=perf-constraint-implies-noexcept",
+                "-c",
+                path,
+            ],
+        }
+    )
+with open(destination, "w", encoding="utf-8") as stream:
+    json.dump(database, stream)
+PY
+(
+  cd "${fixture_root}"
+  "${compile_commands_verifier}" \
+    compile_commands.rtsan.json --require-rtsan-fixtures
+)
+for mutation in \
+  missing-fixture \
+  missing-sanitize \
+  missing-effect \
+  other-sanitizer \
+  escaped-rtsan \
+  disabled-effect; do
+  python3 - \
+    "${fixture_root}/compile_commands.rtsan.json" \
+    "${fixture_root}/compile_commands.rtsan-mutated.json" \
+    "${mutation}" <<'PY'
+import json
+import sys
+
+source, destination, mutation = sys.argv[1:]
+with open(source, encoding="utf-8") as stream:
+    database = json.load(stream)
+if mutation == "missing-fixture":
+    database.pop()
+elif mutation == "missing-sanitize":
+    database[-1]["arguments"].remove("-fsanitize=realtime")
+elif mutation == "missing-effect":
+    database[-1]["arguments"].remove("-Werror=function-effects")
+elif mutation == "other-sanitizer":
+    database[-1]["arguments"].append("-fsanitize=thread")
+elif mutation == "escaped-rtsan":
+    database[0]["arguments"].append("-fsanitize=realtime")
+elif mutation == "disabled-effect":
+    database[-1]["arguments"].append("-Wno-function-effects")
+else:
+    raise ValueError(f"unknown mutation: {mutation}")
+with open(destination, "w", encoding="utf-8") as stream:
+    json.dump(database, stream)
+PY
+  if (
+    cd "${fixture_root}"
+    "${compile_commands_verifier}" \
+      compile_commands.rtsan-mutated.json --require-rtsan-fixtures 2>/dev/null
+  ); then
+    echo "accepted invalid RTSan compile command mutation: ${mutation}" >&2
+    exit 1
+  fi
+done
 
 touch "${fixture_root}/src/unlisted.cpp"
 if (
