@@ -36,6 +36,7 @@ agent:
   max_concurrent_agents: 1
   max_turns: 4
   max_retry_backoff_ms: 300000
+  # OpenSymphony v2.10 extension; Draft v1 uses codex.stall_timeout_ms below.
   stall_timeout_ms: 300000
 
 codex:
@@ -45,6 +46,7 @@ codex:
   escalation_reasoning_effort: xhigh
   repeated_failure_reasoning_effort: max
   context_rollover_percent: 65
+  stall_timeout_ms: 300000
 
 routing:
   harness: codex_app_server

@@ -39,13 +39,24 @@ static ut::suite workflow_tests = [] {
     const auto path =
         temp_workflow("---\npolling:\n  interval_ms: 250\nworkspace:\n  root: "
                       "$WORKSPACE_ROOT\nagent:\n  max_concurrent_agents: 3\n  max_turns: "
-                      "7\nhooks:\n  timeout_ms: 42\n  before_run: |\n    echo "
-                      "fixture\ncodex:\n  command: codex app-server "
+                      "7\n  max_retry_backoff_ms: 12345"
+                      "\n  stall_timeout_ms: 4444\ncodex:\n  command: codex app-server "
                       "--fixture\n  model: gpt-5.6-sol\n  reasoning_effort: high"
                       "\n  escalation_model: gpt-5.6-sol"
                       "\n  escalation_reasoning_effort: xhigh"
                       "\n  repeated_failure_reasoning_effort: max"
                       "\n  context_rollover_percent: 70"
+                      "\n  approval_policy: never"
+                      "\n  thread_sandbox: workspace-write"
+                      "\n  turn_sandbox_policy: '{\"type\":\"workspaceWrite\"}'"
+                      "\n  turn_timeout_ms: 1111"
+                      "\n  read_timeout_ms: 2222"
+                      "\n  stall_timeout_ms: 3333"
+                      "\nhooks:\n  timeout_ms: 42"
+                      "\n  after_create: create"
+                      "\n  before_run: |\n    echo fixture"
+                      "\n  after_run: cleanup"
+                      "\n  before_remove: remove"
                       "\nfuture_extension:\n  enabled: true\n---\nWork on {{ "
                       "issue.identifier }} attempt {{ attempt }}.\n");
     FakeEnvironment env;
@@ -55,8 +66,13 @@ static ut::suite workflow_tests = [] {
     ut::expect(document.config.workspace.root == std::filesystem::path{"/tmp/symphony-fixtures"});
     ut::expect(document.config.agent.max_concurrent_agents == 3U);
     ut::expect(document.config.agent.max_turns == 7U);
+    ut::expect(document.config.agent.max_retry_backoff.count() == 12345);
     ut::expect(document.config.hooks.timeout.count() == 42);
+    ut::expect(document.config.hooks.after_create == std::optional<std::string>{"create"});
     ut::expect(document.config.hooks.before_run->find("echo fixture") != std::string::npos);
+    ut::expect(document.config.hooks.after_run == std::optional<std::string>{"cleanup"});
+    ut::expect(document.config.hooks.before_remove == std::optional<std::string>{"remove"});
+    ut::expect(document.config.codex.command == std::string{"codex app-server --fixture"});
     ut::expect(document.config.codex.model == std::optional<std::string>{"gpt-5.6-sol"});
     ut::expect(document.config.codex.reasoning_effort == std::optional<std::string>{"high"});
     ut::expect(document.config.codex.escalation_model == std::optional<std::string>{"gpt-5.6-sol"});
@@ -65,6 +81,14 @@ static ut::suite workflow_tests = [] {
     ut::expect(document.config.codex.repeated_failure_reasoning_effort ==
                std::optional<std::string>{"max"});
     ut::expect(document.config.codex.context_rollover_percent == std::optional<std::uint32_t>{70});
+    ut::expect(document.config.codex.approval_policy == std::optional<std::string>{"never"});
+    ut::expect(document.config.codex.thread_sandbox ==
+               std::optional<std::string>{"workspace-write"});
+    ut::expect(document.config.codex.turn_sandbox_policy ==
+               std::optional<std::string>{R"({"type":"workspaceWrite"})"});
+    ut::expect(document.config.codex.turn_timeout.count() == 1111);
+    ut::expect(document.config.codex.read_timeout.count() == 2222);
+    ut::expect(document.config.codex.stall_timeout.count() == 3333);
     ut::expect(document.prompt.find("issue.identifier") != std::string::npos);
     std::filesystem::remove(path);
   };

@@ -87,4 +87,14 @@ if(SYMPHONY_ENABLE_REFLECTION)
     symphony_meta symphony_reflection_options ut::ut)
   add_test(NAME symphony_codex_protocol_reflection_tests
     COMMAND symphony_codex_protocol_reflection_tests)
+
+  add_executable(symphony_workflow_dto_reflection_tests
+    test_main.cpp
+    workflow_dto_reflection_tests.cpp)
+  target_include_directories(symphony_workflow_dto_reflection_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/workflow)
+  target_link_libraries(symphony_workflow_dto_reflection_tests PRIVATE
+    symphony_meta symphony_reflection_options ut::ut)
+  add_test(NAME symphony_workflow_dto_reflection_tests
+    COMMAND symphony_workflow_dto_reflection_tests)
 endif()

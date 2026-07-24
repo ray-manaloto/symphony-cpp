@@ -1,7 +1,7 @@
 # Research sources and ingestion checklist
 
 Primary sources define behavior; comparisons only identify possible gaps. Accessed 2026-07-22
-through 2026-07-23.
+through 2026-07-24.
 
 The agent model and effort recommendation additionally uses the current
 [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model),
