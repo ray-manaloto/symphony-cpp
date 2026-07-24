@@ -78,7 +78,36 @@ RUN compile_jobs="$(nproc)" \
  && test -f /opt/clang-p2996/include/c++/v1/meta \
  && rm -rf /tmp/llvm-build /tmp/llvm-project
 
+COPY tests/fixtures/p2996_reflection_probe.cpp /tmp/p2996-reflection-probe.cpp
+RUN /opt/clang-p2996/bin/clang++ \
+      -std=c++26 -stdlib=libc++ -freflection -fexpansion-statements \
+      -fuse-ld=lld /tmp/p2996-reflection-probe.cpp \
+      -Wl,-rpath,/opt/clang-p2996/lib/x86_64-unknown-linux-gnu \
+      -Wl,-rpath,/opt/clang-p2996/lib \
+      -o /tmp/p2996-reflection-probe \
+ && /opt/clang-p2996/bin/clang++ \
+      -std=c++26 -stdlib=libc++ -freflection -fexpansion-statements \
+      -fuse-ld=lld /tmp/p2996-reflection-probe.cpp \
+      -Wl,-rpath,/opt/clang-p2996/lib/x86_64-unknown-linux-gnu \
+      -Wl,-rpath,/opt/clang-p2996/lib \
+      -o /tmp/p2996-link-probe -### 2>&1 \
+      | grep -Fq '"/opt/clang-p2996/bin/ld.lld"' \
+ && LD_LIBRARY_PATH=/opt/clang-p2996/lib/x86_64-unknown-linux-gnu:/opt/clang-p2996/lib \
+      ldd /tmp/p2996-reflection-probe \
+      | tee /tmp/p2996-runtime-links \
+      | grep -Eq 'libc\+\+\.so\.1 => /opt/clang-p2996/' \
+ && grep -Eq 'libc\+\+abi\.so\.1 => /opt/clang-p2996/' /tmp/p2996-runtime-links \
+ && grep -Eq 'libunwind\.so\.1 => /opt/clang-p2996/' /tmp/p2996-runtime-links \
+ && LD_LIBRARY_PATH=/opt/clang-p2996/lib/x86_64-unknown-linux-gnu:/opt/clang-p2996/lib \
+      /tmp/p2996-reflection-probe \
+ && rm /tmp/p2996-reflection-probe /tmp/p2996-reflection-probe.cpp \
+      /tmp/p2996-runtime-links
+
 FROM scratch AS clang-p2996-artifact
+ARG CLANG_P2996_COMMIT=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
+LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-cpp" \
+      org.opencontainers.image.version="${CLANG_P2996_COMMIT}" \
+      org.opencontainers.image.description="Content-addressed Bloomberg clang-p2996 compiler artifact for symphony-cpp"
 COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
 
 FROM compiler-build-base AS symphony-clang-p2996

@@ -21,6 +21,8 @@ Primary sources:
 - [Official prebuild guidance](https://containers.dev/guide/prebuild)
 - [`devcontainers/ci` supported prebuild and run modes](https://github.com/devcontainers/ci#dev-container-build-and-run-devcontainersci)
 - [GitHub's Docker image publication workflow](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
+- [GitHub Actions cache limits and eviction](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
+- [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [Docker GitHub Actions cache backend](https://docs.docker.com/build/cache/backends/gha/)
 - [Docker cache optimization](https://docs.docker.com/build/cache/optimize/)
 - [Docker cache-only exporter](https://docs.docker.com/build/exporters/#cache-only-export)
@@ -115,9 +117,20 @@ sequenceDiagram
     participant R as GHCR
     participant P as Reviewable digest pin
 
-    O->>A: Dispatch the guarded three-lineage matrix
-    A->>B: Select one pinned lineage and native architecture phase
-    B->>V: Build a descendant of each publishable base
+    O->>A: Dispatch one guarded lineage and native architecture
+    A->>R: Probe the compiler recipe tag
+    alt compiler package exists
+        R-->>A: Return the package manifest
+    else package is absent and explicit package seed is true
+        A->>B: Build and probe the isolated compiler artifact once
+        B->>R: Push the recipe-tagged artifact
+        R-->>A: Return the package manifest
+    else package is absent and package seed is false
+        A-->>O: Fail closed before compiling
+    end
+    A->>A: Select the digest captured by the probe or push
+    A->>B: Inject the package reference plus captured digest as a named build context
+    B->>V: Build a validation descendant from that exact artifact
     V->>V: Verify compiler, CMake, C++26/reflection, and runtime
     V->>V: Bind the checkout and run required CMake workflows
     V-->>B: Cache-only result; do not import into Docker Engine
@@ -141,11 +154,19 @@ backend. The matrix therefore bridges only the lineage/architecture-scoped 750 M
 through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installed trees, archives,
 and build trees remain local to one builder.
 
-The interim p2996 cache exports only a `FROM scratch` artifact containing `/opt/clang-p2996`, keyed
-by the exact compiler commit and cache-recipe revision. An explicit exact-lane refresh seeds it
-fail-closed; ordinary validation reads without rewriting the scope. The Codex Universal base stays
-on its authoritative GHCR digest and outside this artifact cache. Cross-run reuse remains
-provisional until a fresh-builder second run proves that `clang-builder` did not execute.
+The first durable implementation exports only a `FROM scratch` OCI artifact containing
+`/opt/clang-p2996` to the separate `symphony-toolchain-clang-p2996` package, keyed by the exact
+compiler commit, architecture, and deterministic SHA-256 of the pinned base, compiler recipe,
+runtime set, and prepublication probe.
+The artifact target runs compiler-integrity, C++26 reflection, LLD-selection, runtime-link, and
+execution probes before it can be pushed. An explicit exact-lane package seed publishes it;
+ordinary validation fails closed on a miss and never rewrites it. The artifact job carries the
+manifest digest returned by the initial probe or push directly into validation without re-reading
+the mutable tag. Validation injects `tag@digest` as a BuildKit named context, so later source,
+CMake, vcpkg, or test failures do not discard the expensive compiler. The Codex Universal
+base stays on its authoritative GHCR digest and outside the artifact package. A fresh-builder
+restore-only run must prove that `clang-builder` did not execute before this pattern is extended to
+native GCC 16.1 artifacts.
 
 GCC and LLVM qualification still persist their stable bases before source validation. These are
 failure-ordering boundaries, not final supply: run `30094944459` proved an 11 GB LLVM/GCC result was
@@ -242,12 +263,17 @@ that a new compiler image is publishable.
 ## Cache policy
 
 - Buildx uses a distinct GitHub Actions cache scope per toolchain lineage, architecture, and policy
-  version. P2996 additionally keys its scratch artifact by compiler commit and recipe revision and
-  writes it only during an explicit refresh.
-  `mode=min` remains required because exporting complete Codex-derived images causes repository
-  cache eviction and compiler rebuilds.
+  version only for short-lived migration or rebuild acceleration. P2996 keys its durable scratch
+  OCI artifact by compiler commit, architecture, and deterministic recipe hash and writes it only
+  during an explicit package seed. It does not export the multi-gigabyte compiler artifact back to the GitHub
+  Actions cache.
 - Source CI keeps bounded `actions/cache` entries for vcpkg archives and ccache. It does not persist
   configured CI build trees.
+- GitHub workflow artifacts and release ZIP files are not compiler package stores: the former are
+  run-scoped and expire, while the latter add archive splitting and a download/extract protocol
+  that Docker and devcontainers cannot consume directly. GHCR supplies OCI manifests, layers, and
+  digest-addressed consumption without spending the repository's default 10 GB Actions-cache
+  allowance.
 - Local Docker retains immutable base layers. Named volumes retain architecture/compiler-specific
   ccache and vcpkg binary archives; the workspace retains architecture-suffixed CMake/Ninja build
   trees.
