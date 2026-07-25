@@ -40,6 +40,39 @@ Accessed 2026-07-24.
       irrelevant to this standalone C++ service.
 - [ ] Update an immutable pin only after focused GCC 16.1 tests and the complete required matrix pass.
 
+## OpenSymphony
+
+OpenSymphony remains a comparative, local-only development orchestrator. It is not the normative
+Symphony specification or a C++ runtime dependency.
+
+### 2026-07-24 — kumanday/OpenSymphony
+
+- Baseline: pinned unsigned annotated tag `v2.10.0`, tag object
+  `26750bbd9aa648297a083db24fb48681a523713b`, peeled commit
+  [`0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb`](https://github.com/kumanday/OpenSymphony/commit/0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb).
+- Candidate: unsigned annotated tag `v2.10.1`, tag object
+  `530fa8fee49ec0338d4eae733876ae394b20d95c`, peeled commit
+  [`d72bb0a409c006e20f2b0d766a0def218f94cd41`](https://github.com/kumanday/OpenSymphony/commit/d72bb0a409c006e20f2b0d766a0def218f94cd41).
+- Authority: comparative orchestrator; pin moved: no.
+- Surfaces: the repository has tags but no GitHub Release objects. Discussions are disabled.
+  [Issue #227](https://github.com/kumanday/OpenSymphony/issues/227) remains open and unchanged
+  since the exact Rust 1.93 reproduction; no pull request is linked to either candidate commit or
+  the issue.
+- Delta: the candidate is two commits ahead of the baseline. One commit makes legacy DuckDB
+  code-graph catalogs tolerate absent snapshot tables; the other changes code-graph rendering and
+  bumps release metadata. Neither commit changes the missing-`gh` process classification or its
+  failing memory integration test. The repository's `main` ref still resolves to the baseline
+  commit, while `develop` contains the candidate. The only reported check on the candidate commit
+  is a changelog-sync dispatch rather than the locked Rust/Linux suite, so its commit-message test
+  claims are not regression evidence for issue #227.
+- Local impact: do not update `docs/upstream-lock.md`, rebuild the local image, or classify
+  OpenSymphony as healthy from `v2.10.1`. The complete pinned upstream suite remains blocked by
+  issue #227, and the current local image remains diagnostic-only. The code-graph fixes are
+  relevant to later full-feature acceptance but do not unblock doctor, the documented contained
+  dry run, or operational promotion.
+- Recheck: a new immutable tag, a change to issue #227, or an upstream commit that changes the
+  missing-command fixture or the two `gh` process launches.
+
 ## Environment and toolchain alignment backlog
 
 - [ ] Compare the pinned
