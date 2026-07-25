@@ -206,7 +206,7 @@ If material ambiguity remains, the request must contain:
 Do not raise model effort for missing credentials, permissions, provider access, or stale evidence.
 Those conditions remain blocked until the evidence changes.
 
-## Open owner decisions
+## Resolved owner decisions
 
 Research accessed 2026-07-25:
 
@@ -234,9 +234,16 @@ Recommendation: A. Until OpenSymphony admission, the canonical goal remains the 
 authority, GitHub owns code-delivery evidence, and Linear remains a future work-item projection.
 After fixture admission, make Linear authoritative for orchestrated work-item lifecycle and use the
 official GitHub integration for PR links/status automation. Do not install a custom tracker writer.
-Initially allow only deterministic provider-native link/status changes; admit autonomous issue
-creation or closure only after typed task, deduplication, expected-revision, idempotency, and
-read-after-write fixtures pass. Merge remains governed by exact-SHA CI/review/publication gates.
+The future autonomous allowlist is limited to creating the provider-native PR link and applying
+Linear state transitions derived from an exact linked-PR lifecycle. It excludes issue
+creation/closure, comments, labels, assignees, priority, scope, and merge. Activation additionally
+requires OpenSymphony admission, stable task/provider mappings, typed mutation proposals,
+deduplication, expected-revision, idempotency, hostile authorization fixtures, and read-after-write
+verification. Expanding that allowlist requires a new researched owner decision. Merge remains
+governed by exact-SHA CI/review/publication gates.
+
+Decision: approved by the owner on 2026-07-25 for the exact contingent allowlist above. No tracker
+mutation is activated now; every prerequisite gate remains mandatory.
 
 Deferral: remain read-only and leave Linear parity unknown; no tracker state is inferred or mutated.
 
@@ -251,6 +258,11 @@ Deferral: remain read-only and leave Linear parity unknown; no tracker state is 
 Recommendation: C, but only after the same prompt passes manually. Use an isolated worktree,
 read-only/default-denied permissions, deterministic collection, and no model on `no_delta`.
 
+Decision: combined release/event collection plus weekly reconciliation design approved by the
+owner on 2026-07-25. Actual scheduled-task creation is a separate owner-authorized action after the
+prompt, no-change behavior, a fixed read-only/default-denied permission profile, and
+isolated-worktree cleanup pass manually.
+
 Deferral: run the bounded 30-day primary-source watch only on explicit request.
 
 ### DEC-REMOTE-001: iOS Remote and Voice
@@ -262,5 +274,9 @@ Deferral: run the bounded 30-day primary-source watch only on explicit request.
 
 Recommendation: A only as an owner-enabled convenience, with **Prevent sleep while running**,
 notifications, repository evidence as authority, and no relaxation of task permissions.
+
+Decision: owner-enabled use approved as policy on 2026-07-25. Actual pairing and app-setting
+changes are owner-performed actions. Remote/Voice never changes repository, tracker, approval, or
+goal authority.
 
 Deferral: leave Remote/Voice disabled; desktop operation is unaffected.

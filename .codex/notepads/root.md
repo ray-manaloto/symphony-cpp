@@ -109,13 +109,20 @@ Canonical durable goal checklist:
 - Primary-source decision briefs now recommend phased Linear work-item authority plus GitHub
   code-delivery authority after OpenSymphony admission, event-plus-weekly deterministic collection
   with no model on unchanged inputs, and optional owner-enabled iOS Remote/Voice for monitoring.
-  All three remain fail-closed pending owner disposition.
+  The owner approved all three recommendations on 2026-07-25. This records future policy only:
+  tracker mutation, schedule creation, OpenSymphony admission, and app-permission changes retain
+  their existing gates.
 - All five profiles parse, use unique names, disable nested agents, and pass the pinned Codex
   `--strict-config doctor` with no failed checks. Local documentation links, dependency policy,
   `git diff --check`, and quick preflight pass on current bytes.
 - Final normal review reports no findings. A broad adversarial re-review failed to checkpoint and
   was stopped; the replacement one-turn closure packet passed all seven prior finding classes.
   This reinforces the smaller-packet rule and does not justify higher effort.
+- The full pre-push hook passed, but SSH closed during the long local gate. A transport-only retry
+  skipped that already-passed hook and pushed `d71ec2340a62f3a7d445e194534997fbc43d3c31`
+  normally without force or rebase. The `gh-watch-run` skill followed exact Source CI run
+  `30172928016` to success: preflight passed in 19 seconds and GCC 16.1 source/reflection tests
+  passed in 1 minute 46 seconds.
 
 ## Active task list
 
