@@ -211,7 +211,7 @@ ARG SOURCE_REVISION=unknown
 COPY --from=gcc16-artifact-input /opt/gcc-16.1 /opt/gcc-16.1
 RUN test ! -e /opt/symphony-cpp-seed \
  && test ! -e /tmp/gcc \
- && printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
+ && printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/00-gcc-16.1.conf \
  && ldconfig \
  && ldconfig -p | grep -F 'libstdc++.so.6' | grep -F '=> /opt/gcc-16.1/lib64/libstdc++.so.6'
 ENV PATH=/opt/gcc-16.1/bin:${PATH} \

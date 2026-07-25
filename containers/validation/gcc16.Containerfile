@@ -17,10 +17,14 @@ RUN test "$(dpkg --print-architecture)" = "${TARGETARCH}" \
  && printf '%s\n' '#include <iostream>' \
       'int main() { std::cout << 16; }' \
       | g++ -std=c++26 -freflection -x c++ - -o /tmp/gcc-runtime-check \
- && ldd /tmp/gcc-runtime-check \
-      | grep -F 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
- && test "$(/tmp/gcc-runtime-check)" = "16" \
- && rm /tmp/gcc-runtime-check
+ && env -u LD_LIBRARY_PATH ldd /tmp/gcc-runtime-check \
+      | tee /tmp/gcc-runtime-links \
+ && grep -Fq 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
+      /tmp/gcc-runtime-links \
+ && grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
+      /tmp/gcc-runtime-links \
+ && test "$(env -u LD_LIBRARY_PATH /tmp/gcc-runtime-check)" = "16" \
+ && rm /tmp/gcc-runtime-check /tmp/gcc-runtime-links
 
 RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
     --mount=type=cache,id=gcc-${TARGETARCH}-ccache,target=/var/cache/ccache,sharing=locked \

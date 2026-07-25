@@ -665,6 +665,11 @@ grep -Fq 'ENTRYPOINT []' <<<"${gcc_runtime}"
 test "$(grep -Ec '^COPY ' <<<"${gcc_runtime}")" -eq 1
 grep -Fq 'COPY --from=gcc16-artifact-input /opt/gcc-16.1 /opt/gcc-16.1' \
   <<<"${gcc_runtime}"
+grep -Fq '/etc/ld.so.conf.d/00-gcc-16.1.conf' <<<"${gcc_runtime}"
+if grep -Fq 'LD_LIBRARY_PATH=' <<<"${gcc_runtime}"; then
+  echo "GCC runtime must establish deterministic default loader ordering without LD_LIBRARY_PATH" >&2
+  exit 1
+fi
 gcc_artifact_input="$(stage_block gcc16-artifact-input)"
 test "${gcc_artifact_input}" = 'FROM scratch AS gcc16-artifact-input'
 if grep -Fq 'COPY --from=symphony-gcc16' <<<"${gcc_runtime}"; then
@@ -707,6 +712,12 @@ test "$(
 )" = 'FROM scratch AS gcc16-validation'
 test "$(grep -Ec '^(COPY|ADD)[[:space:]]' "${gcc16_validation_containerfile}")" -eq 1
 grep -Fq 'CCACHE_COMPILERCHECK=content' "${gcc16_validation_containerfile}"
+grep -Fq 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
+  "${gcc16_validation_containerfile}"
+grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
+  "${gcc16_validation_containerfile}"
+grep -Fq 'test "$(env -u LD_LIBRARY_PATH /tmp/gcc-runtime-check)" = "16"' \
+  "${gcc16_validation_containerfile}"
 grep -Fq 'vcpkg_cache_bytes="$(du -sb /var/cache/vcpkg | cut -f1)"' \
   "${gcc16_validation_containerfile}"
 grep -Fq "printf 'vcpkg-cache bytes=%s files=%s" \
