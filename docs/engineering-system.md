@@ -276,7 +276,10 @@ experimental clang-p2996 fork.
 ### Phase 1: reproducible source quality
 
 - [x] Pin one stock LLVM analysis image and version.
-- [x] Commit `.clang-format`; run exact `clang-format --dry-run --Werror` over tracked C/C++ sources.
+- [x] Commit `.clang-format`; run exact `clang-format --dry-run --Werror` over project-owned C/C++
+  sources. The one byte-stable compiler recipe probe is temporarily exempt by exact path because
+  its bytes are part of two already-published immutable artifact identities; ordinary fixtures
+  remain covered.
 - [x] Commit a narrow `.clang-tidy`; verify its configuration, use a reflection-disabled compile
   database, exclude third-party headers, and start with analyzer, bug-prone, performance,
   portability, selected concurrency/CERT, and include-cleaner checks.
@@ -335,8 +338,8 @@ alternative if its external service and webhook ownership become worthwhile.
 3. [x] Cover Codex startup and workflow decode DTO structure/name/type contracts at compile time
    under authoritative GCC 16.1. Keep the clang-p2996 differential target dependency-free until the
    pinned fork can compile Glaze.
-4. [ ] Generate exhaustive enum-name tables through the selected reflection seam rather than adding a
-   second enum-reflection library.
+4. [x] Generate exhaustive runtime-allocation-free enum-name tables through the selected reflection
+   seam rather than adding a second enum-reflection library.
 5. [ ] Evaluate `stdexec` structured completion only as a deletion test for existing detached-work and
    stop bookkeeping; preserve keyed cancellation and exact GCC 16.1 evidence.
 

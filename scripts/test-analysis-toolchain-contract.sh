@@ -85,11 +85,16 @@ fi
 fixture_root="$(mktemp -d)"
 readonly fixture_root
 trap 'rm -rf "${fixture_root}"' EXIT
-mkdir -p "${fixture_root}/include/project" "${fixture_root}/src" "${fixture_root}/tests"
+mkdir -p \
+  "${fixture_root}/include/project" \
+  "${fixture_root}/src" \
+  "${fixture_root}/tests/fixtures"
 touch "${fixture_root}/include/project/api.hpp" \
   "${fixture_root}/src/main.cpp" \
   "${fixture_root}/src/private.hpp" \
   "${fixture_root}/src/ignored.md" \
+  "${fixture_root}/tests/fixtures/formatted_fixture.cpp" \
+  "${fixture_root}/tests/fixtures/p2996_reflection_probe.cpp" \
   "${fixture_root}/tests/main_tests.cxx" \
   "${fixture_root}/tests/support.hh"
 git_free_sources="$(
@@ -102,11 +107,16 @@ expected_sources="$(
     include/project/api.hpp \
     src/main.cpp \
     src/private.hpp \
+    tests/fixtures/formatted_fixture.cpp \
     tests/main_tests.cxx \
     tests/support.hh
 )"
 readonly expected_sources
 test "${git_free_sources}" = "${expected_sources}"
+if grep -Fxq 'tests/fixtures/p2996_reflection_probe.cpp' <<<"${git_free_sources}"; then
+  echo "byte-stable compiler recipe probe escaped its exact formatter exemption" >&2
+  exit 1
+fi
 
 (
   cd "${fixture_root}"

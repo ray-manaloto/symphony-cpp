@@ -83,6 +83,15 @@ dependency installation. Warning diagnostics remain report-only at this phase; b
 reject nested or runner-supplied configuration and warning promotion, while compiler, configuration,
 and toolchain-selection errors remain fatal.
 
+### Byte-stable compiler recipe probe
+
+The exact path `tests/fixtures/p2996_reflection_probe.cpp` is temporarily excluded from formatting
+because its byte content is part of both already-published compiler artifact recipe identities. It
+remains compiled and executed by the GCC 16.1 and clang-p2996 gates, and contract tests require the
+exemption to cover only that path. Changing its bytes remains fail-closed until compiler payload
+identity and probe-qualification identity are split. Every other project-owned C++ source,
+including ordinary fixtures, remains in the exact LLVM 22.1.8 formatting gate.
+
 The sibling `clang-rtsan` preset enables Clang 22.1.8 Function Effect Analysis and compiler-rt
 RealtimeSanitizer only for explicit provider fixtures. Configure first proves the compiler-rt
 interface and runtime by compiling and linking with `-fsanitize=realtime`; the fixture target makes
