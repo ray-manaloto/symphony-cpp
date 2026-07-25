@@ -34,4 +34,20 @@ template <typename T> [[nodiscard]] consteval auto fields() {
 #endif
 }
 
+template <typename E> [[nodiscard]] consteval auto enum_names() {
+#if defined(SYMPHONY_ENABLE_REFLECTION)
+  static constexpr auto enumerators =
+      std::define_static_array(std::meta::enumerators_of(^^E));
+  std::array<std::string_view, enumerators.size()> result{};
+  [[maybe_unused]] std::size_t index = 0;
+  template for (constexpr auto enumerator : enumerators) {
+    result[index++] = std::meta::identifier_of(enumerator);
+  }
+  return result;
+#else
+  static_assert(sizeof(E) == 0, "symphony_meta reflection requires SYMPHONY_ENABLE_REFLECTION");
+  return std::array<std::string_view, 0>{};
+#endif
+}
+
 } // namespace symphony::meta

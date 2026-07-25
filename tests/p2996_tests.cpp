@@ -1,6 +1,9 @@
 #include <ut/ut.hpp>
 
+#include <array>
 #include <cstddef>
+#include <string_view>
+#include <type_traits>
 
 #include "symphony/meta/reflection.hpp"
 
@@ -13,6 +16,9 @@ struct DifferentialConfig {
   int poll_interval_ms;
   bool enabled;
 };
+
+enum class DifferentialState { queued, running, stopped };
+enum class EmptyDifferentialState {};
 
 ut::suite p2996_tests = [] {
   ut::test("P2996 differential enumerates fields without registration") = [] {
@@ -28,6 +34,27 @@ ut::suite p2996_tests = [] {
     ut::expect(fields[0].type == "int");
     ut::expect(fields[1].name == "enabled");
     ut::expect(fields[1].type == "bool");
+  };
+
+  ut::test("P2996 differential generates exhaustive runtime-allocation-free enum names") = [] {
+    static constexpr auto names = symphony::meta::enum_names<DifferentialState>();
+    static_assert(
+        std::is_same_v<decltype(names), const std::array<std::string_view, std::size_t{3}>>);
+    static_assert(names.size() == std::size_t{3});
+    static_assert(names[0] == std::string_view{"queued"});
+    static_assert(names[1] == std::string_view{"running"});
+    static_assert(names[2] == std::string_view{"stopped"});
+
+    ut::expect(names.size() == std::size_t{3});
+    ut::expect(names[0] == std::string_view{"queued"});
+    ut::expect(names[1] == std::string_view{"running"});
+    ut::expect(names[2] == std::string_view{"stopped"});
+
+    static constexpr auto empty_names = symphony::meta::enum_names<EmptyDifferentialState>();
+    static_assert(
+        std::is_same_v<decltype(empty_names), const std::array<std::string_view, std::size_t{0}>>);
+    static_assert(empty_names.empty());
+    ut::expect(empty_names.empty());
   };
 };
 } // namespace symphony::test

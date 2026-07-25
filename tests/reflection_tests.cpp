@@ -1,11 +1,13 @@
 #include <glaze/json/generic.hpp>
 #include <ut/ut.hpp>
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "symphony/meta/meta.hpp"
 
@@ -15,6 +17,9 @@ struct ReflectedConfig {
   int poll_interval_ms;
   bool enabled;
 };
+
+enum class ReflectedState { queued, running, stopped };
+enum class EmptyReflectedState {};
 
 glz::generic_u64 parse_json(const std::string_view input) {
   glz::generic_u64 value;
@@ -66,6 +71,27 @@ ut::suite reflection_tests = [] {
     ut::expect(schema_property_type(schema, "poll_interval_ms") ==
                std::optional<std::string>{"integer"});
     ut::expect(schema_property_type(schema, "enabled") == std::optional<std::string>{"boolean"});
+  };
+
+  ut::test("C++26 reflection generates exhaustive runtime-allocation-free enum names") = [] {
+    static constexpr auto names = symphony::meta::enum_names<ReflectedState>();
+    static_assert(
+        std::is_same_v<decltype(names), const std::array<std::string_view, std::size_t{3}>>);
+    static_assert(names.size() == std::size_t{3});
+    static_assert(names[0] == std::string_view{"queued"});
+    static_assert(names[1] == std::string_view{"running"});
+    static_assert(names[2] == std::string_view{"stopped"});
+
+    ut::expect(names.size() == std::size_t{3});
+    ut::expect(names[0] == std::string_view{"queued"});
+    ut::expect(names[1] == std::string_view{"running"});
+    ut::expect(names[2] == std::string_view{"stopped"});
+
+    static constexpr auto empty_names = symphony::meta::enum_names<EmptyReflectedState>();
+    static_assert(
+        std::is_same_v<decltype(empty_names), const std::array<std::string_view, std::size_t{0}>>);
+    static_assert(empty_names.empty());
+    ut::expect(empty_names.empty());
   };
 };
 } // namespace symphony::test
