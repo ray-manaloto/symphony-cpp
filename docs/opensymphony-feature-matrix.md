@@ -6,9 +6,15 @@ complete feature surface of the pinned release and the evidence required before
 any feature is called working or deliberately disabled. A feature is not omitted
 merely because the initial Codex route does not need it.
 
+Current promotion is blocked by the mandatory pinned Linux workspace suite's
+missing-`gh` integration failure, tracked in upstream
+[issue #227](https://github.com/kumanday/OpenSymphony/issues/227). Candidate
+image evidence is diagnostic only and cannot establish upstream health or an
+operational image.
+
 | Feature | Decision | Required evidence |
 | --- | --- | --- |
-| Immutable v2.10.0 build | Adopt locally | Exact commit checkout, locked full Rust workspace tests, release build, image smoke tests, and an immutable local image ID; OpenSymphony is not published by this repository |
+| Immutable v2.10.0 build | Adopt locally | Exact commit checkout, locked full Rust workspace tests, release build, image smoke tests, and an immutable local image ID; OpenSymphony is not published by this repository. Current v2.10.0 promotion remains blocked by upstream [issue #227](https://github.com/kumanday/OpenSymphony/issues/227); only an explicitly unverified diagnostic candidate may exist until the unchanged locked suite passes |
 | Target repository `init` | Adopt through disposable fixture | Non-interactive fixture bootstrap fetches the immutable template pin, produces `WORKFLOW.md`, config, memory policy, and memory skill, and asserts the selected project, branch, review provider, memory policy, and OpenHands tool path without touching this checkout |
 | Template `update` / self-update | Prove in a disposable fixture, keep immutable runtime policy | Exercise installation, template/skill/memory changes, review-provider changes, and no-op/idempotence against a disposable home and Git repository; production-like containers remain rebuilt from reviewed pins |
 | `doctor` | Adopt with isolated mutation boundary | Prove static, managed-OpenHands, `--live-openhands`, and `--rehydrate` paths using disposable home, tool, workspace, and conversation volumes; static doctor creates directories and may install tooling |
@@ -21,8 +27,8 @@ merely because the initial Codex route does not need it.
 | Memory CLI and MCP server | Prove the complete read and admin surface | Exercise read tools against a read-only state copy and every mutating/admin operation against a disposable copy, including OKF and code-intelligence operations; verify bearer-token separation and state fingerprints |
 | Real run gateway and TUI | Adopt on loopback | Prove snapshots, capabilities, model status, journal/WebSocket, run detail, files/diffs/validation/approvals/timeline/logs/terminal, memory, task graph, cancel, and a bounded TUI attachment. Distinguish wired behavior from advertised capability flags |
 | Demo `daemon` | Prove and label as demo-only | Exercise loopback snapshots and sampling independently; never treat it as the real scheduler gateway |
-| Codex `debug` | Retain for operator recovery | The CLI path is exposed; a future recovery check must use an already persisted fixture thread and must not start another model turn |
-| OpenHands `debug` / `rehydrate` | Prove in disposable conversations | Exercise normal, `--app`, summarized, and no-summary recovery paths without touching retained Codex or live OpenHands state |
+| Codex `debug` | Retain for operator recovery | Against an already persisted disposable Codex fixture, prove archive-state repair plus default `codex resume` from the issue workspace without submitting a model prompt; separately prove `--app` emits the exact `codex://threads/<id>` deep link without invoking `codex resume`, and rejects an OpenHands-backed manifest |
+| OpenHands `debug` / `rehydrate` | Prove in disposable conversations | Prove default `debug ISSUE` attachment, history recovery, and bounded fake follow-up behavior; separately prove `rehydrate ISSUE` with summarized and `--no-summary` recovery. `--app` is Codex-only and must reject OpenHands manifests; do not touch retained OpenHands state |
 | Code graph / AST context | Read-only AST query-pack gate proven; persistent graph remains open | The contained gate exercises the pinned JavaScript/JSX, TypeScript/TSX, Python, and Rust query packs plus lightweight JSON/YAML/TOML/Markdown parsing with exact parser/query-pack provenance, content hashes, and zero diagnostics. C++ is explicitly unsupported. Persistent ingestion, graph construction, and graph-backed context still require separate disposable-fixture evidence |
 | Hierarchy/dependency scheduling | Retain, fixture-gated | The scheduler supports it, but multi-issue Linear mutation is outside the one-canary boundary; add a deterministic GraphQL fixture before raising concurrency |
 | Concurrent workers | Prove with isolated fixture workers | Exercise configured concurrency, scheduling, cancellation, stalls, retries, and workspace isolation with deterministic fake workers before selecting the operational default |
@@ -56,12 +62,13 @@ These are upstream capability gaps, not locally disabled features. Their
 acceptance result must be recorded as unsupported, misleading, or externally
 contained rather than marked green.
 
-The initial contained image acceptance test is
-`scripts/test-opensymphony-acceptance.sh`. It proves the Codex-route smoke,
-private memory/read-only MCP boundary, demo daemon/TUI, immutable `init`, and a
-no-model routing slice on an internal Docker network against a fake Linear
+The contained image acceptance test is
+`scripts/test-opensymphony-acceptance.sh`. When run against an admitted image
+whose complete upstream suite passed, it is required to prove the Codex-route
+smoke, private memory/read-only MCP boundary, demo daemon/TUI, immutable `init`,
+and a no-model routing slice on an internal Docker network against a fake Linear
 server that rejects every mutation and every non-allowlisted query. The
-no-model slice proves workspace creation, a successful run manifest, and the
+no-model slice must prove workspace creation, a successful run manifest, and the
 `after_create`, `before_run`, and `after_run` hook markers with zero model
 conversations, turns, threads, or tokens. Its second phase restarts the scheduler against the
 same disposable volumes after replacing the read-only fake tracker with the
@@ -75,7 +82,7 @@ deletion, or periodic cleanup idempotence, and it does not close the other
 feature-specific disposable gates above. Credential-bearing live-project dry
 runs remain a separate suffix-scoped local ceremony and never run in public CI.
 
-The same contained acceptance now proves the read-only AST query-pack sub-gate
+The same contained acceptance must prove the read-only AST query-pack sub-gate
 against ten temporary documents: Rust, TypeScript, TSX, JavaScript, JSX, Python,
 JSON, YAML, TOML, and Markdown. It requires the exact pinned provider, parser,
 and query-pack versions, SHA-256 source citations, no diagnostics, and an

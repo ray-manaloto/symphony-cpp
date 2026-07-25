@@ -4,8 +4,31 @@ set -euo pipefail
 mode="${1:-dry-run}"
 shift || true
 
+linear_api_key="${LINEAR_API_KEY:-}"
+unset LINEAR_API_KEY
+if [[ "${OPENSYMPHONY_LINEAR_KEY_STDIN:-false}" == "true" ]]; then
+  if [[ -n "${linear_api_key}" ]]; then
+    echo "refusing ambiguous OpenSymphony key injection from both environment and stdin" >&2
+    exit 2
+  fi
+  if ! IFS= read -r linear_api_key; then
+    echo "failed to read the OpenSymphony tracker key from stdin" >&2
+    exit 2
+  fi
+elif [[ "${OPENSYMPHONY_LINEAR_KEY_STDIN:-false}" != "false" ]]; then
+  echo "OPENSYMPHONY_LINEAR_KEY_STDIN must be true or false" >&2
+  exit 2
+fi
+readonly linear_api_key
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="${OPENSYMPHONY_IMAGE:-symphony-opensymphony:local}"
+requested_image="${OPENSYMPHONY_IMAGE:-symphony-opensymphony:local}"
+readonly expected_opensymphony_commit=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
+expected_build_input_sha256="$(
+  env -u GCC16_ARTIFACT_CONTEXT \
+    "${repo_root}/scripts/opensymphony-build-input-id.sh"
+)"
+readonly expected_build_input_sha256
 state_volume="${OPENSYMPHONY_STATE_VOLUME:-symphony-opensymphony-state}"
 auth_volume="${OPENSYMPHONY_CODEX_AUTH_VOLUME:-symphony-codex-auth}"
 workspaces_volume="${OPENSYMPHONY_WORKSPACES_VOLUME:-symphony-opensymphony-workspaces}"
@@ -16,6 +39,52 @@ uv_cache_volume="${OPENSYMPHONY_UV_CACHE_VOLUME:-symphony-opensymphony-uv-cache}
 runtime_cpus="${OPENSYMPHONY_RUNTIME_CPUS:-6}"
 runtime_memory="${OPENSYMPHONY_RUNTIME_MEMORY:-16g}"
 container_network="${OPENSYMPHONY_NETWORK:-}"
+
+resolve_validated_local_image() {
+  local image_id
+  local upstream_tests
+  local source_commit
+  local build_input_sha256
+
+  if ! image_id="$(
+    docker image inspect --format '{{.Id}}' "${requested_image}" 2>/dev/null
+  )"; then
+    echo "qualified OpenSymphony image is not present in the local Docker image store" >&2
+    exit 2
+  fi
+  if [[ ! "${image_id}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "local OpenSymphony image did not resolve to exactly one immutable image ID" >&2
+    exit 2
+  fi
+  if ! upstream_tests="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.upstream-tests" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${upstream_tests}" != "passed" ]]; then
+    echo "local OpenSymphony image is not descended from the complete upstream test gate" >&2
+    exit 2
+  fi
+  if ! source_commit="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.source.commit" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${source_commit}" != "${expected_opensymphony_commit}" ]]; then
+    echo "local OpenSymphony image does not contain the pinned source revision" >&2
+    exit 2
+  fi
+  if ! build_input_sha256="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.build-input.sha256" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${build_input_sha256}" != "${expected_build_input_sha256}" ]]; then
+    echo "local OpenSymphony image was not built from the current image-policy inputs" >&2
+    exit 2
+  fi
+  printf '%s' "${image_id}"
+}
+
+image="$(resolve_validated_local_image)"
+readonly image
 
 if [[ -n "${container_network}" ]] &&
   [[ ! "${container_network}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
@@ -28,7 +97,7 @@ if [[ -n "${container_network}" ]]; then
 fi
 
 require_linear_key() {
-  if [[ -z "${LINEAR_API_KEY:-}" ]]; then
+  if [[ -z "${linear_api_key}" ]]; then
     echo "LINEAR_API_KEY must be injected for this command by the configured secret manager" >&2
     exit 2
   fi
@@ -96,6 +165,7 @@ require_acceptance_volumes() {
 
 common_args=(
   --rm
+  --pull=never
   --interactive
   --workdir /target
   --cpus "${runtime_cpus}"
@@ -128,7 +198,7 @@ fi
 run_with_linear_key() {
   local entrypoint="$1"
   shift
-  printf '%s\n' "${LINEAR_API_KEY}" |
+  printf '%s\n' "${linear_api_key}" |
     docker run "${common_args[@]}" \
       --entrypoint sh \
       "${image}" \
@@ -145,6 +215,7 @@ case "${mode}" in
     fi
     login_args=(
       --rm
+      --pull=never
       --interactive
       --tty
       --read-only
@@ -206,6 +277,7 @@ case "${mode}" in
     fi
     memory_init_args=(
       --rm
+      --pull=never
       --read-only
       --cpus "${runtime_cpus}"
       --memory "${runtime_memory}"
@@ -306,16 +378,23 @@ case "${mode}" in
     if [[ "${mode}" == "dry-run" ]]; then
       require_acceptance_volumes
       run_args+=(--dry-run)
-    fi
-
-    printf '%s\n' "${LINEAR_API_KEY}" |
-      exec docker run "${common_args[@]}" \
-      --entrypoint sh \
-      --publish 127.0.0.1:2468:2468 \
-      "${image}" \
-      -euc 'IFS= read -r LINEAR_API_KEY
+      printf '%s\n' "${linear_api_key}" |
+        exec docker run "${common_args[@]}" \
+        --entrypoint sh \
+        "${image}" \
+        -euc 'IFS= read -r LINEAR_API_KEY
 export LINEAR_API_KEY
 exec opensymphony "$@"' sh "${run_args[@]}"
+    else
+      printf '%s\n' "${linear_api_key}" |
+        exec docker run "${common_args[@]}" \
+        --entrypoint sh \
+        --publish 127.0.0.1:2468:2468 \
+        "${image}" \
+        -euc 'IFS= read -r LINEAR_API_KEY
+export LINEAR_API_KEY
+exec opensymphony "$@"' sh "${run_args[@]}"
+    fi
     ;;
   tui)
     if (( $# != 0 )); then
@@ -324,6 +403,7 @@ exec opensymphony "$@"' sh "${run_args[@]}"
     fi
     tui_args=(
       --rm
+      --pull=never
       --interactive
       --tty
       --read-only

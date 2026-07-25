@@ -1,8 +1,71 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+unset LINEAR_API_KEY
+
+# Every container invocation in this fixture must remain local-only. The
+# acceptance script resolves one validated immutable image ID below; this
+# wrapper also prevents Docker from pulling if that local ID disappears.
+docker() {
+  if [[ "${1:-}" == "run" ]]; then
+    shift
+    command docker run --pull=never "$@"
+    return
+  fi
+  command docker "$@"
+}
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="${OPENSYMPHONY_INTEGRATION_IMAGE:?set OPENSYMPHONY_INTEGRATION_IMAGE}"
+requested_image="${OPENSYMPHONY_INTEGRATION_IMAGE:?set OPENSYMPHONY_INTEGRATION_IMAGE}"
+readonly expected_opensymphony_commit=0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb
+expected_build_input_sha256="$("${repo_root}/scripts/opensymphony-build-input-id.sh")"
+readonly expected_build_input_sha256
+
+resolve_validated_local_image() {
+  local image_id
+  local upstream_tests
+  local source_commit
+  local build_input_sha256
+
+  if ! image_id="$(
+    docker image inspect --format '{{.Id}}' "${requested_image}" 2>/dev/null
+  )"; then
+    echo "acceptance requires a qualified image present in the local Docker image store" >&2
+    exit 2
+  fi
+  if [[ ! "${image_id}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "acceptance image did not resolve to exactly one immutable image ID" >&2
+    exit 2
+  fi
+  if ! upstream_tests="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.upstream-tests" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${upstream_tests}" != "passed" ]]; then
+    echo "acceptance image is not descended from the complete upstream test gate" >&2
+    exit 2
+  fi
+  if ! source_commit="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.source.commit" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${source_commit}" != "${expected_opensymphony_commit}" ]]; then
+    echo "acceptance image does not contain the pinned OpenSymphony revision" >&2
+    exit 2
+  fi
+  if ! build_input_sha256="$(
+    docker image inspect \
+      --format '{{ index .Config.Labels "dev.opensymphony.build-input.sha256" }}' \
+      "${image_id}" 2>/dev/null
+  )" || [[ "${build_input_sha256}" != "${expected_build_input_sha256}" ]]; then
+    echo "acceptance image was not built from the current image-policy inputs" >&2
+    exit 2
+  fi
+  printf '%s' "${image_id}"
+}
+
+image="$(resolve_validated_local_image)"
+readonly image
 auth_volume="${OPENSYMPHONY_CODEX_AUTH_VOLUME:?set OPENSYMPHONY_CODEX_AUTH_VOLUME}"
 state_volume="${OPENSYMPHONY_STATE_VOLUME:?set OPENSYMPHONY_STATE_VOLUME}"
 workspaces_volume="${OPENSYMPHONY_WORKSPACES_VOLUME:?set OPENSYMPHONY_WORKSPACES_VOLUME}"

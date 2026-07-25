@@ -23,13 +23,13 @@ workspace:
 
 hooks:
   after_create: |
-    git clone --depth 1 --branch codex/implementation https://github.com/ray-manaloto/symphony-cpp.git .
+    env -u LINEAR_API_KEY git clone --depth 1 --branch codex/implementation https://github.com/ray-manaloto/symphony-cpp.git .
   before_run: |
-    git status --short --branch
+    env -u LINEAR_API_KEY git status --short --branch
   after_run: |
-    git status --short --branch
+    env -u LINEAR_API_KEY git status --short --branch
   before_remove: |
-    git status --short --branch
+    env -u LINEAR_API_KEY git status --short --branch
   timeout_ms: 60000
 
 agent:

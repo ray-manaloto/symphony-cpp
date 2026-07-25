@@ -88,6 +88,7 @@ elif [[ "${mode}" == "pre-push" ]]; then
 fi
 
 if [[ "${run_docker_checks}" == true ]]; then
+  ./scripts/test-opensymphony-bake-graph.sh
   readonly containerfile=containers/Containerfile
   readonly clang_p2996_artifact_context="docker-image://ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996:7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-amd64-77b98dd8970c509c9492ad30e19a4ce6dbb6474fc14b167b9aed6094fd9bc276@sha256:d054fa3bcde2091b69950c321a06ba35f9f4a628ad69c5e95849020d9cfe9e68"
   readonly static_runtime_context="docker-image://ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304"

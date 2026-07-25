@@ -10,6 +10,9 @@ if [[ -z "${LINEAR_API_KEY:-}" ]]; then
   echo "LINEAR_API_KEY must be injected into this exact contained ceremony" >&2
   exit 2
 fi
+linear_api_key="${LINEAR_API_KEY}"
+unset LINEAR_API_KEY
+readonly linear_api_key
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 owner_token="live-${mode}-$$-${RANDOM}-${RANDOM}"
@@ -77,14 +80,16 @@ for volume in "${volumes[@]}"; do
   created_volumes+=("${volume}")
 done
 
-OPENSYMPHONY_ACCEPTANCE_SUFFIX="${suffix}" \
-  OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED=true \
-  OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN="${owner_token}" \
-  OPENSYMPHONY_CODEX_AUTH_VOLUME="${auth_volume}" \
-  OPENSYMPHONY_STATE_VOLUME="${state_volume}" \
-  OPENSYMPHONY_WORKSPACES_VOLUME="${workspaces_volume}" \
-  OPENSYMPHONY_TOOLS_VOLUME="${tools_volume}" \
-  OPENSYMPHONY_CCACHE_VOLUME="${ccache_volume}" \
-  OPENSYMPHONY_VCPKG_ARCHIVES_VOLUME="${vcpkg_archives_volume}" \
-  OPENSYMPHONY_UV_CACHE_VOLUME="${uv_cache_volume}" \
-  "${repo_root}/scripts/opensymphony-container.sh" "${mode}"
+printf '%s\n' "${linear_api_key}" |
+  OPENSYMPHONY_LINEAR_KEY_STDIN=true \
+    OPENSYMPHONY_ACCEPTANCE_SUFFIX="${suffix}" \
+    OPENSYMPHONY_ACCEPTANCE_RESOURCES_VERIFIED=true \
+    OPENSYMPHONY_ACCEPTANCE_OWNER_TOKEN="${owner_token}" \
+    OPENSYMPHONY_CODEX_AUTH_VOLUME="${auth_volume}" \
+    OPENSYMPHONY_STATE_VOLUME="${state_volume}" \
+    OPENSYMPHONY_WORKSPACES_VOLUME="${workspaces_volume}" \
+    OPENSYMPHONY_TOOLS_VOLUME="${tools_volume}" \
+    OPENSYMPHONY_CCACHE_VOLUME="${ccache_volume}" \
+    OPENSYMPHONY_VCPKG_ARCHIVES_VOLUME="${vcpkg_archives_volume}" \
+    OPENSYMPHONY_UV_CACHE_VOLUME="${uv_cache_volume}" \
+    "${repo_root}/scripts/opensymphony-container.sh" "${mode}"

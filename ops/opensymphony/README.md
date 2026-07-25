@@ -2,9 +2,12 @@
 
 OpenSymphony is a pinned, external development tool. It is not linked into the
 C++ service and does not define Symphony conformance. Its separate orchestrator
-image is built locally from the same immutable GCC 16.1 toolchain base used by
-the C++ development container. OpenSymphony is not installed in the
-development container and its image is not published by this repository.
+image is composed locally through a BuildKit Bake graph from the exact qualified
+AMD64 GCC 16.1 compiler child, a clean generic Codex Universal runtime, and
+independently generated runtime/rootfs validation markers. This does not repin
+or qualify the separately managed development container. OpenSymphony is not
+installed in the development container and its image is not published by this
+repository.
 
 ## Containment boundary
 
@@ -16,9 +19,11 @@ development container and its image is not published by this repository.
 - The host home directory, Docker socket, SSH agent, and GitHub credentials are
   not mounted.
 - `LINEAR_API_KEY` is accepted only from the exact launch command's environment
-  and streamed over container stdin, rather than stored in Docker configuration
-  metadata. It remains present in the OpenSymphony process environment while the
-  process is running, so host access to Docker is privileged access. No plaintext
+  or the contained wrapper's stdin. The wrappers capture and unset the exported
+  value before invoking Docker and stream it over container stdin, rather than
+  exposing it to Docker CLI subprocesses or Docker configuration metadata. It
+  remains present in the OpenSymphony process environment while the process is
+  running, so host access to Docker is privileged access. No plaintext
   environment file is part of this repository's runtime contract.
 - The control plane is exposed only on host loopback.
 - OpenSymphony invokes Codex with `danger-full-access` and approval disabled;
@@ -31,8 +36,15 @@ development container and its image is not published by this repository.
    builds the release only after that stage passes, loads
    `symphony-opensymphony:local`, and prints its immutable local image ID.
    `scripts/build-opensymphony-local.sh` instead creates an explicitly labeled
-   `symphony-opensymphony:candidate` for contained diagnostics when an upstream
-   test is blocked; never use that candidate operationally.
+   `symphony-opensymphony:candidate` only for direct immutable smoke/rootfs
+   inspection when an upstream test is blocked. Guarded operator and acceptance
+   launchers reject it; never use that candidate operationally. The complete pinned
+   suite is mandatory and currently blocked by upstream
+   [issue #227](https://github.com/kumanday/OpenSymphony/issues/227), so no
+   qualified operational `symphony-opensymphony:local` can be recreated until a
+   reviewed immutable upstream correction passes that unchanged gate. See
+   [the upstream evolution watch](../../docs/upstream-evolution-watch.md#opensymphony).
+   Steps 2–6 are unavailable until step 1 produces that admitted image.
 2. Human-create a least-privilege Linear key and store it through the existing
    fnox/Doppler/macOS secrets authority as `LINEAR_API_KEY`. Do not paste it into
    Codex, a shell argument, a project file, or logs.
@@ -51,17 +63,29 @@ development container and its image is not published by this repository.
    Backlog. `doctor` can create directories/install managed tooling, and
    `run --dry-run` still creates or recovers workspaces, writes run manifests,
    and executes lifecycle hooks even though it launches no model worker.
-6. Inspect `http://127.0.0.1:2468` and the container logs. The historical
-   `GUI-5` run already consumed the sole fixture-only live-canary authorization.
-   Do not activate another Linear issue without a new explicit authorization.
+6. Review the bounded command output. The contained no-model dry run publishes
+   no host port; only an explicitly authorized live `run` exposes the gateway at
+   `http://127.0.0.1:2468`. The historical `GUI-5` run already consumed the sole
+   fixture-only live-canary authorization. Do not activate another Linear issue
+   without a new explicit authorization.
 
 The earlier contained ceremony completed against historical immutable image
 manifest `sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982`.
 That remains evidence for the prior boundary, not the default runtime. The
-launcher now selects only `symphony-opensymphony:local`. Repeat the contained
-acceptance, doctor, and contained no-model dry run after every local base or
-OpenSymphony pin change. `OPENSYMPHONY_IMAGE` remains an explicit test override;
-never use it to select a mutable registry tag.
+launcher defaults to `symphony-opensymphony:local`, resolves the selected local
+reference once to an immutable image ID, requires the exact pinned source commit
+and `upstream-tests=passed` labels, and passes `--pull=never`. Repeat the
+contained acceptance, doctor, and contained no-model dry run after every local
+base or OpenSymphony pin change. `OPENSYMPHONY_IMAGE` may select another already
+local test tag only when it satisfies the same immutable identity and label
+gate; it cannot authorize a candidate or mutable registry fallback.
+
+The graph is content-addressed but is not claimed bit-reproducible: its pinned
+base digests still perform package-manager operations against moving Debian,
+Ubuntu, and npm indexes. The admitted local image ID, exact OpenSymphony commit,
+and exact image-policy input digest are therefore the qualification identity.
+Do not infer that a later rebuild must produce the same image ID until package
+snapshots and npm artifact integrity are independently pinned.
 
 `scripts/opensymphony-container.sh run` is deliberately separate from the dry
 run. Running it is authorization to operate only on issues deliberately moved
@@ -105,10 +129,13 @@ Use the contained operator commands:
 ./scripts/opensymphony-container.sh preflight
 ./scripts/opensymphony-container.sh memory-status
 ./scripts/opensymphony-container.sh memory-context GUI-5
-./scripts/opensymphony-container.sh tui
 ./scripts/run-opensymphony-contained.sh doctor
-./scripts/opensymphony-container.sh debug GUI-5
 ```
+
+`tui` requires an explicitly authorized live `run`; the contained no-model dry
+run publishes no gateway port. `debug ISSUE` is a separately authorized manual
+recovery action because it may repair archived state and invoke interactive
+Codex resume. Do not use retained `GUI-5` state as a routine debug fixture.
 
 `doctor` is exposed for exact upstream diagnostics. With the Codex route it
 parses the configuration and workflow, renders the prompt, validates the
@@ -121,13 +148,17 @@ login status, app-server schema generation and required lifecycle methods,
 workspace and memory-volume writability, and the passing configuration,
 workflow, and prompt-rendering portions of `doctor`. Do not add a second
 compiler toolchain to the standalone C++ service: these tools exist only in the
-separate local orchestrator image. Sharing the maintained GCC base gives its
-Codex workers the same compiler contract without coupling the orchestrator to
-the developer's interactive container.
+separate local orchestrator image. Composing the clean generic GCC runtime from
+the qualified compiler child gives Codex workers the same compiler semantics
+without coupling the orchestrator to the developer's interactive container or
+placing Symphony source, vcpkg installations, or `/opt/symphony-cpp-seed` in
+the image.
 
-OpenSymphony v2.10.0 `rehydrate` operates on OpenHands conversation manifests,
-so it is deliberately not exposed for the Codex route. Use `debug ISSUE`,
-which supports persisted Codex thread unarchive and recovery.
+OpenSymphony v2.10.0 `rehydrate` operates on OpenHands conversation manifests.
+The Codex-oriented operational wrapper exposes no `rehydrate` command for
+either route; future OpenHands proof must invoke the pinned CLI only inside a
+disposable fixture. Separately authorized `debug ISSUE` supports persisted
+Codex thread unarchive and recovery.
 
 The adopted, deferred, and rejected feature boundaries are tracked in
 [`docs/opensymphony-feature-matrix.md`](../../docs/opensymphony-feature-matrix.md).

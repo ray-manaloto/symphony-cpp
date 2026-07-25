@@ -16,13 +16,13 @@ workspace:
 
 hooks:
   after_create: |
-    printf '%s\n' after-create > .opensymphony-fixture-after-create
+    env -u LINEAR_API_KEY sh -euc 'test -z "${LINEAR_API_KEY+x}"; printf "%s\n" after-create > .opensymphony-fixture-after-create'
   before_run: |
-    printf '%s\n' before-run > .opensymphony-fixture-before-run
+    env -u LINEAR_API_KEY sh -euc 'test -z "${LINEAR_API_KEY+x}"; printf "%s\n" before-run > .opensymphony-fixture-before-run'
   after_run: |
-    printf '%s\n' after-run > .opensymphony-fixture-after-run
+    env -u LINEAR_API_KEY sh -euc 'test -z "${LINEAR_API_KEY+x}"; printf "%s\n" after-run > .opensymphony-fixture-after-run'
   before_remove: |
-    printf '%s\n' before-remove >> .opensymphony-fixture-before-remove
+    env -u LINEAR_API_KEY sh -euc 'test -z "${LINEAR_API_KEY+x}"; printf "%s\n" before-remove >> .opensymphony-fixture-before-remove'
   timeout_ms: 10000
 
 agent:

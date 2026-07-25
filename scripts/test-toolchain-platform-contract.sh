@@ -6,6 +6,8 @@ readonly containerfile=containers/Containerfile
 readonly dockerignore=.dockerignore
 readonly opensymphony_containerfile=containers/OpenSymphony.Containerfile
 readonly opensymphony_dockerignore=containers/OpenSymphony.Containerfile.dockerignore
+readonly opensymphony_local_bake=containers/opensymphony-local.bake.hcl
+readonly opensymphony_acceptance=scripts/test-opensymphony-acceptance.sh
 readonly generic_bake=containers/bake.hcl
 readonly gcc16_bake=containers/gcc16-separated.bake.hcl
 readonly gcc16_validation_containerfile=containers/validation/gcc16.Containerfile
@@ -1555,13 +1557,97 @@ fi
 
 test "$(wc -l <"${opensymphony_dockerignore}")" -eq 1
 grep -Fxq '**' "${opensymphony_dockerignore}"
+test -f "${opensymphony_local_bake}"
+rust_arg_line="$(
+  grep -n -m1 '^ARG RUST_IMAGE=' "${opensymphony_containerfile}" | cut -d: -f1
+)"
+first_from_line="$(
+  grep -n -m1 '^FROM ' "${opensymphony_containerfile}" | cut -d: -f1
+)"
+test "${rust_arg_line}" -lt "${first_from_line}"
 if grep -Eq '^(ADD|COPY)[[:space:]]+[^-]' "${opensymphony_containerfile}"; then
   echo "OpenSymphony local image must remain independent of the repository build context" >&2
   exit 1
 fi
+if grep -Eq '^ADD[[:space:]]' "${opensymphony_containerfile}"; then
+  echo "OpenSymphony local image must not use ADD" >&2
+  exit 1
+fi
+while IFS= read -r copy_instruction; do
+  if [[ "${copy_instruction}" != *"--from="* ]]; then
+    echo "OpenSymphony COPY must select an explicit stage or named context" >&2
+    exit 1
+  fi
+done < <(grep -E '^COPY[[:space:]]' "${opensymphony_containerfile}")
 
 test "$(grep -Fc 'test ! -e /opt/symphony-cpp-seed' "${containerfile}")" -eq 2
-grep -Fq 'test ! -e /opt/symphony-cpp-seed' "${opensymphony_containerfile}"
+if grep -Fq 'ghcr.io/ray-manaloto/symphony-dev' "${opensymphony_containerfile}"; then
+  echo "OpenSymphony must not fall back to the contaminated legacy development image" >&2
+  exit 1
+fi
+grep -Fq 'FROM scratch AS symphony-cpp-base' "${opensymphony_containerfile}"
+grep -Fq 'FROM scratch AS symphony-cpp-base-validation' \
+  "${opensymphony_containerfile}"
+grep -Fq \
+  'from=symphony-cpp-base-validation,source=/gcc16-runtime-candidate-execution-passed' \
+  "${opensymphony_containerfile}"
+grep -Fq \
+  'from=symphony-cpp-base-validation,source=/gcc16-runtime-candidate-rootfs-audit-passed' \
+  "${opensymphony_containerfile}"
+grep -Fq '"gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT' \
+  "${opensymphony_local_bake}"
+grep -Fq 'OPENSYMPHONY_IMAGE must use the local symphony-opensymphony namespace' \
+  "${opensymphony_local_bake}"
+grep -Fq 'SOURCE_REVISION must be an exact lowercase 40-hex Git revision' \
+  "${opensymphony_local_bake}"
+grep -Fq 'condition     = can(regex("^[0-9a-f]{40}$", SOURCE_REVISION))' \
+  "${opensymphony_local_bake}"
+grep -Fq 'condition     = can(regex("^symphony-opensymphony:[a-z0-9][a-z0-9._-]*$", OPENSYMPHONY_IMAGE))' \
+  "${opensymphony_local_bake}"
+grep -Fq 'BUILD_INPUT_SHA256 must be an exact lowercase SHA-256 digest' \
+  "${opensymphony_local_bake}"
+grep -Eq '"runtime-base"[[:space:]]*=[[:space:]]*"target:opensymphony-gcc-runtime"' \
+  "${opensymphony_local_bake}"
+grep -Eq '"symphony-cpp-base"[[:space:]]*=[[:space:]]*"target:opensymphony-gcc-runtime"' \
+  "${opensymphony_local_bake}"
+grep -Eq \
+  '"symphony-cpp-base-validation"[[:space:]]*=[[:space:]]*"target:opensymphony-gcc-runtime-validation"' \
+  "${opensymphony_local_bake}"
+test "$(grep -Fc 'output = ["type=docker"]' "${opensymphony_local_bake}")" -eq 1
+test "$(grep -Fc 'output = ["type=cacheonly"]' "${opensymphony_local_bake}")" -eq 2
+if grep -Eq 'type=(registry|image|oci|local)|(^|[[:space:]])(push|cache-to)[[:space:]]*=' \
+  "${opensymphony_local_bake}"; then
+  echo "OpenSymphony local Bake graph contains a publication or external cache output" >&2
+  exit 1
+fi
+for script in scripts/build-opensymphony-local.sh scripts/test-opensymphony-upstream.sh; do
+  grep -Fq 'containers/opensymphony-local.bake.hcl' "${script}"
+  grep -Fq 'GCC16_ARTIFACT_CONTEXT=' "${script}"
+  grep -Fq 'cd "${repo_root}"' "${script}"
+  grep -Fq 'docker image inspect --format '\''{{.Id}}'\''' "${script}"
+  grep -Fq 'dev.opensymphony.source.commit' "${script}"
+  grep -Fq 'dev.symphony.source.revision' "${script}"
+  if grep -Fq 'docker buildx build' "${script}"; then
+    echo "${script} bypasses the validated local OpenSymphony Bake graph" >&2
+    exit 1
+  fi
+done
+grep -Fq 'dev.symphony.source.revision="${SOURCE_REVISION}"' \
+  "${opensymphony_containerfile}"
+grep -Fq 'dev.opensymphony.build-input.sha256="${BUILD_INPUT_SHA256}"' \
+  "${opensymphony_containerfile}"
+grep -Fq 'org.opencontainers.image.version="v2.10.0"' \
+  "${opensymphony_containerfile}"
+test -x scripts/opensymphony-build-input-id.sh
+test -x scripts/test-opensymphony-bake-graph.sh
+test "$(./scripts/opensymphony-build-input-id.sh | wc -c)" -eq 65
+test "$(grep -Fc 'env -u LINEAR_API_KEY' WORKFLOW.md)" -eq 4
+grep -Fq 'docker image inspect --format '\''{{.Id}}'\''' \
+  "${opensymphony_acceptance}"
+grep -Fq 'dev.opensymphony.upstream-tests' "${opensymphony_acceptance}"
+grep -Fq 'dev.opensymphony.source.commit' "${opensymphony_acceptance}"
+grep -Fq '0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb' \
+  "${opensymphony_acceptance}"
 test "$(
   grep -Fc \
     'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
