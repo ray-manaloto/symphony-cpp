@@ -36,8 +36,7 @@ template <typename T> [[nodiscard]] consteval auto fields() {
 
 template <typename E> [[nodiscard]] consteval auto enum_names() {
 #if defined(SYMPHONY_ENABLE_REFLECTION)
-  static constexpr auto enumerators =
-      std::define_static_array(std::meta::enumerators_of(^^E));
+  static constexpr auto enumerators = std::define_static_array(std::meta::enumerators_of(^^E));
   std::array<std::string_view, enumerators.size()> result{};
   [[maybe_unused]] std::size_t index = 0;
   template for (constexpr auto enumerator : enumerators) {
