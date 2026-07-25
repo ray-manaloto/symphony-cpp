@@ -79,6 +79,10 @@ std::string trim(std::string value) {
   return value;
 }
 
+bool is_front_matter_delimiter(const std::string_view line) {
+  return line == "---" || line == "---\r";
+}
+
 std::string expand(std::string value, const Environment& env) {
   if (value.empty() || value.front() != '$') return value;
   std::string name;
@@ -171,32 +175,33 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path,
                             std::istreambuf_iterator<char>{}};
   std::istringstream input(content);
   std::string line;
-  if (!std::getline(input, line) || trim(line) != "---") {
-    throw std::runtime_error("WORKFLOW.md must begin with YAML front matter");
-  }
-
   WorkflowDocument document;
   document.path = path;
   document.fingerprint = content_fingerprint(content);
-  std::ostringstream yaml_text;
-  bool closed = false;
-  while (std::getline(input, line)) {
-    if (trim(line) == "---") {
-      closed = true;
-      break;
-    }
-    yaml_text << line << '\n';
-  }
-  if (!closed) throw std::runtime_error("unterminated YAML front matter");
-  auto yaml = yaml_text.str();
-  if (trim(yaml).empty()) {
-    throw std::runtime_error("workflow front matter must be a YAML mapping");
-  }
+  const auto has_front_matter = std::getline(input, line) && is_front_matter_delimiter(line);
   detail::RawWorkflow raw;
-  const auto yaml_error =
-      glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(raw, yaml);
-  if (yaml_error) {
-    throw std::runtime_error("invalid workflow YAML");
+  if (has_front_matter) {
+    std::ostringstream yaml_text;
+    bool closed = false;
+    while (std::getline(input, line)) {
+      if (is_front_matter_delimiter(line)) {
+        closed = true;
+        break;
+      }
+      yaml_text << line << '\n';
+    }
+    if (!closed) throw std::runtime_error("unterminated YAML front matter");
+    auto yaml = yaml_text.str();
+    if (trim(yaml).empty()) {
+      throw std::runtime_error("workflow front matter must be a YAML mapping");
+    }
+    const auto yaml_error =
+        glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(raw, yaml);
+    if (yaml_error) {
+      throw std::runtime_error("invalid workflow YAML");
+    }
+  } else {
+    document.prompt = content;
   }
 
   if (raw.polling && raw.polling->interval_ms) {
@@ -296,8 +301,11 @@ WorkflowDocument WorkflowLoader::load(const std::filesystem::path& path,
       document.config.tracker.terminal_states = std::move(*raw.tracker->terminal_states);
     }
   }
-  document.prompt.assign(std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{});
-  if (trim(document.prompt).empty()) throw std::runtime_error("workflow prompt must not be empty");
+  if (has_front_matter) {
+    document.prompt.assign(std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{});
+  }
+  document.prompt = trim(std::move(document.prompt));
+  if (document.prompt.empty()) throw std::runtime_error("workflow prompt must not be empty");
   if (document.config.polling.interval <= std::chrono::milliseconds::zero() ||
       document.config.agent.max_concurrent_agents == 0 || document.config.agent.max_turns == 0 ||
       document.config.hooks.timeout <= std::chrono::milliseconds::zero()) {

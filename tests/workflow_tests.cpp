@@ -97,11 +97,84 @@ static ut::suite workflow_tests = [] {
     FakeEnvironment env;
     auto path = temp_workflow("---\nunknown: 1\n---\nprompt\n");
     ut::expect(symphony::workflow::WorkflowLoader{}.load(path, env).prompt ==
-               std::string{"prompt\n"});
+               std::string{"prompt"});
     path = temp_workflow("---\nworkspace:\n  root: $MISSING\n---\nprompt\n");
     ut::expect(ut::throws(
         [&] { static_cast<void>(symphony::workflow::WorkflowLoader{}.load(path, env)); }));
     std::filesystem::remove(path);
+  };
+
+  ut::test("workflow accepts a trimmed prompt without front matter") = [] {
+    FakeEnvironment env;
+    const auto path = temp_workflow("\n# Task\n\nKeep  internal spacing.\n\t");
+    const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(document.prompt == std::string{"# Task\n\nKeep  internal spacing."});
+    ut::expect(document.path == path);
+    ut::expect(!document.fingerprint.empty());
+    ut::expect(document.config.tracker.kind.empty());
+    ut::expect(document.config.tracker.active_states.empty());
+    ut::expect(document.config.tracker.terminal_states.empty());
+    ut::expect(document.config.polling.interval.count() == 30000);
+    ut::expect(document.config.agent.max_concurrent_agents == 10U);
+    ut::expect(document.config.agent.max_turns == 20U);
+    ut::expect(document.config.codex.command == std::string{"codex app-server"});
+    ut::expect(
+        ut::throws([&] { symphony::workflow::validate_for_dispatch(document.config, {"fake"}); }));
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow treats an indented thematic break as prompt content") = [] {
+    FakeEnvironment env;
+    const auto path = temp_workflow("  ---\nTask");
+    const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(document.prompt == std::string{"---\nTask"});
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow trims delimited prompt boundaries and preserves interior whitespace") = [] {
+    FakeEnvironment env;
+    const auto path =
+        temp_workflow("---\nunknown: true\n---\n \t\n  First\n\n    indented  text\n\t");
+    const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(document.prompt == std::string{"First\n\n    indented  text"});
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow keeps an indented delimiter inside a block hook") = [] {
+    FakeEnvironment env;
+    const auto path = temp_workflow(
+        "---\nhooks:\n  before_run: |\n    echo start\n    ---\n    echo end\n---\nPrompt");
+    const auto document = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(document.config.hooks.before_run.has_value());
+    ut::expect(document.config.hooks.before_run->find("echo start\n---\necho end") !=
+               std::string::npos);
+    ut::expect(document.prompt == std::string{"Prompt"});
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow fingerprints raw bytes before trimming the prompt") = [] {
+    FakeEnvironment env;
+    const auto path = temp_workflow("prompt\n");
+    const auto first = symphony::workflow::WorkflowLoader{}.load(path, env);
+    temp_workflow("prompt\n\n");
+    const auto second = symphony::workflow::WorkflowLoader{}.load(path, env);
+    ut::expect(first.prompt == second.prompt);
+    ut::expect(first.fingerprint != second.fingerprint);
+    std::filesystem::remove(path);
+  };
+
+  ut::test("workflow does not reinterpret malformed front matter as a prompt") = [] {
+    FakeEnvironment env;
+    for (const auto& content : {
+             std::string{"---\ntracker:\n  kind: fake\n"},
+             std::string{"---\n- item\n---\nprompt"},
+             std::string{"---\nscalar\n---\nprompt"},
+         }) {
+      const auto path = temp_workflow(content);
+      ut::expect(ut::throws(
+          [&] { static_cast<void>(symphony::workflow::WorkflowLoader{}.load(path, env)); }));
+      std::filesystem::remove(path);
+    }
   };
 
   ut::test("workflow preserves provider config and normalizes state "
