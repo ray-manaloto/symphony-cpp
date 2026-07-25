@@ -40,6 +40,10 @@ RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
  && cmake --workflow --preset gcc-sanitizers \
  && cmake --workflow --preset gcc-tsan \
  && ccache --show-stats \
+ && vcpkg_cache_bytes="$(du -sb /var/cache/vcpkg | cut -f1)" \
+ && vcpkg_cache_files="$(find /var/cache/vcpkg -type f | wc -l)" \
+ && printf 'vcpkg-cache bytes=%s files=%s\n' \
+      "${vcpkg_cache_bytes}" "${vcpkg_cache_files}" \
  && install -d /validation \
  && printf '%s\n' passed >/validation/gcc16
 

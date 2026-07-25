@@ -151,8 +151,10 @@ strategy. Validation descendants add only build-time checks and are never tagged
 `type=cacheonly` keeps their result in BuildKit and avoids duplicating the multi-gigabyte toolchain
 inside Docker Engine. BuildKit cache mounts are not exported by the normal GitHub Actions cache
 backend. The matrix therefore bridges only the lineage/architecture-scoped 750 MB ccache mount
-through pinned `buildkit-cache-dance` and `actions/cache`; vcpkg roots, installed trees, archives,
-and build trees remain local to one builder.
+and vcpkg's ABI-addressed binary-archive mount through pinned `buildkit-cache-dance` and
+`actions/cache`. The archive cache uses an exact compiler-child, architecture, and dependency-graph
+key without a broad restore prefix. vcpkg roots, installed trees, port build trees, configured
+project trees, and source remain local to one builder.
 
 The durable implementation exports minimal `FROM scratch` OCI artifacts to separate packages:
 `/opt/clang-p2996` to `symphony-toolchain-clang-p2996`, and `/opt/gcc-16.1` to
@@ -268,8 +270,11 @@ that a new compiler image is publishable.
   scratch OCI artifacts by compiler pin, architecture, and deterministic recipe hash and write
   them only during explicit package seeds. Neither exports the multi-gigabyte compiler artifact
   back to the GitHub Actions cache.
-- Source CI keeps bounded `actions/cache` entries for vcpkg archives and ccache. It does not persist
-  configured CI build trees.
+- The separated compiler-matrix validation graph keeps an exact-key `actions/cache` entry for
+  vcpkg ABI archives and a size-bounded ccache entry. It transports only those two explicit
+  BuildKit cache mounts; neither path is committed to a runtime or validation result. Source CI
+  retains its independently keyed fast-path caches. Neither workflow persists a vcpkg checkout,
+  installed tree, port build tree, configured project tree, or source.
 - GitHub workflow artifacts and release ZIP files are not compiler package stores: the former are
   run-scoped and expire, while the latter add archive splitting and a download/extract protocol
   that Docker and devcontainers cannot consume directly. GHCR supplies OCI manifests, layers, and

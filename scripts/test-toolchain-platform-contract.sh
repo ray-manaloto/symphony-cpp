@@ -707,6 +707,10 @@ test "$(
 )" = 'FROM scratch AS gcc16-validation'
 test "$(grep -Ec '^(COPY|ADD)[[:space:]]' "${gcc16_validation_containerfile}")" -eq 1
 grep -Fq 'CCACHE_COMPILERCHECK=content' "${gcc16_validation_containerfile}"
+grep -Fq 'vcpkg_cache_bytes="$(du -sb /var/cache/vcpkg | cut -f1)"' \
+  "${gcc16_validation_containerfile}"
+grep -Fq "printf 'vcpkg-cache bytes=%s files=%s" \
+  "${gcc16_validation_containerfile}"
 cmp -s "${dockerignore}" "${gcc16_validation_dockerignore}"
 grep -Fq '"gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT' "${gcc16_bake}"
 grep -Fq '"runtime-base" = "target:gcc16-runtime"' "${gcc16_bake}"
@@ -886,6 +890,59 @@ gcc_validation_step="$(
   workflow_step_block_for_job "${gcc_job}" \
     "Build and validate GCC toolchain without loading it"
 )"
+gcc_vcpkg_restore_step="$(
+  workflow_step_block_for_job "${gcc_job}" \
+    "Restore exact GCC vcpkg binary archives"
+)"
+gcc_cache_bridge_step="$(
+  workflow_step_block_for_job "${gcc_job}" \
+    "Bridge scoped GCC validation caches into BuildKit"
+)"
+grep -Fq \
+  'VCPKG_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/vcpkg-archives/gcc/${{ inputs.architecture }}' \
+  <<<"${gcc_job}"
+grep -Fxq '        id: gcc-vcpkg-archives' <<<"${gcc_vcpkg_restore_step}"
+grep -Fxq \
+  '        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' \
+  <<<"${gcc_vcpkg_restore_step}"
+grep -Fxq '          path: ${{ env.VCPKG_DANCE_DIR }}' \
+  <<<"${gcc_vcpkg_restore_step}"
+grep -Fq \
+  "gcc16-vcpkg-archives-v1-\${{ needs.gcc16-artifact.outputs.digest }}-\${{ inputs.architecture == 'arm64' && 'arm64-linux' || 'x64-linux' }}-" \
+  <<<"${gcc_vcpkg_restore_step}"
+grep -Fq \
+  "hashFiles('containers/Containerfile', 'containers/validation/gcc16.Containerfile', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**', 'scripts/bootstrap-vcpkg.sh', 'scripts/devcontainer-setup.sh', 'scripts/install-cmake.sh')" \
+  <<<"${gcc_vcpkg_restore_step}"
+if grep -Fq 'restore-keys:' <<<"${gcc_vcpkg_restore_step}"; then
+  echo "GCC vcpkg archive cache must not use a prefix restore" >&2
+  exit 1
+fi
+if grep -Eq 'path:.*(\.build/vcpkg|vcpkg_installed|/build($|/))' \
+    <<<"${gcc_vcpkg_restore_step}"; then
+  echo "GCC Actions cache includes non-archive project or vcpkg state" >&2
+  exit 1
+fi
+grep -Fq '"${{ env.VCPKG_DANCE_DIR }}": {' <<<"${gcc_cache_bridge_step}"
+grep -Fq '"target": "/var/cache/vcpkg"' <<<"${gcc_cache_bridge_step}"
+grep -Fq '"id": "gcc-${{ inputs.architecture }}-vcpkg-archives"' \
+  <<<"${gcc_cache_bridge_step}"
+grep -Fxq \
+  "          skip-extraction: \${{ steps.gcc-ccache.outputs.cache-hit == 'true' && steps.gcc-vcpkg-archives.outputs.cache-hit == 'true' }}" \
+  <<<"${gcc_cache_bridge_step}"
+gcc_vcpkg_restore_line="$(
+  grep -nF '      - name: Restore exact GCC vcpkg binary archives' \
+    <<<"${gcc_job}" | cut -d: -f1
+)"
+gcc_cache_bridge_line="$(
+  grep -nF '      - name: Bridge scoped GCC validation caches into BuildKit' \
+    <<<"${gcc_job}" | cut -d: -f1
+)"
+gcc_validation_line="$(
+  grep -nF '      - name: Build and validate GCC toolchain without loading it' \
+    <<<"${gcc_job}" | cut -d: -f1
+)"
+test "${gcc_vcpkg_restore_line}" -lt "${gcc_cache_bridge_line}"
+test "${gcc_cache_bridge_line}" -lt "${gcc_validation_line}"
 gcc_probe_step="$(
   workflow_step_block_for_job "${gcc_artifact_job}" \
     "Probe immutable GCC 16.1 package"
@@ -1089,7 +1146,7 @@ gcc_restore_line="$(
     <<<"${gcc_job}" | cut -d: -f1
 )"
 gcc_bridge_line="$(
-  grep -Fn '      - name: Bridge GCC compiler cache into BuildKit' \
+  grep -Fn '      - name: Bridge scoped GCC validation caches into BuildKit' \
     <<<"${gcc_job}" | cut -d: -f1
 )"
 gcc_validation_line="$(

@@ -238,6 +238,7 @@ jobs:
       TOOLCHAIN_ARCH: ${{ inputs.architecture }}
       TOOLCHAIN_PLATFORM: linux/${{ inputs.architecture }}
       CCACHE_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/ccache/gcc/${{ inputs.architecture }}
+      VCPKG_DANCE_DIR: ${{ github.workspace }}/.build/toolchain-cache/vcpkg-archives/gcc/${{ inputs.architecture }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -277,7 +278,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-gcc16-ccache-v2-${{ needs.gcc16-artifact.outputs.digest }}-${{ hashFiles('containers/Containerfile', 'CMakePresets.json', 'CMakeLists.txt', 'cmake/**', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**') }}-
             ${{ runner.os }}-${{ runner.arch }}-gcc16-ccache-v2-${{ needs.gcc16-artifact.outputs.digest }}-
-      - name: Bridge GCC compiler cache into BuildKit
+      - name: Restore exact GCC vcpkg binary archives
+        id: gcc-vcpkg-archives
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.VCPKG_DANCE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-gcc16-vcpkg-archives-v1-${{ needs.gcc16-artifact.outputs.digest }}-${{ inputs.architecture == 'arm64' && 'arm64-linux' || 'x64-linux' }}-${{ hashFiles('containers/Containerfile', 'containers/validation/gcc16.Containerfile', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-ports/**', 'vcpkg-triplets/**', 'scripts/bootstrap-vcpkg.sh', 'scripts/devcontainer-setup.sh', 'scripts/install-cmake.sh') }}
+      - name: Bridge scoped GCC validation caches into BuildKit
         uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
         with:
           builder: ${{ steps.buildx.outputs.name }}
@@ -287,9 +294,14 @@ jobs:
                 "target": "/var/cache/ccache",
                 "id": "gcc-${{ inputs.architecture }}-ccache",
                 "sharing": "locked"
+              },
+              "${{ env.VCPKG_DANCE_DIR }}": {
+                "target": "/var/cache/vcpkg",
+                "id": "gcc-${{ inputs.architecture }}-vcpkg-archives",
+                "sharing": "locked"
               }
             }
-          skip-extraction: ${{ steps.gcc-ccache.outputs.cache-hit }}
+          skip-extraction: ${{ steps.gcc-ccache.outputs.cache-hit == 'true' && steps.gcc-vcpkg-archives.outputs.cache-hit == 'true' }}
           utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7
       - name: Build and validate GCC toolchain without loading it
         env:
