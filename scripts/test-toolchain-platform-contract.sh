@@ -10,6 +10,9 @@ readonly generic_bake=containers/bake.hcl
 readonly gcc16_bake=containers/gcc16-separated.bake.hcl
 readonly gcc16_validation_containerfile=containers/validation/gcc16.Containerfile
 readonly gcc16_validation_dockerignore=containers/validation/gcc16.Containerfile.dockerignore
+readonly gcc16_runtime_candidate_bake=containers/gcc16-runtime-candidate.bake.hcl
+readonly gcc16_runtime_candidate_containerfile=containers/validation/gcc16-runtime-candidate.Containerfile
+readonly gcc16_runtime_candidate_dockerignore=containers/validation/gcc16-runtime-candidate.Containerfile.dockerignore
 readonly p2996_bake=containers/p2996-separated.bake.hcl
 readonly p2996_validation_containerfile=containers/validation/clang-p2996.Containerfile
 readonly p2996_validation_dockerignore=containers/validation/clang-p2996.Containerfile.dockerignore
@@ -192,6 +195,100 @@ if grep -Fq 'cache-to: type=gha,mode=min,scope=symphony-gcc16-' \
   echo "GCC 16.1 package still writes its multi-gigabyte artifact to Actions cache" >&2
   exit 1
 fi
+test -f "${gcc16_runtime_candidate_bake}"
+test -f "${gcc16_runtime_candidate_containerfile}"
+test -f "${gcc16_runtime_candidate_dockerignore}"
+grep -Fq \
+  'RUNTIME_BASE_CONTEXT must be an exact docker-image:// reference pinned by sha256 digest' \
+  "${gcc16_runtime_candidate_bake}"
+grep -Fq \
+  'condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", RUNTIME_BASE_CONTEXT))' \
+  "${gcc16_runtime_candidate_bake}"
+test "$(grep -Fxc '  output = ["type=cacheonly"]' \
+  "${gcc16_runtime_candidate_bake}")" -eq 1
+if grep -Eq \
+  '(^|[[:space:]])(tags|cache-from|cache-to)[[:space:]]*=|type=(registry|image|oci|docker|local)' \
+    "${gcc16_runtime_candidate_bake}"; then
+  echo "read-only GCC runtime candidate graph contains an unapproved output or cache" >&2
+  exit 1
+fi
+grep -Fq 'FROM scratch AS runtime-base' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq \
+  'FROM ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7 AS gcc16-runtime-candidate-rootfs-audit' \
+  "${gcc16_runtime_candidate_containerfile}"
+if grep -Fq 'AUDIT_BASE' "${gcc16_runtime_candidate_containerfile}"; then
+  echo "trusted GCC runtime audit image must not be caller-overridable" >&2
+  exit 1
+fi
+grep -Fq \
+  'source=tests/fixtures/p2996_reflection_probe.cpp,target=/tmp/gcc16-reflection-probe.cpp,ro' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq \
+  'from=runtime-base,source=/,target=/candidate,ro' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq 'env -u LD_LIBRARY_PATH ldd' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq 'test -z "${LD_LIBRARY_PATH+x}"' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq 'test "$(command -v gcc)" = "/opt/gcc-16.1/bin/gcc"' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq 'test "$(command -v g++)" = "/opt/gcc-16.1/bin/g++"' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/opt/symphony-cpp-seed' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq 'vcpkg_installed' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '.opensymphony' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/usr/local/bin/opensymphony' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/opt/opensymphony' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/tmp/install-cmake.sh' "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/root/.npmrc' "${gcc16_runtime_candidate_containerfile}"
+if grep -Fq -- '-o -name .npmrc' "${gcc16_runtime_candidate_containerfile}"; then
+  echo "runtime audit must not classify provider-owned nested npm configuration as a credential" >&2
+  exit 1
+fi
+grep -Fq -- "-path '/candidate/root/.azure/*'" \
+  "${gcc16_runtime_candidate_containerfile}"
+if grep -Fq -- "-path '*/.azure/*'" "${gcc16_runtime_candidate_containerfile}"; then
+  echo "runtime audit must not classify provider source fixtures as home credentials" >&2
+  exit 1
+fi
+test "$(grep -Ec '^RUN --network=none' \
+  "${gcc16_runtime_candidate_containerfile}")" -eq 3
+test "$(
+  grep -Ec '^RUN([[:space:]]|$)' "${gcc16_runtime_candidate_containerfile}"
+)" -eq "$(
+  grep -Ec '^RUN --network=none' "${gcc16_runtime_candidate_containerfile}"
+)"
+test "$(grep -Fc -- '--mount=' \
+  "${gcc16_runtime_candidate_containerfile}")" -eq 2
+test "$(grep -Ec '^FROM[[:space:]]' \
+  "${gcc16_runtime_candidate_containerfile}")" -eq 4
+test "$(
+  grep -E '^FROM[[:space:]]' "${gcc16_runtime_candidate_containerfile}" |
+    tail -n 1
+)" = 'FROM scratch AS gcc16-runtime-candidate-validation'
+test "$(grep -Ec '^COPY[[:space:]]' \
+  "${gcc16_runtime_candidate_containerfile}")" -eq 2
+grep -Fq '/validation/gcc16-runtime-candidate-execution' \
+  "${gcc16_runtime_candidate_containerfile}"
+grep -Fq '/validation/gcc16-runtime-candidate-rootfs' \
+  "${gcc16_runtime_candidate_containerfile}"
+if grep -Eq \
+  '(^|[[:space:]])(ADD|ONBUILD)([[:space:]]|$)|--mount=type=(secret|ssh)|source=\.|\[\[' \
+  "${gcc16_runtime_candidate_containerfile}"; then
+  echo "GCC runtime candidate validation contains an unapproved context or secret input" >&2
+  exit 1
+fi
+cmp -s \
+  <(printf '%s\n' \
+    '**' \
+    '!containers/validation/gcc16-runtime-candidate.Containerfile' \
+    '!tests/fixtures/p2996_reflection_probe.cpp') \
+  "${gcc16_runtime_candidate_dockerignore}"
+grep -Fq \
+  '"containers/validation/gcc16-runtime-candidate.Containerfile:gcc16-runtime-candidate-validation"' \
+  scripts/check-local-preflight.sh
+grep -Fq 'containers/gcc16-runtime-candidate.bake.hcl' \
+  scripts/check-local-preflight.sh
 test "$(grep -Fc -- '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF' "${ut_port}")" -eq 1
 test "$(grep -Fc -- '-DUT_ENABLE_MODULES=OFF' "${ut_port}")" -eq 1
 node -e '

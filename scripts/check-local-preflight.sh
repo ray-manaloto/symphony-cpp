@@ -93,6 +93,7 @@ if [[ "${run_docker_checks}" == true ]]; then
   readonly static_runtime_context="docker-image://ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304"
   for missing_context_case in \
     "containers/validation/gcc16.Containerfile:gcc16-validation" \
+    "containers/validation/gcc16-runtime-candidate.Containerfile:gcc16-runtime-candidate-validation" \
     "containers/validation/clang-p2996.Containerfile:clang-p2996-validation"; do
     missing_context_dockerfile="${missing_context_case%%:*}"
     missing_context_target="${missing_context_case##*:}"
@@ -138,6 +139,13 @@ if [[ "${run_docker_checks}" == true ]]; then
       --call=check \
       .
   done
+  docker buildx build \
+    --file containers/validation/gcc16-runtime-candidate.Containerfile \
+    --platform linux/amd64 \
+    --target gcc16-runtime-candidate-validation \
+    --build-context "runtime-base=${static_runtime_context}" \
+    --call=check \
+    .
   docker buildx build \
     --file "${containerfile}" \
     --platform linux/amd64 \
@@ -241,6 +249,51 @@ if [[ "${run_docker_checks}" == true ]]; then
         ([.target[] | has("tags") or has("cache-to")] | any) == false
       ' <<<"${resolved_gcc16_bake}" >/dev/null
   done
+  for invalid_runtime_context in \
+    "" \
+    "docker-image://example.invalid/runtime:mutable" \
+    "docker-image://example.invalid/runtime@sha256:1234"; do
+    if RUNTIME_BASE_CONTEXT="${invalid_runtime_context}" \
+      RUNTIME_ARCH=amd64 \
+      docker buildx bake \
+        --file containers/gcc16-runtime-candidate.bake.hcl \
+        --print \
+        gcc16-runtime-candidate-validation >/dev/null 2>&1; then
+      echo "GCC runtime candidate graph accepted an inexact runtime context" >&2
+      exit 1
+    fi
+  done
+  if RUNTIME_BASE_CONTEXT="${static_runtime_context}" \
+    RUNTIME_ARCH=ppc64le \
+    docker buildx bake \
+      --file containers/gcc16-runtime-candidate.bake.hcl \
+      --print \
+      gcc16-runtime-candidate-validation >/dev/null 2>&1; then
+    echo "GCC runtime candidate graph accepted an unsupported architecture" >&2
+    exit 1
+  fi
+  resolved_runtime_candidate_bake="$(
+    RUNTIME_BASE_CONTEXT="${static_runtime_context}" \
+      RUNTIME_ARCH=amd64 \
+      docker buildx bake \
+        --file containers/gcc16-runtime-candidate.bake.hcl \
+        --print \
+        gcc16-runtime-candidate-validation
+  )"
+  jq -e \
+    --arg runtime_context "${static_runtime_context}" \
+    '
+      (.target | keys) == ["gcc16-runtime-candidate-validation"] and
+      .target["gcc16-runtime-candidate-validation"].platforms ==
+        ["linux/amd64"] and
+      .target["gcc16-runtime-candidate-validation"].contexts["runtime-base"] ==
+        $runtime_context and
+      .target["gcc16-runtime-candidate-validation"].output ==
+        [{"type": "cacheonly"}] and
+      ([.target[] |
+        has("tags") or has("cache-to") or has("cache-from")
+      ] | any) == false
+    ' <<<"${resolved_runtime_candidate_bake}" >/dev/null
   GCC16_ARTIFACT_CONTEXT="${static_runtime_context}" \
     docker buildx bake \
       --file containers/bake.hcl \

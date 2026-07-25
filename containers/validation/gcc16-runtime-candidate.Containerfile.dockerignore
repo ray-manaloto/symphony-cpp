@@ -1,0 +1,3 @@
+**
+!containers/validation/gcc16-runtime-candidate.Containerfile
+!tests/fixtures/p2996_reflection_probe.cpp
