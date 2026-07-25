@@ -28,3 +28,9 @@ This repository implements OpenAI Symphony Draft v1 as a standalone C++26 servic
   adopts its own controller; never borrow goal state or leases from another repository.
 - Public pushes use `scripts/check-adaptive-orchestration.mjs` only as an exact-range redacted
   publication gate. It is not part of the C++ service, daemon runtime, or orchestration controller.
+- Native specialist-agent roles follow `docs/agent-orchestration.md`. Dispatch only bounded,
+  event-triggered read-only roles in parallel; the primary controller alone updates the canonical
+  goal and integration worktree. No tracker or pull-request mutation agent is currently authorized.
+- Before requesting owner approval or asking a material question, complete bounded primary-source
+  research and present viable options, pros, cons, a recommendation, and the consequence of
+  deferring. Missing credentials, access, or evidence is not research resolution.

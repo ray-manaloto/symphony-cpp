@@ -2,6 +2,7 @@
 
 - [Architecture](architecture.md)
 - [Engineering system: learning, parallel work, context, quality, and docs](engineering-system.md)
+- [Native Codex specialist-agent orchestration](agent-orchestration.md)
 - [Cross-project coordination](cross-project-coordination.md)
 - [Dependency-first convention](conventions/dependency-first.md)
 - [Dependency decision ledger](dependency-decisions.md)
@@ -15,3 +16,8 @@
 - [Pinned upstream inputs](upstream-lock.md)
 - [ADR-0001: compiler and reflection policy](adr/0001-compiler-reflection-policy.md)
 - [Implementation goal log](implementation-log.md)
+- [OpenSymphony supervisor boundary](opensymphony-supervisor.md)
+- [OpenSymphony feature matrix](opensymphony-feature-matrix.md)
+- [Tracker adapters](tracker-adapters.md)
+- [Toolchain and local devcontainer workflow](toolchain-and-devcontainer-workflow.md)
+- [Upstream evolution watch](upstream-evolution-watch.md)

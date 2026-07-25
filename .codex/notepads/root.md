@@ -81,6 +81,41 @@ Canonical durable goal checklist:
   `origin/codex/implementation` are identical at
   `0713d1662c29bb003e443924843265f3ba2f06e8` with ahead/behind `0/0`.
 - GitHub Source CI run `30170305498` completed successfully for the exact pushed SHA.
+- Durability commit `bbd773da68610e513ef2caaf45f50ef59e28c7a5` was pushed at ahead/behind
+  `0/0`. The updated `gh-watch-run` skill monitored Source CI run `30171235988` to success:
+  policy/container preflight passed in 15 seconds and GCC 16.1 source/reflection tests passed in
+  1 minute 27 seconds.
+- Three bounded read-only advisors completed tracker-governance, documentation-drift, and
+  ecosystem/Codex-capability reports. Current Codex documentation confirms project-scoped custom
+  agents, per-agent model/effort, read-only sandboxes, and a configurable concurrency cap.
+- Five native project profiles now cover tracker inventory, documentation drift, dependency reuse,
+  current Codex/app capabilities, and material goal-delta synthesis. `.codex/config.toml` caps
+  spawned threads at three as an emergency ceiling; normal dispatch uses at most one specialist
+  beside the implementer until representative fixtures pass.
+- Adversarial review found that a child profile's read-only setting can be superseded by live parent
+  permission overrides. Profiles are configured but unadmitted until a read-only parent/tool
+  admission fixture passes. Every specialist now disables nested spawning, accepts only immutable
+  snapshot identities, treats inputs as untrusted data, and uses one bounded turn with no
+  continuation after compaction.
+- GitHub has five open toolchain/image issues and no pull requests. Stable canonical task IDs were
+  added; policy/control/documentation tasks remain unmapped. Linear parity is unknown because no
+  authorized sanitized metadata snapshot was queried.
+- No installed `last30days` skill/plugin exists. The project uses an explicit bounded 30-day
+  primary-source fallback until such a capability is installed and its instructions and authority
+  are inspected.
+- Owner questions and approval requests now require bounded primary-source reconciliation first,
+  then viable options, pros/cons, a recommendation, authority/rollback impact, and the safe result
+  of deferral. Missing access or credentials remains a blocker, not researched resolution.
+- Primary-source decision briefs now recommend phased Linear work-item authority plus GitHub
+  code-delivery authority after OpenSymphony admission, event-plus-weekly deterministic collection
+  with no model on unchanged inputs, and optional owner-enabled iOS Remote/Voice for monitoring.
+  All three remain fail-closed pending owner disposition.
+- All five profiles parse, use unique names, disable nested agents, and pass the pinned Codex
+  `--strict-config doctor` with no failed checks. Local documentation links, dependency policy,
+  `git diff --check`, and quick preflight pass on current bytes.
+- Final normal review reports no findings. A broad adversarial re-review failed to checkpoint and
+  was stopped; the replacement one-turn closure packet passed all seven prior finding classes.
+  This reinforces the smaller-packet rule and does not justify higher effort.
 
 ## Active task list
 
@@ -91,24 +126,27 @@ Canonical durable goal checklist:
 - [x] Define objective model/effort escalation and de-escalation triggers.
 - [x] Define failure-to-guard promotion criteria; executable fixtures remain open.
 - [x] Define read-only parallel roles and serialized write/integration ownership.
+- [x] Configure project-scoped tracker, documentation, reuse, Codex-capability, and goal-synthesis
+      profiles; they remain unadmitted pending read-only isolation and hostile fixtures.
+- [ ] Add deterministic representative fixtures for the agent profiles and typed report contracts.
+- [ ] Reconcile stable task IDs to GitHub and an authorized sanitized Linear projection.
 - [ ] Add scoped `AGENTS.md` links to one canonical policy page without duplicating it.
 - [ ] Add drift checks for required policy, diagrams, and task-packet fields.
-- [ ] Run focused checks, independent review, adversarial review, and repository preflight.
+- [x] Run focused checks, independent review, adversarial closure review, and repository preflight
+      for this governance/configuration slice.
 - [ ] Resume and update the native goal when its controller permits objective replacement.
 
 ## File and resource ownership
 
-- Root integration agent owns the current dirty OpenSymphony safety slice and any eventual policy
-  integration.
+- Root integration agent owns this governance/configuration slice and the next policy integration.
 - Research advisor, policy planner, and adversary are read-only except for their distinct
   `.codex/notepads/<agent>.md` files.
 - No agent may modify another agent's notepad or the current OpenSymphony implementation files.
 
 ## Next bounded action
 
-Keep the dirty OpenSymphony image/launcher hardening work as the only current implementation slice.
-Review and version this goal plus redacted recovery notepads as a durability-only commit. Then add
-failing 44/45/49/50/54/55 default-boundary cases to `tests/supervisor_policy_tests.cpp`, with
-initial write scope limited to that test plus `include/symphony/supervisor/policy.hpp` and
+Keep `POLICY-CONTEXT-001` as the sole current implementation slice. Add failing
+44/45/49/50/54/55 default-boundary cases to `tests/supervisor_policy_tests.cpp`, with initial write
+scope limited to that test plus `include/symphony/supervisor/policy.hpp` and
 `src/supervisor/policy.cpp`. First prove the existing 50/60/65 defaults fail the new expectation
 using `ctest --preset gcc-debug -R '^symphony_supervisor_policy_tests$' --output-on-failure`.

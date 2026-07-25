@@ -11,6 +11,14 @@ Codex CLI. The contained configuration now selects `gpt-5.6-sol` and overlays th
 setting `model_reasoning_effort = "high"`; it still defines no role-specific agent pool. Upstream
 `.agents/skills` specialize instructions, not model instances.
 
+Native Codex work now has project-scoped profiles under `.codex/agents/` for tracker inventory,
+documentation drift, dependency reuse, current Codex/app capabilities, and material goal-delta
+synthesis. They are configured but unadmitted until read-only parent/tool isolation and hostile
+fixtures pass. They do not change OpenSymphony configuration or add writable workers.
+`.codex/config.toml` caps spawned threads at three as an emergency ceiling. Until representative
+agent fixtures pass, normal dispatch uses at most one specialist beside the implementer. See
+[`../agent-orchestration.md`](../agent-orchestration.md).
+
 The contained image pins Codex CLI 0.145.0. Its authenticated, read-only `model/list` result on
 2026-07-22 advertised Sol as the default with `low` effort and supported `low`, `medium`, `high`,
 `xhigh`, `max`, and `ultra`. Terra advertised the same range; Luna advertised through `max`. This
@@ -27,6 +35,11 @@ the prior CLI-default behavior available as rollback evidence.
 | Independent reviewer/verification specialist | `gpt-5.6-sol` | `high` | `xhigh` for security, concurrency, persistence, or release gates | Review a completed diff; do not co-author it |
 | Focused test/triage specialist | `gpt-5.6-terra` | `medium` | `high` when failure causality remains ambiguous | Reproduction, logs, focused fixtures, compiler diagnostics |
 | Mechanical search/documentation specialist | `gpt-5.6-luna` | `low` | `medium` for synthesis across several sources | Bounded inventory, formatting, or documentation updates |
+| Tracker inventory specialist | `gpt-5.6-sol` | `high` | `xhigh` only for a verified cross-provider identity conflict | Read-only goal/GitHub/sanitized-Linear reconciliation |
+| Documentation drift specialist | `gpt-5.6-sol` | `high` | `xhigh` only for a cross-subsystem authority conflict | Read-only exact-SHA/diff claim verification |
+| Dependency reuse specialist | `gpt-5.6-sol` | `xhigh` | `max` only for one bounded high-impact provider decision | Read-only dependency-first primary-source synthesis |
+| Codex capability specialist | `gpt-5.6-sol` | `high` | `xhigh` only for a material configuration/authority conflict | Read-only official-source delta synthesis |
+| Goal synthesis specialist | `gpt-5.6-sol` | `xhigh` | Pause after a repeated unresolved conflict | Read-only exact goal-delta proposal; controller applies |
 
 Use aliases only while evaluating quality. Once representative fixtures pass, prefer dated model
 snapshots where the selected access path supports them. Do not use `max` as a routine default: it

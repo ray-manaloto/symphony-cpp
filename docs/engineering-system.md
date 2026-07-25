@@ -11,6 +11,8 @@ of OpenAI Symphony Draft v1.
   are fixture-proven.
 - Native collaboration may use parallel read-only research, triage, or review lanes. The root
   integration agent is the only writer unless isolated worktrees and file claims are explicit.
+- Project-scoped specialist roles, dispatch triggers, result contracts, and tracker/research
+  boundaries are defined in [`agent-orchestration.md`](agent-orchestration.md).
 - Validate the complete pinned OpenSymphony feature matrix before disabling a feature. Reproduce
   upstream behavior and link the upstream issue before adding an external-supervisor containment.
 - One exact GitHub Actions run has one watcher. Quiet or stale partial logs never justify a
