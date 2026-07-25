@@ -3,6 +3,7 @@
 # `runtime-base` is a required BuildKit named context. The focused Bake graph
 # supplies it from the generic runtime target; this file never constructs or
 # publishes a reusable toolchain image.
+FROM scratch AS runtime-base
 FROM runtime-base AS p2996-validation-execution
 USER root
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

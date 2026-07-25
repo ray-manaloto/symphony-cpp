@@ -91,16 +91,60 @@ if [[ "${run_docker_checks}" == true ]]; then
   readonly containerfile=containers/Containerfile
   readonly clang_p2996_artifact_context="docker-image://ghcr.io/ray-manaloto/symphony-toolchain-clang-p2996:7220baffd57ea5b0f8cf59bee494dd5b7cc2b748-amd64-77b98dd8970c509c9492ad30e19a4ce6dbb6474fc14b167b9aed6094fd9bc276@sha256:d054fa3bcde2091b69950c321a06ba35f9f4a628ad69c5e95849020d9cfe9e68"
   readonly static_runtime_context="docker-image://ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304"
-  for target in \
-    symphony-gcc-validation \
-    symphony-analysis-validation; do
+  for missing_context_case in \
+    "containers/validation/gcc16.Containerfile:gcc16-validation" \
+    "containers/validation/clang-p2996.Containerfile:clang-p2996-validation"; do
+    missing_context_dockerfile="${missing_context_case%%:*}"
+    missing_context_target="${missing_context_case##*:}"
+    set +e
+    missing_context_output="$(
+      docker buildx build \
+        --file "${missing_context_dockerfile}" \
+        --platform linux/amd64 \
+        --target "${missing_context_target}" \
+        --output type=cacheonly \
+        . 2>&1
+    )"
+    missing_context_status=$?
+    set -e
+    if [[ "${missing_context_status}" -eq 0 ]]; then
+      echo "${missing_context_dockerfile} accepted a missing runtime-base context" >&2
+      exit 1
+    fi
+    if grep -Fq 'docker.io/library/runtime-base' <<<"${missing_context_output}"; then
+      echo "${missing_context_dockerfile} resolved a mutable runtime-base fallback" >&2
+      exit 1
+    fi
+  done
+  docker buildx build \
+    --file "${containerfile}" \
+    --platform linux/amd64 \
+    --target gcc16-artifact \
+    --call=check \
+    .
+  for architecture in amd64 arm64; do
     docker buildx build \
       --file "${containerfile}" \
-      --platform linux/amd64 \
-      --target "${target}" \
+      --platform "linux/${architecture}" \
+      --target symphony-gcc-runtime \
+      --build-context "gcc16-artifact-input=${static_runtime_context}" \
+      --call=check \
+      .
+    docker buildx build \
+      --file containers/validation/gcc16.Containerfile \
+      --platform "linux/${architecture}" \
+      --target gcc16-validation \
+      --build-context "runtime-base=${static_runtime_context}" \
       --call=check \
       .
   done
+  docker buildx build \
+    --file "${containerfile}" \
+    --platform linux/amd64 \
+    --target symphony-analysis-validation \
+    --build-context "gcc16-artifact-input=${static_runtime_context}" \
+    --call=check \
+    .
   docker buildx build \
     --file "${containerfile}" \
     --platform linux/amd64 \
@@ -153,10 +197,54 @@ if [[ "${run_docker_checks}" == true ]]; then
       --file containers/bake.hcl \
       --print \
       symphony-ci-clang >/dev/null
-  docker buildx build \
-    --file "${containerfile}" \
-    --platform linux/arm64 \
-    --target symphony-gcc-validation \
-    --call=check \
-    .
+  if GCC16_ARTIFACT_CONTEXT="docker-image://example.invalid/compiler:mutable" \
+    GCC16_ARCH=amd64 \
+    docker buildx bake \
+      --file containers/gcc16-separated.bake.hcl \
+      --print \
+      gcc16-validation >/dev/null 2>&1; then
+    echo "GCC Bake graph accepted an inexact artifact context" >&2
+    exit 1
+  fi
+  if GCC16_ARTIFACT_CONTEXT="${static_runtime_context}" \
+    GCC16_ARCH=ppc64le \
+    docker buildx bake \
+      --file containers/gcc16-separated.bake.hcl \
+      --print \
+      gcc16-validation >/dev/null 2>&1; then
+    echo "GCC Bake graph accepted an unsupported architecture" >&2
+    exit 1
+  fi
+  for architecture in amd64 arm64; do
+    resolved_gcc16_bake="$(
+      GCC16_ARTIFACT_CONTEXT="${static_runtime_context}" \
+        GCC16_ARCH="${architecture}" \
+        docker buildx bake \
+          --file containers/gcc16-separated.bake.hcl \
+          --print \
+          gcc16-validation
+    )"
+    jq -e \
+      --arg architecture "${architecture}" \
+      --arg artifact_context "${static_runtime_context}" \
+      '
+        (.target | keys | sort) ==
+          ["gcc16-runtime", "gcc16-validation"] and
+        .target["gcc16-runtime"].platforms == ["linux/" + $architecture] and
+        .target["gcc16-runtime"].contexts["gcc16-artifact-input"] ==
+          $artifact_context and
+        .target["gcc16-runtime"].output == [{"type": "cacheonly"}] and
+        .target["gcc16-validation"].platforms == ["linux/" + $architecture] and
+        .target["gcc16-validation"].contexts["runtime-base"] ==
+          "target:gcc16-runtime" and
+        .target["gcc16-validation"].output == [{"type": "cacheonly"}] and
+        ([.target[] | has("tags") or has("cache-to")] | any) == false
+      ' <<<"${resolved_gcc16_bake}" >/dev/null
+  done
+  GCC16_ARTIFACT_CONTEXT="${static_runtime_context}" \
+    docker buildx bake \
+      --file containers/bake.hcl \
+      --print \
+      symphony-gcc-runtime \
+      symphony-analysis >/dev/null
 fi

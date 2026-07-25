@@ -7,6 +7,9 @@ readonly dockerignore=.dockerignore
 readonly opensymphony_containerfile=containers/OpenSymphony.Containerfile
 readonly opensymphony_dockerignore=containers/OpenSymphony.Containerfile.dockerignore
 readonly generic_bake=containers/bake.hcl
+readonly gcc16_bake=containers/gcc16-separated.bake.hcl
+readonly gcc16_validation_containerfile=containers/validation/gcc16.Containerfile
+readonly gcc16_validation_dockerignore=containers/validation/gcc16.Containerfile.dockerignore
 readonly p2996_bake=containers/p2996-separated.bake.hcl
 readonly p2996_validation_containerfile=containers/validation/clang-p2996.Containerfile
 readonly p2996_validation_dockerignore=containers/validation/clang-p2996.Containerfile.dockerignore
@@ -183,8 +186,6 @@ fi
 grep -Fq 'GCC16_ARTIFACT_REF: ghcr.io/${{ github.repository_owner }}/symphony-toolchain-gcc:16.1.0-${{ inputs.architecture }}-6b1431c2581c93d174792a530acd054c06979d9185117aefca7f03a46830f51d' \
   .github/workflows/compiler-matrix.yml
 grep -Fq 'Resolve or publish GCC 16.1 artifact' \
-  .github/workflows/compiler-matrix.yml
-grep -Fq 'gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
   .github/workflows/compiler-matrix.yml
 if grep -Fq 'cache-to: type=gha,mode=min,scope=symphony-gcc16-' \
     .github/workflows/compiler-matrix.yml; then
@@ -559,7 +560,7 @@ clang_recipe_sha256="$(
     cat "${cmake_installer}"
     awk '
       /^FROM compiler-build-base AS clang-builder/ { emit = 1 }
-      /^FROM clang-p2996-artifact-input AS symphony-clang-p2996/ { exit }
+      /^FROM scratch AS clang-p2996-artifact-input/ { exit }
       emit { print }
     ' "${containerfile}"
     cat "${p2996_probe}"
@@ -574,7 +575,7 @@ test "${clang_recipe_sha256}" = "${clang_artifact_recipe_sha256}"
 
 gcc_recipe_sha256="$(
   {
-    awk '/^FROM compiler-build-base AS clang-builder/{exit} {print}' "${containerfile}"
+    awk '/^FROM scratch AS gcc16-artifact-input/{exit} {print}' "${containerfile}"
     cat "${cmake_installer}"
     cat "${p2996_probe}"
   } | if command -v sha256sum >/dev/null 2>&1; then
@@ -662,7 +663,14 @@ grep -Fq 'ARG SOURCE_REVISION=unknown' <<<"${gcc_runtime}"
 grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' <<<"${gcc_runtime}"
 grep -Fq 'ENTRYPOINT []' <<<"${gcc_runtime}"
 test "$(grep -Ec '^COPY ' <<<"${gcc_runtime}")" -eq 1
-grep -Fq 'COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1' <<<"${gcc_runtime}"
+grep -Fq 'COPY --from=gcc16-artifact-input /opt/gcc-16.1 /opt/gcc-16.1' \
+  <<<"${gcc_runtime}"
+gcc_artifact_input="$(stage_block gcc16-artifact-input)"
+test "${gcc_artifact_input}" = 'FROM scratch AS gcc16-artifact-input'
+if grep -Fq 'COPY --from=symphony-gcc16' <<<"${gcc_runtime}"; then
+  echo "GCC runtime assembly must fail closed without the external artifact context" >&2
+  exit 1
+fi
 
 gcc_artifact="$(stage_block gcc16-artifact)"
 grep -Fq 'FROM scratch AS gcc16-artifact' <<<"${gcc_artifact}"
@@ -681,8 +689,32 @@ grep -Fq 'test "$(/opt/gcc-16.1/bin/g++ -dumpfullversion)" = "16.1.0"' \
   "${containerfile}"
 grep -Fq 'libgcc_s.so.1 => /opt/gcc-16.1/lib64/libgcc_s.so.1' \
   "${containerfile}"
-gcc_container_validation="$(stage_block symphony-gcc-validation)"
-grep -Fq 'CCACHE_COMPILERCHECK=content' <<<"${gcc_container_validation}"
+if grep -Fq 'FROM symphony-gcc-runtime AS symphony-gcc-validation' "${containerfile}" ||
+  grep -Fq 'gcc-${TARGETARCH}-vcpkg-' "${containerfile}"; then
+  echo "generic toolchain Containerfile must not contain project GCC validation" >&2
+  exit 1
+fi
+grep -Fq 'FROM runtime-base AS gcc16-validation-execution' \
+  "${gcc16_validation_containerfile}"
+grep -Fq 'FROM scratch AS runtime-base' "${gcc16_validation_containerfile}"
+grep -Fq 'FROM scratch AS gcc16-validation' "${gcc16_validation_containerfile}"
+grep -Fq \
+  'COPY --from=gcc16-validation-execution /validation/gcc16 /gcc16-validation-passed' \
+  "${gcc16_validation_containerfile}"
+test "$(grep -Ec '^FROM[[:space:]]' "${gcc16_validation_containerfile}")" -eq 3
+test "$(
+  grep -E '^FROM[[:space:]]' "${gcc16_validation_containerfile}" | tail -n 1
+)" = 'FROM scratch AS gcc16-validation'
+test "$(grep -Ec '^(COPY|ADD)[[:space:]]' "${gcc16_validation_containerfile}")" -eq 1
+grep -Fq 'CCACHE_COMPILERCHECK=content' "${gcc16_validation_containerfile}"
+cmp -s "${dockerignore}" "${gcc16_validation_dockerignore}"
+grep -Fq '"gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT' "${gcc16_bake}"
+grep -Fq '"runtime-base" = "target:gcc16-runtime"' "${gcc16_bake}"
+grep -Fq 'platforms  = ["linux/${GCC16_ARCH}"]' "${gcc16_bake}"
+test "$(grep -Fc 'output = ["type=cacheonly"]' "${gcc16_bake}")" -eq 2
+grep -Fq 'default     = ""' "${gcc16_bake}"
+grep -Fq 'contains(["amd64", "arm64"], GCC16_ARCH)' "${gcc16_bake}"
+grep -Fq 'SOURCE_REVISION = SOURCE_REVISION' "${gcc16_bake}"
 
 analysis_runtime="$(stage_block symphony-analysis)"
 grep -Fq 'FROM symphony-gcc-runtime AS symphony-analysis' <<<"${analysis_runtime}"
@@ -722,8 +754,9 @@ fi
 clang_package="$(stage_block symphony-clang-p2996)"
 grep -Fq 'FROM clang-p2996-artifact-input AS symphony-clang-p2996' \
   <<<"${clang_package}"
-if grep -Fq 'AS clang-p2996-artifact-input' "${containerfile}" ||
-  grep -Eq '^(COPY|ADD)[[:space:]]' <<<"${clang_package}"; then
+clang_artifact_input="$(stage_block clang-p2996-artifact-input)"
+test "${clang_artifact_input}" = 'FROM scratch AS clang-p2996-artifact-input'
+if grep -Eq '^(COPY|ADD)[[:space:]]' <<<"${clang_package}"; then
   echo "clang runtime assembly must fail closed without the external artifact context" >&2
   exit 1
 fi
@@ -734,6 +767,7 @@ if grep -Fq 'FROM symphony-ci-clang AS symphony-clang-validation' "${containerfi
 fi
 grep -Fq 'FROM runtime-base AS p2996-validation-execution' \
   "${p2996_validation_containerfile}"
+grep -Fq 'FROM scratch AS runtime-base' "${p2996_validation_containerfile}"
 grep -Fq 'FROM scratch AS clang-p2996-validation' "${p2996_validation_containerfile}"
 grep -Fq \
   'COPY --from=p2996-validation-execution /validation/clang-p2996 /clang-p2996-validation-passed' \
@@ -753,18 +787,26 @@ grep -Fq \
 cmp -s "${dockerignore}" "${p2996_validation_dockerignore}"
 grep -Fq '"clang-p2996-artifact-input" = CLANG_P2996_ARTIFACT_CONTEXT' \
   "${generic_bake}"
-if grep -Fq 'target "symphony-clang-p2996"' "${generic_bake}"; then
+grep -Fq '"gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT' "${generic_bake}"
+if grep -Fq 'target "symphony-clang-p2996"' "${generic_bake}" ||
+  grep -Fq 'target "symphony-gcc16"' "${generic_bake}"; then
   echo "generic Bake graph must not expose the external compiler package as a build target" >&2
   exit 1
 fi
-test "$(grep -Fhc 'default     = ""' "${generic_bake}" "${p2996_bake}" | awk '{sum += $1} END {print sum}')" -eq 2
+test "$(grep -Fhc 'default     = ""' "${p2996_bake}" "${gcc16_bake}" | awk '{sum += $1} END {print sum}')" -eq 3
+grep -Fq \
+  'default     = "docker-image://invalid.invalid/required-clang-p2996-artifact@sha256:0000000000000000000000000000000000000000000000000000000000000000"' \
+  "${generic_bake}"
+grep -Fq \
+  'default     = "docker-image://invalid.invalid/required-gcc16-artifact@sha256:0000000000000000000000000000000000000000000000000000000000000000"' \
+  "${generic_bake}"
 test "$(
   grep -Fhc \
     'condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", CLANG_P2996_ARTIFACT_CONTEXT))' \
     "${generic_bake}" "${p2996_bake}" |
     awk '{sum += $1} END {print sum}'
 )" -eq 2
-test "$(grep -Ec '^FROM[[:space:]]' "${p2996_validation_containerfile}")" -eq 2
+test "$(grep -Ec '^FROM[[:space:]]' "${p2996_validation_containerfile}")" -eq 3
 test "$(
   grep -E '^FROM[[:space:]]' "${p2996_validation_containerfile}" | tail -n 1
 )" = 'FROM scratch AS clang-p2996-validation'
@@ -785,7 +827,10 @@ grep -Fq 'platforms: ${{ env.TOOLCHAIN_PLATFORM }}' "${workflow}"
 grep -Fq 'scope=symphony-gcc16-${{ inputs.architecture }}-min-v3' "${workflow}"
 grep -Fq 'if: ${{ inputs.architecture == '\''arm64'\'' && inputs.lineage != '\''gcc16'\'' }}' \
   "${workflow}"
-grep -Fq 'target: symphony-gcc-validation' "${workflow}"
+if grep -Fq 'target: symphony-gcc-validation' "${workflow}"; then
+  echo "GCC project validation must use the separated Bake graph" >&2
+  exit 1
+fi
 if grep -Fq 'target: symphony-clang-validation' "${workflow}"; then
   echo "clang project validation must use the separated Bake graph" >&2
   exit 1
@@ -801,6 +846,12 @@ gcc_artifact_job="$(workflow_job_block gcc16-artifact)"
 clang_job="$(workflow_job_block clang-p2996)"
 clang_artifact_job="$(workflow_job_block clang-p2996-artifact)"
 validate_job="$(workflow_job_block validate-inputs)"
+grep -Fxq \
+  "    if: \${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' || inputs.lineage == 'llvm-analysis' }}" \
+  <<<"${gcc_artifact_job}"
+grep -Fxq \
+  "    if: \${{ inputs.lineage == 'all' || inputs.lineage == 'gcc16' }}" \
+  <<<"${gcc_job}"
 grep -Fq \
   'group: compiler-matrix-${{ github.ref }}-${{ inputs.lineage }}-${{ inputs.architecture }}' \
   "${workflow}"
@@ -863,7 +914,6 @@ clang_validation_step="$(
   workflow_step_block_for_job "${clang_job}" \
     "Build and validate clang-p2996 without loading it"
 )"
-grep -Fxq '          target: symphony-gcc-validation' <<<"${gcc_validation_step}"
 grep -Fxq \
   "        if: \${{ steps.gcc-artifact-probe.outputs.hit != 'true' && inputs.seed_gcc_artifact_package }}" \
   <<<"${gcc_publish_step}"
@@ -903,19 +953,32 @@ grep -Fq \
   <<<"${gcc_select_step}"
 grep -Fq 'echo "digest=${digest}"' <<<"${gcc_select_step}"
 grep -Fq 'echo "index_digest=${index_digest}"' <<<"${gcc_select_step}"
+grep -Fxq '        env:' <<<"${gcc_validation_step}"
 grep -Fxq \
-  '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
+  '          BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}' \
   <<<"${gcc_validation_step}"
-grep -Fxq '          context: .' <<<"${gcc_validation_step}"
-grep -Fxq '          file: containers/Containerfile' <<<"${gcc_validation_step}"
-grep -Fxq '          platforms: ${{ env.TOOLCHAIN_PLATFORM }}' <<<"${gcc_validation_step}"
-grep -Fxq '          outputs: type=cacheonly' <<<"${gcc_validation_step}"
-grep -Fxq '          load: false' <<<"${gcc_validation_step}"
-grep -Fxq '          push: false' <<<"${gcc_validation_step}"
-grep -Fxq '          builder: ${{ steps.buildx.outputs.name }}' <<<"${gcc_validation_step}"
 grep -Fq \
-  'gcc16-artifact=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
+  '          GCC16_ARTIFACT_CONTEXT: docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
   <<<"${gcc_validation_step}"
+grep -Fxq '          GCC16_ARCH: ${{ inputs.architecture }}' <<<"${gcc_validation_step}"
+grep -Fxq '          SOURCE_REVISION: ${{ github.sha }}' <<<"${gcc_validation_step}"
+grep -Fq 'docker buildx bake \' <<<"${gcc_validation_step}"
+grep -Fq -- '--builder "${BUILDX_BUILDER}" \' <<<"${gcc_validation_step}"
+grep -Fq -- '--file containers/gcc16-separated.bake.hcl \' \
+  <<<"${gcc_validation_step}"
+grep -Fq -- '--progress=plain \' <<<"${gcc_validation_step}"
+grep -Fxq '            gcc16-validation' <<<"${gcc_validation_step}"
+if grep -Eq '^[[:space:]]+uses:' <<<"${gcc_validation_step}" ||
+  grep -Fq -- '--load' <<<"${gcc_validation_step}" ||
+  grep -Fq -- '--push' <<<"${gcc_validation_step}" ||
+  grep -Fq -- '--output' <<<"${gcc_validation_step}" ||
+  grep -Fq -- '--set' <<<"${gcc_validation_step}" ||
+  grep -Fq 'cache-to:' <<<"${gcc_validation_step}" ||
+  grep -Fq 'tags:' <<<"${gcc_validation_step}" ||
+  grep -Eq 'type=(registry|docker|oci|local)' <<<"${gcc_validation_step}"; then
+  echo "GCC Bake validation must remain cache-only and non-publishing" >&2
+  exit 1
+fi
 grep -Fq \
   'gcc16-ccache-v2-${{ needs.gcc16-artifact.outputs.digest }}-' \
   <<<"${gcc_job}"
@@ -1098,6 +1161,21 @@ test "${clang_artifact_setup_line}" -lt "${clang_probe_line}"
 test "${clang_probe_line}" -lt "${clang_publish_line}"
 test "${clang_publish_line}" -lt "${clang_select_line}"
 llvm_analysis_job="$(workflow_job_block llvm-analysis)"
+grep -Fxq '      - validate-inputs' <<<"${llvm_analysis_job}"
+grep -Fxq '      - gcc16-artifact' <<<"${llvm_analysis_job}"
+grep -Fxq '      packages: read' <<<"${llvm_analysis_job}"
+grep -Fxq \
+  "    if: \${{ inputs.lineage == 'all' || inputs.lineage == 'llvm-analysis' }}" \
+  <<<"${llvm_analysis_job}"
+analysis_login_step="$(
+  workflow_step_block "Log in to GitHub Container Registry for GCC artifact"
+)"
+grep -Fxq \
+  '        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0' \
+  <<<"${analysis_login_step}"
+grep -Fxq '          registry: ghcr.io' <<<"${analysis_login_step}"
+grep -Fxq '          username: ${{ github.actor }}' <<<"${analysis_login_step}"
+grep -Fxq '          password: ${{ secrets.GITHUB_TOKEN }}' <<<"${analysis_login_step}"
 analysis_base_step="$(
   workflow_step_block "Persist stable LLVM analysis base before source validation"
 )"
@@ -1116,7 +1194,10 @@ for step in "${analysis_base_step}" "${analysis_validation_step}"; do
   grep -Fxq '          load: false' <<<"${step}"
   grep -Fxq '          push: false' <<<"${step}"
   grep -Fxq '          cache-from: type=gha,scope=symphony-llvm-analysis-min-v2' <<<"${step}"
-  for key in uses context file target platforms outputs load push builder cache-from; do
+  grep -Fq \
+    'gcc16-artifact-input=docker-image://${{ needs.gcc16-artifact.outputs.ref }}@${{ needs.gcc16-artifact.outputs.digest }}' \
+    <<<"${step}"
+  for key in uses context file target platforms outputs load push builder cache-from build-contexts; do
     test "$(grep -Ec "^[[:space:]]+${key}:" <<<"${step}")" = "1"
   done
 done
@@ -1164,8 +1245,8 @@ test "${setup_buildx_id_line}" -lt "${base_step_line}"
 test "${base_step_line}" -lt "${restore_ccache_line}"
 test "${restore_ccache_line}" -lt "${bridge_ccache_line}"
 test "${bridge_ccache_line}" -lt "${validation_step_line}"
-test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "3"
-test "$(grep -Fc 'load: false' "${workflow}")" = "5"
+test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "2"
+test "$(grep -Fc 'load: false' "${workflow}")" = "4"
 test "$(grep -Fc 'version: v0.35.0' "${workflow}")" = "5"
 grep -Fq \
   'uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723' \
@@ -1177,9 +1258,9 @@ grep -Fq \
   'utility-image: ghcr.io/containerd/busybox@sha256:52f73a0a43a16cf37cd0720c90887ce972fe60ee06a687ee71fb93a7ca601df7' \
   "${workflow}"
 
-test "$(grep -Fc 'push: false' "${workflow}")" = "3"
+test "$(grep -Fc 'push: false' "${workflow}")" = "2"
 test "$(grep -Ec '^permissions:$' "${workflow}")" = "1"
-test "$(grep -Ec '^[[:space:]]*permissions:' "${workflow}")" = "5"
+test "$(grep -Ec '^[[:space:]]*permissions:' "${workflow}")" = "6"
 test "$(grep -Ec '^  contents: read$' "${workflow}")" = "1"
 test "$(grep -Ec '^[[:space:]]+packages: write$' "${workflow}")" = "2"
 if grep -Eq '(^|[[:space:]])write-all([[:space:]]|$)' "${workflow}"; then
@@ -1191,7 +1272,7 @@ if grep -E '^[[:space:]]+[[:alnum:]_-]+:[[:space:]]+write([[:space:]]|$)' "${wor
   echo "compiler workflow requested an unexpected write permission" >&2
   exit 1
 fi
-test "$(grep -Fc '${{ secrets.GITHUB_TOKEN }}' "${workflow}")" = "4"
+test "$(grep -Fc '${{ secrets.GITHUB_TOKEN }}' "${workflow}")" = "5"
 if grep -F '${{ secrets.' "${workflow}" |
   grep -Fqv '${{ secrets.GITHUB_TOKEN }}'; then
   echo "compiler workflow must not consume repository secrets other than its scoped token" >&2
@@ -1293,7 +1374,12 @@ test "$(
   grep -Fc \
     'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
     "${containerfile}"
-)" -eq 2
+)" -eq 1
+test "$(
+  grep -Fc \
+    'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \
+    "${gcc16_validation_containerfile}"
+)" -eq 1
 test "$(
   grep -Fc \
     'RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \' \

@@ -1,9 +1,18 @@
 variable "CLANG_P2996_ARTIFACT_CONTEXT" {
   description = "Exact docker-image:// clang-p2996 linux/amd64 manifest reference"
-  default     = ""
+  default     = "docker-image://invalid.invalid/required-clang-p2996-artifact@sha256:0000000000000000000000000000000000000000000000000000000000000000"
   validation {
     condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", CLANG_P2996_ARTIFACT_CONTEXT))
     error_message = "CLANG_P2996_ARTIFACT_CONTEXT must be an exact docker-image:// reference pinned by sha256 digest"
+  }
+}
+
+variable "GCC16_ARTIFACT_CONTEXT" {
+  description = "Exact docker-image:// GCC 16.1 native manifest reference"
+  default     = "docker-image://invalid.invalid/required-gcc16-artifact@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  validation {
+    condition     = can(regex("^docker-image://[^@[:space:]]+@sha256:[0-9a-f]{64}$", GCC16_ARTIFACT_CONTEXT))
+    error_message = "GCC16_ARTIFACT_CONTEXT must be an exact docker-image:// reference pinned by sha256 digest"
   }
 }
 
@@ -17,14 +26,12 @@ target "common" {
   platforms = ["linux/amd64"]
 }
 
-target "symphony-gcc16" {
-  inherits = ["common"]
-  target = "symphony-gcc16"
-}
-
 target "symphony-gcc-runtime" {
   inherits = ["common"]
   target = "symphony-gcc-runtime"
+  contexts = {
+    "gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT
+  }
 }
 
 target "symphony-ci-clang" {
@@ -38,4 +45,7 @@ target "symphony-ci-clang" {
 target "symphony-analysis" {
   inherits = ["common"]
   target = "symphony-analysis"
+  contexts = {
+    "gcc16-artifact-input" = GCC16_ARTIFACT_CONTEXT
+  }
 }

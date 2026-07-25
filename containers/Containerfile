@@ -77,6 +77,7 @@ COPY --from=gcc-builder /opt/gcc-16.1 /opt/gcc-16.1
 FROM compiler-build-base AS symphony-gcc16
 COPY --from=gcc16-artifact /opt/gcc-16.1 /opt/gcc-16.1
 
+FROM scratch AS gcc16-artifact-input
 FROM compiler-build-base AS clang-builder
 ARG CLANG_P2996_COMMIT=7220baffd57ea5b0f8cf59bee494dd5b7cc2b748
 ARG TARGETARCH
@@ -139,10 +140,11 @@ LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-
       org.opencontainers.image.description="Content-addressed Bloomberg clang-p2996 compiler artifact for symphony-cpp"
 COPY --from=clang-builder /opt/clang-p2996 /opt/clang-p2996
 
+FROM scratch AS clang-p2996-artifact-input
 FROM clang-p2996-artifact-input AS symphony-clang-p2996
 # CI/runtime assembly receives the already-published, digest-pinned compiler
-# package as a named context. There is deliberately no internal stage with the
-# input name, so a missing context fails closed instead of rebuilding clang.
+# package as a named context, overriding the empty sentinel stage. Without that
+# context the sentinel cannot supply the compiler, so assembly fails closed.
 
 FROM compiler-build-base AS llvm-analysis-tools
 ARG LLVM_VERSION=22.1.8
@@ -206,7 +208,7 @@ RUN --mount=type=bind,source=scripts/install-cmake.sh,target=/tmp/install-cmake.
 
 FROM toolchain-runtime-base AS symphony-gcc-runtime
 ARG SOURCE_REVISION=unknown
-COPY --from=symphony-gcc16 /opt/gcc-16.1 /opt/gcc-16.1
+COPY --from=gcc16-artifact-input /opt/gcc-16.1 /opt/gcc-16.1
 RUN test ! -e /opt/symphony-cpp-seed \
  && test ! -e /tmp/gcc \
  && printf '%s\n' /opt/gcc-16.1/lib64 > /etc/ld.so.conf.d/gcc-16.1.conf \
@@ -251,39 +253,6 @@ LABEL org.opencontainers.image.source="https://github.com/ray-manaloto/symphony-
 WORKDIR /workspaces
 ENTRYPOINT []
 CMD ["bash"]
-
-FROM symphony-gcc-runtime AS symphony-gcc-validation
-ARG TARGETARCH
-RUN test "$(dpkg --print-architecture)" = "${TARGETARCH}" \
- && test "$(g++ -dumpfullversion)" = "16.1.0" \
- && test "$(cmake --version | head -n 1)" = "cmake version 4.4.0" \
- && command -v ninja \
- && command -v ccache \
- && printf '%s\n' '#include <iostream>' \
-      'int main() { std::cout << 16; }' \
-      | g++ -std=c++26 -freflection -x c++ - -o /tmp/gcc-runtime-check \
- && ldd /tmp/gcc-runtime-check \
-      | grep -F 'libstdc++.so.6 => /opt/gcc-16.1/lib64/libstdc++.so.6' \
- && test "$(/tmp/gcc-runtime-check)" = "16" \
- && rm /tmp/gcc-runtime-check
-RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
-    --mount=type=cache,id=gcc-${TARGETARCH}-ccache,target=/var/cache/ccache,sharing=locked \
-    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-archives,target=/var/cache/vcpkg,sharing=locked \
-    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-root,target=/workspaces/symphony-cpp/.build/vcpkg,sharing=locked \
-    --mount=type=cache,id=gcc-${TARGETARCH}-vcpkg-installed,target=/workspaces/symphony-cpp/vcpkg_installed,sharing=locked \
-    --mount=type=cache,id=gcc-${TARGETARCH}-build,target=/workspaces/symphony-cpp/build,sharing=locked \
-    cd /workspaces/symphony-cpp \
- && export CCACHE_DIR=/var/cache/ccache \
-           CCACHE_COMPILERCHECK=content \
-           VCPKG_DEFAULT_BINARY_CACHE=/var/cache/vcpkg \
- && ccache --max-size=750M \
- && ccache --zero-stats \
- && ./scripts/devcontainer-setup.sh gcc \
- && cmake --workflow --preset gcc-debug \
- && cmake --workflow --preset gcc-release \
- && cmake --workflow --preset gcc-sanitizers \
- && cmake --workflow --preset gcc-tsan \
- && ccache --show-stats
 
 FROM symphony-analysis AS symphony-analysis-validation
 RUN --mount=type=bind,source=scripts/check-clang-format-version.sh,target=/usr/local/bin/check-clang-format-version,ro \
