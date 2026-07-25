@@ -265,6 +265,13 @@ RUN --mount=type=bind,source=scripts/check-clang-format-version.sh,target=/usr/l
  && test "$(g++ -dumpfullversion)" = "16.1.0" \
  && command -v ninja \
  && command -v ccache
+
+FROM symphony-analysis AS symphony-analysis-format-validation
+RUN --network=none --mount=type=bind,source=.,target=/workspaces/symphony-cpp,ro \
+    cd /workspaces/symphony-cpp \
+ && ./scripts/check-format.sh
+
+FROM symphony-analysis-validation AS symphony-analysis-source-validation
 RUN --mount=type=bind,source=.,target=/workspaces/symphony-cpp,rw \
     --mount=type=cache,id=analysis-ccache,target=/var/cache/ccache,sharing=locked \
     --mount=type=cache,id=analysis-vcpkg-archives,target=/var/cache/vcpkg,sharing=locked \

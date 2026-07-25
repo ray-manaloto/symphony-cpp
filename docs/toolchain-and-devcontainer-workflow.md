@@ -190,12 +190,17 @@ passed the complete GCC project matrix without executing the compiler builder. T
 minimal compiler artifacts only. Runnable Codex-derived generic runtimes, a reviewed
 multi-platform index, and devcontainer digest wiring remain separate work under issue #4.
 
-GCC and LLVM qualification still persist their stable bases before source validation. These are
-failure-ordering boundaries, not final supply: run `30094944459` proved an 11 GB LLVM/GCC result was
-not reusable, and run `30106926105` imported p2996 metadata before three evicted blobs forced a
-72m35s cold compiler build. The pinned Codex Universal AMD64 image alone is 10.17 GiB compressed,
-already beyond GitHub's default repository cache allowance. Routine validation therefore must
-ultimately consume reviewed GHCR digests rather than compiler-source mirrors.
+GCC compiler identity persists as an immutable GHCR artifact before source validation. LLVM
+analysis validation no longer exports its Codex-derived ancestry to Actions cache: it imports any
+remaining cache read-only, runs exact formatting before project dependency/configuration work, and
+reuses the same job-local Buildx builder for the complete source-analysis solve. These are
+failure-ordering boundaries, not final supply. Run `30094944459` proved an 11 GB LLVM/GCC result was
+not reusable, run `30106926105` imported p2996 metadata before three evicted blobs forced a 72m35s
+cold compiler build, and cancelled run `30148756830` repeated LLVM persistence after the repository
+had exceeded GitHub's default 10 GB cache allowance. A cold LLVM solve can still materialize its
+signed toolchain ancestors before formatting. Routine validation must ultimately consume a
+separately qualified, reviewed GHCR analysis-runtime digest to eliminate that prerequisite rather
+than restoring compiler-source mirrors.
 
 The obsolete publication job was removed because its older cache scopes and local image-loading
 ceremony could not identify the validated result. Its replacement must push one

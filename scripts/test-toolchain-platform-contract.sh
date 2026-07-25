@@ -289,6 +289,9 @@ grep -Fq \
   scripts/check-local-preflight.sh
 grep -Fq 'containers/gcc16-runtime-candidate.bake.hcl' \
   scripts/check-local-preflight.sh
+grep -Fq \
+  'for analysis_target in symphony-analysis-format-validation symphony-analysis-source-validation; do' \
+  scripts/check-local-preflight.sh
 test "$(grep -Fc -- '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF' "${ut_port}")" -eq 1
 test "$(grep -Fc -- '-DUT_ENABLE_MODULES=OFF' "${ut_port}")" -eq 1
 node -e '
@@ -843,6 +846,25 @@ analysis_validation="$(stage_block symphony-analysis-validation)"
 grep -Fq \
   'RUN --mount=type=bind,source=scripts/check-clang-format-version.sh,target=/usr/local/bin/check-clang-format-version,ro \' \
   <<<"${analysis_validation}"
+analysis_format_validation="$(stage_block symphony-analysis-format-validation)"
+grep -Fq 'FROM symphony-analysis AS symphony-analysis-format-validation' \
+  <<<"${analysis_format_validation}"
+grep -Fq \
+  'RUN --network=none --mount=type=bind,source=.,target=/workspaces/symphony-cpp,ro \' \
+  <<<"${analysis_format_validation}"
+grep -Fq '&& ./scripts/check-format.sh' <<<"${analysis_format_validation}"
+test "$(grep -Ec '^RUN ' <<<"${analysis_format_validation}")" -eq 1
+if grep -Eq \
+  'source=\.,target=/workspaces/symphony-cpp,rw|type=cache|vcpkg|cmake|ccache' \
+  <<<"${analysis_format_validation}"; then
+  echo "format validation leaf escaped its read-only, project-dependency-free boundary" >&2
+  exit 1
+fi
+analysis_source_validation="$(stage_block symphony-analysis-source-validation)"
+grep -Fq \
+  'FROM symphony-analysis-validation AS symphony-analysis-source-validation' \
+  <<<"${analysis_source_validation}"
+grep -Fq '&& ./scripts/check-format.sh' <<<"${analysis_source_validation}"
 
 clang_runtime="$(stage_block symphony-ci-clang)"
 grep -Fq 'FROM toolchain-runtime-base AS symphony-ci-clang' <<<"${clang_runtime}"
@@ -1341,13 +1363,13 @@ grep -Fxq \
 grep -Fxq '          registry: ghcr.io' <<<"${analysis_login_step}"
 grep -Fxq '          username: ${{ github.actor }}' <<<"${analysis_login_step}"
 grep -Fxq '          password: ${{ secrets.GITHUB_TOKEN }}' <<<"${analysis_login_step}"
-analysis_base_step="$(
-  workflow_step_block "Persist stable LLVM analysis base before source validation"
+analysis_format_step="$(
+  workflow_step_block "Validate exact LLVM formatting before source analysis"
 )"
 analysis_validation_step="$(
   workflow_step_block "Build and validate LLVM analysis without loading it"
 )"
-for step in "${analysis_base_step}" "${analysis_validation_step}"; do
+for step in "${analysis_format_step}" "${analysis_validation_step}"; do
   grep -Fxq \
     '        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a' \
     <<<"${step}"
@@ -1366,15 +1388,20 @@ for step in "${analysis_base_step}" "${analysis_validation_step}"; do
     test "$(grep -Ec "^[[:space:]]+${key}:" <<<"${step}")" = "1"
   done
 done
-grep -Fxq \
-  '          cache-to: type=gha,mode=min,scope=symphony-llvm-analysis-min-v2,timeout=30m,ignore-error=true' \
-  <<<"${analysis_base_step}"
-if grep -Fq '          cache-to:' <<<"${analysis_validation_step}"; then
-  echo "analysis validation must not overwrite the stable analysis cache scope" >&2
+if grep -Fq '          cache-to:' <<<"${llvm_analysis_job}"; then
+  echo "analysis validation must not write image layers to GitHub Actions cache" >&2
   exit 1
 fi
-grep -Fxq '          target: symphony-analysis' <<<"${analysis_base_step}"
-grep -Fxq '          target: symphony-analysis-validation' <<<"${analysis_validation_step}"
+if grep -Eq \
+  '^[[:space:]]+(build-args|tags|secrets):|type=(registry|image|oci|docker|local)' \
+  <<<"${analysis_format_step}"; then
+  echo "format validation received an output, secret, or mutable build argument" >&2
+  exit 1
+fi
+grep -Fxq '          target: symphony-analysis-format-validation' \
+  <<<"${analysis_format_step}"
+grep -Fxq '          target: symphony-analysis-source-validation' \
+  <<<"${analysis_validation_step}"
 setup_buildx_line="$(
   grep -Fn \
     '      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c' \
@@ -1385,9 +1412,9 @@ setup_buildx_id_line="$(
   grep -Fn '        id: buildx' <<<"${llvm_analysis_job}" |
     cut -d: -f1
 )"
-base_step_line="$(
+format_step_line="$(
   grep -Fn \
-    '      - name: Persist stable LLVM analysis base before source validation' \
+    '      - name: Validate exact LLVM formatting before source analysis' \
     <<<"${llvm_analysis_job}" |
     cut -d: -f1
 )"
@@ -1406,8 +1433,8 @@ validation_step_line="$(
     cut -d: -f1
 )"
 test "${setup_buildx_line}" -lt "${setup_buildx_id_line}"
-test "${setup_buildx_id_line}" -lt "${base_step_line}"
-test "${base_step_line}" -lt "${restore_ccache_line}"
+test "${setup_buildx_id_line}" -lt "${format_step_line}"
+test "${format_step_line}" -lt "${restore_ccache_line}"
 test "${restore_ccache_line}" -lt "${bridge_ccache_line}"
 test "${bridge_ccache_line}" -lt "${validation_step_line}"
 test "$(grep -Fc 'outputs: type=cacheonly' "${workflow}")" = "2"

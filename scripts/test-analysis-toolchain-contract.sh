@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly verifier=./scripts/check-clang-format-version.sh
 readonly source_lister="${PWD}/scripts/list-format-sources.sh"
+readonly formatter_runner=scripts/check-format.sh
 readonly pinned_commit=ca7933e47d3a3451d81e72ac174dcb5aa28b59d1
 readonly presets=CMakePresets.json
 readonly tidy_config=.clang-tidy
@@ -12,6 +13,10 @@ readonly devcontainer_runner=scripts/devcontainer-build.sh
 readonly compile_commands_verifier="${PWD}/scripts/check-analysis-compile-commands.py"
 readonly tidy_policy_verifier="${PWD}/scripts/check-tidy-policy.sh"
 
+grep -Fq './scripts/list-format-sources.sh |' "${formatter_runner}"
+grep -Fq 'xargs -0 -r "${clang_format}" \' "${formatter_runner}"
+grep -Fq -- '--dry-run \' "${formatter_runner}"
+grep -Fq -- '--Werror \' "${formatter_runner}"
 grep -Fq \
   '"VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/clang-analysis.cmake"' \
   "${presets}"

@@ -146,13 +146,15 @@ if [[ "${run_docker_checks}" == true ]]; then
     --build-context "runtime-base=${static_runtime_context}" \
     --call=check \
     .
-  docker buildx build \
-    --file "${containerfile}" \
-    --platform linux/amd64 \
-    --target symphony-analysis-validation \
-    --build-context "gcc16-artifact-input=${static_runtime_context}" \
-    --call=check \
-    .
+  for analysis_target in symphony-analysis-format-validation symphony-analysis-source-validation; do
+    docker buildx build \
+      --file "${containerfile}" \
+      --platform linux/amd64 \
+      --target "${analysis_target}" \
+      --build-context "gcc16-artifact-input=${static_runtime_context}" \
+      --call=check \
+      .
+  done
   docker buildx build \
     --file "${containerfile}" \
     --platform linux/amd64 \
