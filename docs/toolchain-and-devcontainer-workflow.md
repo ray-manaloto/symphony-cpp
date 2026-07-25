@@ -171,6 +171,16 @@ base stays on its authoritative GHCR digest and outside the artifact packages. A
 package-hit run must prove that neither `clang-builder` nor `gcc-builder` executes before a
 candidate is treated as reusable.
 
+The compiler-artifact boundary is qualified for GCC 16.1 on both native architectures. AMD64 seed
+run `30137472450` and fresh package-hit run `30138910349` selected child
+`sha256:30cf91ffd71a925d11e687b31b7d298ca8b30b715b12d547ba4c1a8c4091c890`.
+ARM64 seed run `30139992468` published child
+`sha256:19dea032f531be3b15ccbc04bc8795a357877a9f4ece2b0f92a0fb46858f0ee3`;
+seed-disabled correction run `30141979097` and distinct exact-cache-hit run `30142443867` then
+passed the complete GCC project matrix without executing the compiler builder. This qualifies the
+minimal compiler artifacts only. Runnable Codex-derived generic runtimes, a reviewed
+multi-platform index, and devcontainer digest wiring remain separate work under issue #4.
+
 GCC and LLVM qualification still persist their stable bases before source validation. These are
 failure-ordering boundaries, not final supply: run `30094944459` proved an 11 GB LLVM/GCC result was
 not reusable, and run `30106926105` imported p2996 metadata before three evicted blobs forced a
@@ -289,9 +299,11 @@ that a new compiler image is publishable.
 ## Native ARM64 rollout
 
 GCC 16.1 supports AArch64 and exposes the same C++26 reflection switch, but the reflection patch's
-published bootstrap evidence was x86-64. ARM64 therefore starts as a candidate and becomes the
-Apple Silicon default only after the exact Debug, Release, sanitizer, dependency, stdexec, and
-reflection workflows pass. AMD64 remains the executable-semantics parity baseline during rollout.
+published bootstrap evidence was x86-64. The native ARM64 compiler artifact has now passed the
+exact Debug, Release, sanitizer, dependency, stdexec, reflection, runtime-link, cold-cache, and
+fresh-cache-hit gates. It becomes the Apple Silicon default only after issue #4 publishes and
+inspects a runnable generic ARM64 runtime and a separate reviewed digest-wiring commit updates the
+devcontainer. AMD64 remains the executable-semantics parity baseline during rollout.
 
 ```mermaid
 flowchart TD
