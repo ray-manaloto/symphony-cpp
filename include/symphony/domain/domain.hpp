@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <compare>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -52,11 +53,28 @@ struct Issue {
   bool dispatchable{true};
 };
 
+struct RepositoryContentEvidence {
+  std::string path;
+  std::string content_digest;
+  friend auto operator<=>(const RepositoryContentEvidence&,
+                          const RepositoryContentEvidence&) = default;
+};
+
+struct CommandExecutionEvidence {
+  std::string command;
+  std::string cwd;
+  std::string toolchain;
+  std::int32_t exit_status{};
+  std::vector<std::string> artifact_digests;
+  friend auto operator<=>(const CommandExecutionEvidence&,
+                          const CommandExecutionEvidence&) = default;
+};
+
 struct ProgressSnapshot {
   std::string summary;
   std::string current_step;
-  std::vector<std::string> changed_paths;
-  std::vector<std::string> completed_checks;
+  std::vector<RepositoryContentEvidence> repository_content;
+  std::vector<CommandExecutionEvidence> command_results;
 };
 
 struct ProgressFingerprint {

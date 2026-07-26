@@ -24,35 +24,64 @@ void hash_size(Sha256& hasher, const std::size_t size) {
   hasher.process(encoded.begin(), encoded.end());
 }
 
+void hash_uint32(Sha256& hasher, const std::uint32_t value) {
+  std::array<unsigned char, sizeof(value)> encoded{};
+  auto remaining = value;
+  for (auto iterator = encoded.rbegin(); iterator != encoded.rend(); ++iterator) {
+    *iterator = static_cast<unsigned char>(remaining & 0xffU);
+    remaining >>= 8U;
+  }
+  hasher.process(encoded.begin(), encoded.end());
+}
+
 void hash_bytes(Sha256& hasher, const std::string_view value) {
   hash_size(hasher, value.size());
   hasher.process(value.begin(), value.end());
 }
 
-void normalize(std::vector<std::string>& values) {
+template <typename Value> void normalize(std::vector<Value>& values) {
   std::ranges::sort(values);
   values.erase(std::ranges::unique(values).begin(), values.end());
 }
 
-void hash_values(Sha256& hasher, const unsigned char tag, const std::vector<std::string>& values) {
+void hash_repository_content(Sha256& hasher, const std::vector<RepositoryContentEvidence>& values) {
+  constexpr unsigned char tag{1U};
   hasher.process(&tag, &tag + 1);
   hash_size(hasher, values.size());
   for (const auto& value : values) {
-    hash_bytes(hasher, value);
+    hash_bytes(hasher, value.path);
+    hash_bytes(hasher, value.content_digest);
+  }
+}
+
+void hash_command_results(Sha256& hasher, const std::vector<CommandExecutionEvidence>& values) {
+  constexpr unsigned char tag{2U};
+  hasher.process(&tag, &tag + 1);
+  hash_size(hasher, values.size());
+  for (const auto& value : values) {
+    hash_bytes(hasher, value.command);
+    hash_bytes(hasher, value.cwd);
+    hash_bytes(hasher, value.toolchain);
+    hash_uint32(hasher, static_cast<std::uint32_t>(value.exit_status));
+    hash_size(hasher, value.artifact_digests.size());
+    for (const auto& digest : value.artifact_digests) {
+      hash_bytes(hasher, digest);
+    }
   }
 }
 } // namespace
 
 ProgressFingerprint fingerprint(const ProgressSnapshot& snapshot) {
-  auto paths = snapshot.changed_paths;
-  auto checks = snapshot.completed_checks;
-  normalize(paths);
-  normalize(checks);
+  auto repository_content = snapshot.repository_content;
+  auto command_results = snapshot.command_results;
+  for (auto& result : command_results) normalize(result.artifact_digests);
+  normalize(repository_content);
+  normalize(command_results);
 
   Sha256 hasher;
-  hash_bytes(hasher, "symphony-objective-progress-v1");
-  hash_values(hasher, 1U, paths);
-  hash_values(hasher, 2U, checks);
+  hash_bytes(hasher, "symphony-objective-progress-v2");
+  hash_repository_content(hasher, repository_content);
+  hash_command_results(hasher, command_results);
   hasher.finish();
   return {picosha2::get_hash_hex_string(hasher)};
 }
