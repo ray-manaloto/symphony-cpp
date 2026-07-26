@@ -29,6 +29,88 @@ target_link_libraries(symphony_supervisor_policy_tests PRIVATE
 add_test(NAME symphony_supervisor_policy_tests
   COMMAND symphony_supervisor_policy_tests)
 
+add_executable(symphony_control_records_tests
+  test_main.cpp control_records_tests.cpp)
+target_link_libraries(symphony_control_records_tests PRIVATE
+  symphony_control_records ut::ut glaze::glaze)
+add_test(NAME symphony_control_records_tests
+  COMMAND symphony_control_records_tests)
+
+add_executable(symphony_control_record_schema_generator
+  control_record_schema_generator.cpp)
+target_link_libraries(symphony_control_record_schema_generator PRIVATE
+  symphony_control_records)
+
+find_program(SYMPHONY_CHECK_JSONSCHEMA
+  NAMES check-jsonschema
+  REQUIRED)
+set(control_record_schema_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/generated/control-record-schemas)
+add_test(
+  NAME symphony_control_record_schema_generate
+  COMMAND symphony_control_record_schema_generator
+    ${control_record_schema_dir})
+set_tests_properties(symphony_control_record_schema_generate
+  PROPERTIES FIXTURES_SETUP control_record_schemas)
+
+add_test(
+  NAME symphony_control_record_schema_metaschema
+  COMMAND ${SYMPHONY_CHECK_JSONSCHEMA}
+    --check-metaschema
+    ${control_record_schema_dir}/task-packet-v1.schema.json
+    ${control_record_schema_dir}/task-result-v1.schema.json
+    ${control_record_schema_dir}/review-attestation-v1.schema.json
+    ${control_record_schema_dir}/task-notepad-v1.schema.json)
+set_tests_properties(symphony_control_record_schema_metaschema
+  PROPERTIES FIXTURES_REQUIRED control_record_schemas)
+
+function(symphony_control_record_schema_fixture name schema fixture expected_valid)
+  add_test(
+    NAME symphony_control_record_schema_${name}
+    COMMAND ${CMAKE_COMMAND}
+      -DCHECK_JSONSCHEMA=${SYMPHONY_CHECK_JSONSCHEMA}
+      -DSCHEMA=${control_record_schema_dir}/${schema}
+      -DINSTANCE=${PROJECT_SOURCE_DIR}/tests/fixtures/control-records/${fixture}
+      -DEXPECT_VALID=${expected_valid}
+      -DMAX_INSTANCE_BYTES=1048576
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckJsonSchemaFixture.cmake)
+  set_tests_properties(symphony_control_record_schema_${name}
+    PROPERTIES FIXTURES_REQUIRED control_record_schemas)
+endfunction()
+
+symphony_control_record_schema_fixture(
+  task_packet_valid task-packet-v1.schema.json task-packet-v1.valid.json TRUE)
+symphony_control_record_schema_fixture(
+  task_packet_hostile task-packet-v1.schema.json task-packet-v1.hostile.json FALSE)
+symphony_control_record_schema_fixture(
+  task_packet_wrong_kind task-packet-v1.schema.json
+  task-packet-v1.wrong-kind.json FALSE)
+symphony_control_record_schema_fixture(
+  task_packet_nested_unknown task-packet-v1.schema.json
+  task-packet-v1.nested-unknown.json FALSE)
+symphony_control_record_schema_fixture(
+  task_result_valid task-result-v1.schema.json task-result-v1.valid.json TRUE)
+symphony_control_record_schema_fixture(
+  task_result_hostile task-result-v1.schema.json task-result-v1.hostile.json FALSE)
+symphony_control_record_schema_fixture(
+  review_valid review-attestation-v1.schema.json review-attestation-v1.valid.json TRUE)
+symphony_control_record_schema_fixture(
+  review_hostile review-attestation-v1.schema.json review-attestation-v1.hostile.json FALSE)
+symphony_control_record_schema_fixture(
+  notepad_valid task-notepad-v1.schema.json task-notepad-v1.valid.json TRUE)
+symphony_control_record_schema_fixture(
+  notepad_hostile task-notepad-v1.schema.json task-notepad-v1.hostile.json FALSE)
+add_test(
+  NAME symphony_control_record_schema_wrapper_self_test
+  COMMAND ${CMAKE_COMMAND}
+    -DSELF_TEST=TRUE
+    -DCHECK_JSONSCHEMA=${SYMPHONY_CHECK_JSONSCHEMA}
+    -DSCHEMA=${control_record_schema_dir}/task-packet-v1.schema.json
+    -DINSTANCE=${PROJECT_SOURCE_DIR}/tests/fixtures/control-records/task-packet-v1.valid.json
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckJsonSchemaFixture.cmake)
+set_tests_properties(symphony_control_record_schema_wrapper_self_test
+  PROPERTIES FIXTURES_REQUIRED control_record_schemas)
+
 add_executable(symphony_intel_provider_tests
   test_main.cpp
   intel_provider_tests.cpp)

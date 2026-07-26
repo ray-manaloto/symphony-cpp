@@ -43,11 +43,20 @@ jobs:
       - name: Install build frontend
         run: |
           apt-get update
-          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs tar unzip zip zstd
+          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs pipx tar unzip zip zstd
           rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Install pinned schema validator
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        with:
+          version: 2026.7.12
+          sha256: dad54e0b843908324282b8673f9c0ebc3a4da0c49ad2da309a49bfbc918ba180
+          install_args: pipx:check-jsonschema
+          cache_key_prefix: symphony-source-schema-v1
+      - name: Verify pinned schema validator
+        run: test "$(check-jsonschema --version)" = "check-jsonschema, version 0.37.4"
       - name: Install pinned CMake 4.4.0
         run: ./scripts/install-cmake.sh
       - name: Restore pinned vcpkg binary cache

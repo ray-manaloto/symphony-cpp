@@ -1,0 +1,58 @@
+{
+  "schema_version": "one",
+  "record_kind": "task_notepad",
+  "task_id": "CONTROL-RECORDS-001",
+  "packet_id": "packet-001",
+  "objective": "introduce strict versioned control records",
+  "constraints": ["records grant no authority"],
+  "decisions": [{
+    "decision": "use Glaze",
+    "evidence_references": ["docs/dependency-decisions.md"]
+  }],
+  "commands": [{
+    "command": "ctest --preset gcc-debug",
+    "cwd": "/workspace/symphony-cpp",
+    "exit_status": 0,
+    "result_summary": "passed",
+    "redacted_log_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }],
+  "repository": {
+    "repository_url": "https://github.com/ray-manaloto/symphony-cpp",
+    "worktree": "/workspace/symphony-cpp",
+    "branch": "codex/implementation",
+    "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "head_sha": "ffffffffffffffffffffffffffffffffffffffff"
+  },
+  "files_claimed": ["include/symphony/control/records.hpp"],
+  "resources_claimed": ["build/gcc-debug"],
+  "progress_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "consecutive_failure_count": 0,
+  "blockers": [],
+  "unresolved_risks": [],
+  "role": "executor",
+  "model": "gpt-5.6-sol",
+  "effort": "high",
+  "turn_number": 1,
+  "session_id": "session-001",
+  "context": {
+    "thread_id": "thread-001",
+    "turn_id": "turn-001",
+    "context_window": 100000,
+    "last_input_tokens": 44000,
+    "cumulative_input_tokens": 44000,
+    "cumulative_output_tokens": 1000,
+    "cumulative_cached_tokens": 20000,
+    "compaction_count": 0
+  },
+  "task_items": [{
+    "id": "fixture",
+    "description": "add failing fixture",
+    "state": "completed"
+  }],
+  "next_action": "request review",
+  "next_owner": "root",
+  "created_at": "2026-07-25T00:00:00Z",
+  "updated_at": "2026-07-25T00:10:00Z",
+  "content_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "redaction_summary": "sanitized"
+}

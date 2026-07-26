@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "record_kind": "review_attestation",
+  "review_id": "review-001",
+  "packet_id": "packet-001",
+  "review_kind": "adversarial",
+  "reviewer_id": "reviewer-001",
+  "reviewer_session_id": "session-review-001",
+  "role_history_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+  "independence": {
+    "designed_change": false,
+    "authored_change": false,
+    "materially_shaped_change": false
+  },
+  "reviewed_sha": "ffffffffffffffffffffffffffffffffffffffff",
+  "reviewed_diff_digest": "8888888888888888888888888888888888888888888888888888888888888888",
+  "reviewed_path_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+  "findings": [],
+  "required_check_ids": ["symphony_control_records_tests"],
+  "required_checks_fresh": true,
+  "reviewed_path_bytes_unchanged": true,
+  "passed": true,
+  "created_at": "2026-07-25T00:00:00Z",
+  "redaction_summary": "sanitized"
+}

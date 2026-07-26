@@ -83,13 +83,12 @@ static ut::suite supervisor_policy_tests = [] {
     ContextBudgetState state;
     state.turns_in_session = 3;
 
-    const auto compacted =
-        decide_context_budget({}, state,
-                              {
-                                  .token_usage = usage(55, 100),
-                                  .completed_turns = 1,
-                                  .compactions = 1,
-                              });
+    const auto compacted = decide_context_budget({}, state,
+                                                 {
+                                                     .token_usage = usage(55, 100),
+                                                     .completed_turns = 1,
+                                                     .compactions = 1,
+                                                 });
     const auto turn_capped = decide_context_budget({}, state, observed(55, 100));
 
     ut::expect(compacted.action == ContextBudgetAction::rollover_fresh_session);

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "record_kind": "task_result",
+  "identity": {
+    "packet_id": "packet-001",
+    "issue_id": "issue-001",
+    "issue_identifier": "CONTROL-RECORDS-001",
+    "repository_url": "https://github.com/ray-manaloto/symphony-cpp",
+    "worktree": "/workspace/symphony-cpp",
+    "branch": "codex/implementation",
+    "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "plan_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "spec_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "created_at": "2026-07-25T00:00:00Z",
+    "expires_at": "2026-07-26T00:00:00Z"
+  },
+  "role": "executor",
+  "objective": {
+    "observable_contract": "round-trip strict V1 records",
+    "acceptance_boundary": "focused schema fixtures pass",
+    "atomic_action": "implement the control-record codec",
+    "stop_conditions": ["provider cannot express the contract"],
+    "split_conditions": ["controller wiring is requested"]
+  },
+  "authority": {
+    "read_only": false,
+    "tracker_mutation": false,
+    "publication": false,
+    "deployment": false,
+    "allowed_paths": ["include/symphony/control/records.hpp"],
+    "denied_paths": ["fixtures/generated"],
+    "serialized_paths": ["src/CMakeLists.txt"],
+    "resource_keys": ["build/gcc-debug"]
+  },
+  "dependency": {
+    "decision_status": "adopted",
+    "provider": "Glaze 7.9.0",
+    "seam": "symphony::control",
+    "decision_record": "docs/dependency-decisions.md"
+  },
+  "failure_first": {
+    "fixture_id": "control-records-red-001",
+    "focused_command": "ctest --preset gcc-debug -R ^symphony_control_record",
+    "expected_initial_outcome": "missing control-record interface"
+  },
+  "acceptance": [{
+    "command": "ctest --preset gcc-debug -R ^symphony_control_record",
+    "cwd": "/workspace/symphony-cpp",
+    "expected_exit": 0,
+    "artifact_path": "build/gcc-debug/tests/symphony_control_records_tests",
+    "toolchain": "GCC 16.1",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }],
+  "review": {
+    "risk_triggers": ["control policy"],
+    "required_kinds": ["normal", "adversarial"],
+    "independent_reviewer_required": true
+  },
+  "budget": {
+    "max_turns": 4,
+    "max_sessions": 2,
+    "deadline_seconds": 5400,
+    "no_progress_limit": 1,
+    "repeated_failure_limit": 2
+  },
+  "model_route": {
+    "model": "gpt-5.6-sol",
+    "effort": "high",
+    "reason": "baseline implementation route"
+  },
+  "checkpoint": {
+    "notepad_path": ".codex/notepads/root.md",
+    "notepad_schema_version": 1,
+    "context_telemetry_source": "native exact-turn telemetry",
+    "checkpoint_percent": 45,
+    "handoff_percent": 50,
+    "hard_stop_percent": 55,
+    "next_owner": "root"
+  }
+}

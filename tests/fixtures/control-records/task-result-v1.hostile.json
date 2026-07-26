@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "record_kind": "task_result",
+  "packet_id": "packet-001",
+  "role": "executor",
+  "actor_id": "root",
+  "session_id": "session-001",
+  "role_history_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "repository": {
+    "repository_url": "https://github.com/ray-manaloto/symphony-cpp",
+    "worktree": "/workspace/symphony-cpp",
+    "branch": "codex/implementation",
+    "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "head_sha": "ffffffffffffffffffffffffffffffffffffffff"
+  },
+  "changed_path_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "progress_fingerprint": "2222222222222222222222222222222222222222222222222222222222222222",
+  "command_results": [{
+    "command": "ctest --preset gcc-debug",
+    "cwd": "/workspace/symphony-cpp",
+    "exit_status": 0,
+    "toolchain": "GCC 16.1",
+    "environment_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "redacted_log_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+    "artifact_digests": ["5555555555555555555555555555555555555555555555555555555555555555"]
+  }],
+  "files_touched": ["tests/control_records_tests.cpp"],
+  "resources_touched": ["build/gcc-debug"],
+  "unresolved_risks": [],
+  "blockers": [],
+  "next_action": "request review",
+  "next_owner": "root",
+  "notepad_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+  "terminal_reason": "completed",
+  "partial": false,
+  "redaction_summary": "no secrets or issue content"
+}

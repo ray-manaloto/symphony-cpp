@@ -15,6 +15,10 @@ endfunction()
 symphony_library(symphony_domain domain/domain.cpp)
 symphony_public_headers(symphony_domain PUBLIC
   ${PROJECT_SOURCE_DIR}/include/symphony/domain/domain.hpp)
+symphony_library(symphony_control_records control/records.cpp)
+target_link_libraries(symphony_control_records PRIVATE glaze::glaze)
+symphony_public_headers(symphony_control_records PUBLIC
+  ${PROJECT_SOURCE_DIR}/include/symphony/control/records.hpp)
 add_library(symphony_reflection INTERFACE)
 target_include_directories(symphony_reflection
   INTERFACE ${PROJECT_SOURCE_DIR}/include)

@@ -38,10 +38,6 @@ readonly devcontainer_configs=(
   .devcontainer/analysis/devcontainer.json
 )
 
-grep -Fq \
-  'apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs tar unzip zip zstd' \
-  "${source_workflow}"
-
 bash -n "${cmake_installer}"
 bash -n "${devcontainer_setup}"
 bash -n "${p2996_workflow_runner}"
@@ -1509,7 +1505,89 @@ source_gcc_job="$(
     }
   ' "${source_workflow}"
 )"
+readonly source_gcc_job
 grep -Fxq '    needs: metadata' <<<"${source_gcc_job}"
+readonly schema_apt_line='          apt-get install --yes --no-install-recommends ca-certificates ccache cmake curl git jq ninja-build nodejs pipx tar unzip zip zstd'
+readonly schema_action_line='        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea'
+readonly schema_mise_version_line='          version: 2026.7.12'
+readonly schema_mise_sha_line='          sha256: dad54e0b843908324282b8673f9c0ebc3a4da0c49ad2da309a49bfbc918ba180'
+readonly schema_install_line='          install_args: pipx:check-jsonschema'
+readonly schema_cache_line='          cache_key_prefix: symphony-source-schema-v1'
+readonly schema_verify_line='        run: test "$(check-jsonschema --version)" = "check-jsonschema, version 0.37.4"'
+readonly gcc_debug_workflow_line='        run: cmake --workflow --preset gcc-debug'
+readonly gcc_release_workflow_line='        run: cmake --workflow --preset gcc-release'
+readonly gcc_sanitizers_workflow_line='        run: cmake --workflow --preset gcc-sanitizers'
+readonly gcc_tsan_workflow_line='        run: cmake --workflow --preset gcc-tsan'
+
+for expected_line in \
+  "${schema_apt_line}" \
+  "${schema_action_line}" \
+  "${schema_mise_version_line}" \
+  "${schema_mise_sha_line}" \
+  "${schema_install_line}" \
+  "${schema_cache_line}" \
+  "${schema_verify_line}" \
+  "${gcc_debug_workflow_line}" \
+  "${gcc_release_workflow_line}" \
+  "${gcc_sanitizers_workflow_line}" \
+  "${gcc_tsan_workflow_line}"; do
+  test "$(grep -Fxc "${expected_line}" <<<"${source_gcc_job}")" -eq 1
+done
+
+test "$(
+  grep -Ec '^[[:space:]]+run: cmake --workflow --preset gcc-(debug|release|sanitizers|tsan)$' \
+    <<<"${source_gcc_job}"
+)" -eq 4
+
+schema_apt_line_number="$(grep -Fnx "${schema_apt_line}" <<<"${source_gcc_job}" | cut -d: -f1)"
+schema_action_line_number="$(grep -Fnx "${schema_action_line}" <<<"${source_gcc_job}" | cut -d: -f1)"
+schema_mise_version_line_number="$(
+  grep -Fnx "${schema_mise_version_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+schema_mise_sha_line_number="$(
+  grep -Fnx "${schema_mise_sha_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+schema_install_line_number="$(
+  grep -Fnx "${schema_install_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+schema_cache_line_number="$(grep -Fnx "${schema_cache_line}" <<<"${source_gcc_job}" | cut -d: -f1)"
+schema_verify_line_number="$(
+  grep -Fnx "${schema_verify_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+gcc_debug_workflow_line_number="$(
+  grep -Fnx "${gcc_debug_workflow_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+gcc_release_workflow_line_number="$(
+  grep -Fnx "${gcc_release_workflow_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+gcc_sanitizers_workflow_line_number="$(
+  grep -Fnx "${gcc_sanitizers_workflow_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+gcc_tsan_workflow_line_number="$(
+  grep -Fnx "${gcc_tsan_workflow_line}" <<<"${source_gcc_job}" | cut -d: -f1
+)"
+readonly schema_apt_line_number
+readonly schema_action_line_number
+readonly schema_mise_version_line_number
+readonly schema_mise_sha_line_number
+readonly schema_install_line_number
+readonly schema_cache_line_number
+readonly schema_verify_line_number
+readonly gcc_debug_workflow_line_number
+readonly gcc_release_workflow_line_number
+readonly gcc_sanitizers_workflow_line_number
+readonly gcc_tsan_workflow_line_number
+
+test "${schema_apt_line_number}" -lt "${schema_action_line_number}"
+test "${schema_action_line_number}" -lt "${schema_mise_version_line_number}"
+test "${schema_mise_version_line_number}" -lt "${schema_mise_sha_line_number}"
+test "${schema_mise_sha_line_number}" -lt "${schema_install_line_number}"
+test "${schema_install_line_number}" -lt "${schema_cache_line_number}"
+test "${schema_cache_line_number}" -lt "${schema_verify_line_number}"
+test "${schema_verify_line_number}" -lt "${gcc_debug_workflow_line_number}"
+test "${gcc_debug_workflow_line_number}" -lt "${gcc_release_workflow_line_number}"
+test "${gcc_release_workflow_line_number}" -lt "${gcc_sanitizers_workflow_line_number}"
+test "${gcc_sanitizers_workflow_line_number}" -lt "${gcc_tsan_workflow_line_number}"
 
 if grep -Fq 'setup-qemu-action' "${workflow}"; then
   echo "native compiler qualification must not install QEMU" >&2
