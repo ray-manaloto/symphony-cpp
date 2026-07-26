@@ -1,36 +1,60 @@
 #include "symphony/domain/domain.hpp"
 
 #include <algorithm>
-#include <iomanip>
-#include <limits>
-#include <sstream>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include <vector>
+
+#include <picosha2.h>
 
 namespace symphony::domain {
 namespace {
-void hash_bytes(std::uint64_t& hash, std::string_view value) {
-  constexpr std::uint64_t prime = 1099511628211ULL;
-  for (const auto byte : value) {
-    hash ^= static_cast<unsigned char>(byte);
-    hash *= prime;
+using Sha256 = picosha2::hash256_one_by_one;
+
+void hash_size(Sha256& hasher, const std::size_t size) {
+  static_assert(sizeof(std::size_t) <= sizeof(std::uint64_t));
+  auto remaining = static_cast<std::uint64_t>(size);
+  std::array<unsigned char, sizeof(std::uint64_t)> encoded{};
+  for (auto iterator = encoded.rbegin(); iterator != encoded.rend(); ++iterator) {
+    *iterator = static_cast<unsigned char>(remaining & 0xffU);
+    remaining >>= 8U;
   }
-  hash ^= 0xffU;
-  hash *= prime;
+  hasher.process(encoded.begin(), encoded.end());
+}
+
+void hash_bytes(Sha256& hasher, const std::string_view value) {
+  hash_size(hasher, value.size());
+  hasher.process(value.begin(), value.end());
+}
+
+void normalize(std::vector<std::string>& values) {
+  std::ranges::sort(values);
+  values.erase(std::ranges::unique(values).begin(), values.end());
+}
+
+void hash_values(Sha256& hasher, const unsigned char tag, const std::vector<std::string>& values) {
+  hasher.process(&tag, &tag + 1);
+  hash_size(hasher, values.size());
+  for (const auto& value : values) {
+    hash_bytes(hasher, value);
+  }
 }
 } // namespace
 
 ProgressFingerprint fingerprint(const ProgressSnapshot& snapshot) {
   auto paths = snapshot.changed_paths;
   auto checks = snapshot.completed_checks;
-  std::ranges::sort(paths);
-  std::ranges::sort(checks);
-  std::uint64_t hash = 14695981039346656037ULL;
-  hash_bytes(hash, snapshot.summary);
-  hash_bytes(hash, snapshot.current_step);
-  for (const auto& path : paths) hash_bytes(hash, path);
-  for (const auto& check : checks) hash_bytes(hash, check);
-  std::ostringstream value;
-  value << std::hex << std::setfill('0') << std::setw(16) << hash;
-  return {value.str()};
+  normalize(paths);
+  normalize(checks);
+
+  Sha256 hasher;
+  hash_bytes(hasher, "symphony-objective-progress-v1");
+  hash_values(hasher, 1U, paths);
+  hash_values(hasher, 2U, checks);
+  hasher.finish();
+  return {picosha2::get_hash_hex_string(hasher)};
 }
 
 ProgressDecision observe_progress(Attempt& attempt, const ProgressFingerprint& current) {

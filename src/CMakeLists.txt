@@ -13,6 +13,7 @@ function(symphony_public_headers target visibility)
 endfunction()
 
 symphony_library(symphony_domain domain/domain.cpp)
+target_link_libraries(symphony_domain PRIVATE picosha2::picosha2)
 symphony_public_headers(symphony_domain PUBLIC
   ${PROJECT_SOURCE_DIR}/include/symphony/domain/domain.hpp)
 symphony_library(symphony_control_records control/records.cpp)
