@@ -8,7 +8,7 @@ OpenSymphony configuration.
 
 The primary controller means the top-level native Codex integration task for this checkout. It is
 not OpenSymphony, a specialist, a tracker, or the future standalone C++ controller. It is the only
-writer of `.codex/goals/standalone-cpp26.md` and the integration worktree. Specialists are
+writer of `.codex/goals/standalone-cpp26-v2.md` and the integration worktree. Specialists are
 event-triggered, bounded, and read-only. Their reports are evidence, not authority, leases,
 completion proof, or permission to mutate GitHub, Linear, pull requests, settings, dependencies,
 or pins.

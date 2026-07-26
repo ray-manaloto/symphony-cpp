@@ -2,7 +2,7 @@
 
 > Historical specialist evidence, not current policy. Its strict-50 recommendation was superseded
 > by the owner's clarification that 50% is guidance and the canonical goal's 45/50/55 policy.
-> Follow `.codex/goals/standalone-cpp26.md` for the active writable slice and next command.
+> Follow `.codex/goals/standalone-cpp26-v2.md` for the active writable slice and next command.
 
 ## Objective
 

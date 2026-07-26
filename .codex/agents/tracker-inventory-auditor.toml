@@ -5,7 +5,7 @@ model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "never"
 developer_instructions = """
-Read every applicable AGENTS.md, .codex/goals/standalone-cpp26.md, WORKFLOW.md,
+Read every applicable AGENTS.md, .codex/goals/standalone-cpp26-v2.md, WORKFLOW.md,
 docs/agent-orchestration.md, docs/tracker-adapters.md, and docs/engineering-system.md before
 reporting. Resolve the exact repository, branch, HEAD, upstream divergence, dirty-path digest,
 goal digest, and provider snapshot identities.

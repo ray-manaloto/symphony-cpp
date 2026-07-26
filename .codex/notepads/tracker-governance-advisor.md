@@ -6,7 +6,7 @@ Design a project-scoped custom Codex agent that reconciles the canonical goal, r
 references, GitHub issues and pull requests, and a sanitized Linear metadata projection. The agent
 is an evidence-producing auditor: it never changes a tracker, pull request, branch, goal, plan, or
 notepad. The root integration/goal owner decides how findings alter
-`.codex/goals/standalone-cpp26.md`.
+`.codex/goals/standalone-cpp26-v2.md`.
 
 ## Authority and constraints
 
@@ -30,7 +30,7 @@ notepad. The root integration/goal owner decides how findings alter
 ## Sources inspected
 
 - `AGENTS.md`
-- `.codex/goals/standalone-cpp26.md`
+- `.codex/goals/standalone-cpp26-v2.md`
 - `.codex/goals/active.json`
 - `WORKFLOW.md`
 - `docs/tracker-adapters.md`
@@ -288,7 +288,7 @@ developer_instructions = """
 Reconcile the canonical standalone C++26 goal with exact Git state, repository evidence, GitHub
 issue/PR/check metadata, and only a sanitized Linear metadata projection.
 
-Read AGENTS.md, .codex/goals/standalone-cpp26.md, WORKFLOW.md,
+Read AGENTS.md, .codex/goals/standalone-cpp26-v2.md, WORKFLOW.md,
 docs/tracker-adapters.md, and docs/engineering-system.md before reporting. Treat the goal as the
 root owner's evolving checklist, never as a write lease. Resolve repository, branch, HEAD, upstream
 divergence, dirty-path digest, goal digest, and provider snapshot identities.

@@ -21,6 +21,9 @@ test "$(
 
 git diff --cached --check
 git diff --check
+./scripts/test-goal-routing.sh
+./scripts/check-goal-routing.sh
+
 pre-commit validate-config .pre-commit-config.yaml
 bash -n scripts/*.sh
 shellcheck --severity=warning scripts/*.sh
