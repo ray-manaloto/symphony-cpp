@@ -19,11 +19,12 @@ networks, disposable state, and fake Linear/GitHub/model services. The completed
 sole live canary.
 
 OpenSymphony does not enforce the approved run, effort, progress, failure, or context policy. The
-external C++26 supervisor therefore fails closed after four model-backed runs, 90 minutes, two
-unchanged/repeated-failure results, missing telemetry, or failed checkpoint reconciliation. It
-checkpoints at 50%, finishes only an atomic handoff slice at 60%, and authorizes no continuation at
-65% of last-turn input tokens over the reported positive context window. Compaction immediately
-requires a durable fresh-session rollover.
+planned external C++26 supervisor remains disarmed until its telemetry/checkpoint wiring passes.
+Once admitted, it must fail closed after four model-backed runs, 90 minutes, two
+unchanged/repeated-failure results, missing telemetry, or failed checkpoint reconciliation. It must
+checkpoint at 45%, add no scope and finish only an atomic handoff slice at 50%, and authorize no
+continuation at 55% of last-turn input tokens over the reported positive context window. Compaction
+must require a durable fresh-session rollover.
 
 Stable compiler bases are built on native GitHub AMD64 and ARM64 runners and published only through
 the guarded image ceremony. Apple Silicon daily development uses the ARM64 child of a reviewed

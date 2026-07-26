@@ -35,20 +35,67 @@ ContextBudgetObservation observed(const std::uint64_t total, const std::int64_t 
 } // namespace
 
 static ut::suite supervisor_policy_tests = [] {
-  ut::test("context budget applies the 50 60 and 65 percent boundaries") = [] {
-    const auto below = decide_context_budget({}, {}, observed(49, 100));
-    const auto checkpoint = decide_context_budget({}, {}, observed(50, 100));
-    const auto handoff = decide_context_budget({}, {}, observed(60, 100));
-    const auto rollover = decide_context_budget({}, {}, observed(65, 100));
+  ut::test("context budget applies the 45 50 and 55 percent boundaries") = [] {
+    const auto below_checkpoint = decide_context_budget({}, {}, observed(44, 100));
+    const auto at_checkpoint = decide_context_budget({}, {}, observed(45, 100));
+    const auto below_handoff = decide_context_budget({}, {}, observed(49, 100));
+    const auto at_handoff = decide_context_budget({}, {}, observed(50, 100));
+    const auto below_rollover = decide_context_budget({}, {}, observed(54, 100));
+    const auto at_rollover = decide_context_budget({}, {}, observed(55, 100));
 
-    ut::expect(below.action == ContextBudgetAction::continue_session);
-    ut::expect(below.reason == ContextBudgetReason::below_checkpoint);
-    ut::expect(checkpoint.action == ContextBudgetAction::checkpoint_then_continue);
-    ut::expect(checkpoint.reason == ContextBudgetReason::checkpoint_threshold);
-    ut::expect(handoff.action == ContextBudgetAction::finish_atomic_then_handoff);
-    ut::expect(handoff.reason == ContextBudgetReason::handoff_threshold);
-    ut::expect(rollover.action == ContextBudgetAction::rollover_fresh_session);
-    ut::expect(rollover.reason == ContextBudgetReason::rollover_threshold);
+    ut::expect(below_checkpoint.action == ContextBudgetAction::continue_session);
+    ut::expect(below_checkpoint.reason == ContextBudgetReason::below_checkpoint);
+    ut::expect(at_checkpoint.action == ContextBudgetAction::checkpoint_then_continue);
+    ut::expect(at_checkpoint.reason == ContextBudgetReason::checkpoint_threshold);
+    ut::expect(below_handoff.action == ContextBudgetAction::checkpoint_then_continue);
+    ut::expect(below_handoff.reason == ContextBudgetReason::checkpoint_threshold);
+    ut::expect(at_handoff.action == ContextBudgetAction::finish_atomic_then_handoff);
+    ut::expect(at_handoff.reason == ContextBudgetReason::handoff_threshold);
+    ut::expect(below_rollover.action == ContextBudgetAction::finish_atomic_then_handoff);
+    ut::expect(below_rollover.reason == ContextBudgetReason::handoff_threshold);
+    ut::expect(at_rollover.action == ContextBudgetAction::rollover_fresh_session);
+    ut::expect(at_rollover.reason == ContextBudgetReason::rollover_threshold);
+  };
+
+  ut::test("context budget rounds non-divisible boundaries up") = [] {
+    const auto below_checkpoint = decide_context_budget({}, {}, observed(45, 101));
+    const auto at_checkpoint = decide_context_budget({}, {}, observed(46, 101));
+    const auto below_handoff = decide_context_budget({}, {}, observed(50, 101));
+    const auto at_handoff = decide_context_budget({}, {}, observed(51, 101));
+    const auto below_rollover = decide_context_budget({}, {}, observed(55, 101));
+    const auto at_rollover = decide_context_budget({}, {}, observed(56, 101));
+
+    ut::expect(below_checkpoint.action == ContextBudgetAction::continue_session);
+    ut::expect(below_checkpoint.reason == ContextBudgetReason::below_checkpoint);
+    ut::expect(at_checkpoint.action == ContextBudgetAction::checkpoint_then_continue);
+    ut::expect(at_checkpoint.reason == ContextBudgetReason::checkpoint_threshold);
+    ut::expect(below_handoff.action == ContextBudgetAction::checkpoint_then_continue);
+    ut::expect(below_handoff.reason == ContextBudgetReason::checkpoint_threshold);
+    ut::expect(at_handoff.action == ContextBudgetAction::finish_atomic_then_handoff);
+    ut::expect(at_handoff.reason == ContextBudgetReason::handoff_threshold);
+    ut::expect(below_rollover.action == ContextBudgetAction::finish_atomic_then_handoff);
+    ut::expect(below_rollover.reason == ContextBudgetReason::handoff_threshold);
+    ut::expect(at_rollover.action == ContextBudgetAction::rollover_fresh_session);
+    ut::expect(at_rollover.reason == ContextBudgetReason::rollover_threshold);
+  };
+
+  ut::test("compaction and turn cap precede context thresholds") = [] {
+    ContextBudgetState state;
+    state.turns_in_session = 3;
+
+    const auto compacted =
+        decide_context_budget({}, state,
+                              {
+                                  .token_usage = usage(55, 100),
+                                  .completed_turns = 1,
+                                  .compactions = 1,
+                              });
+    const auto turn_capped = decide_context_budget({}, state, observed(55, 100));
+
+    ut::expect(compacted.action == ContextBudgetAction::rollover_fresh_session);
+    ut::expect(compacted.reason == ContextBudgetReason::compaction_observed);
+    ut::expect(turn_capped.action == ContextBudgetAction::rollover_fresh_session);
+    ut::expect(turn_capped.reason == ContextBudgetReason::turn_cap);
   };
 
   ut::test("only latest input tokens measure context pressure") = [] {

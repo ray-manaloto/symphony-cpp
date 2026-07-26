@@ -69,10 +69,12 @@ then expand only after measured throughput and defect-recall evidence.
 - Preserve Codex-reported context-window and compaction telemetry.
 - Let Codex own automatic compaction. End the bounded worker session after any observed compaction,
   then resume from durable workspace and tracker state in a fresh process and thread. The adapter
-  distinctly decodes optional `tokenUsage.last.inputTokens`, and the pure reducer's 50/60/65%
+  distinctly decodes optional `tokenUsage.last.inputTokens`, and the pure reducer's 45/50/55%
   fixtures pass and pause on a missing value or non-positive window. Keep the external supervisor
   process disarmed until its telemetry/checkpoint wiring passes; never estimate missing
-  utilization. Observed-compaction and per-session-turn rollover remain active meanwhile.
+  utilization. The standalone C++ app-server path already stops its own continuation after an
+  observed compaction or configured per-session turn cap; those signals are not yet enforced around
+  stock OpenSymphony.
 - Enforce a turn budget independently of context size. The repository workflow uses four turns per
   session. A compaction is not progress and does not reset retry/no-progress policy.
 - Select Sol/high at baseline. Use Sol/xhigh in the next fresh session for cross-subsystem design or
@@ -92,8 +94,8 @@ then expand only after measured throughput and defect-recall evidence.
   without logging prompts, issue content, credentials, or hidden reasoning.
 
 Use the repository-wide checkpoint and recurrence policy in
-[`../engineering-system.md`](../engineering-system.md). The pure policy checkpoints at 50% decoded
-last-turn input use, prepares a fresh-session handoff at 60%, and makes 65% rollover mandatory; the
+[`../engineering-system.md`](../engineering-system.md). The pure policy checkpoints at 45% decoded
+last-turn input use, prepares a fresh-session handoff at 50%, and makes 55% rollover mandatory; the
 external process may enforce those transitions only after its wiring gate passes. Missing
 last-turn telemetry pauses rather than interpreting cumulative totals as context pressure. A second
 occurrence of one normalized failure family must promote a deterministic guard; a third stops

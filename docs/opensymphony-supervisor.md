@@ -38,9 +38,9 @@ upstream issues before widening autonomous worker or merge authority.
 | No-progress budget | Two consecutive post-baseline runs |
 | Repeated-failure budget | Two matching redacted signatures without changed diff/check evidence |
 | Context metric gate | Distinct optional `tokenUsage.last.inputTokens` decoding and pure reducer fixtures pass; external process wiring remains disarmed |
-| Context checkpoint | At 50% of decoded last-turn input tokens over the reported positive model context window |
-| Context handoff | At 60%, finish only the active atomic slice and prepare durable handoff |
-| Context rollover | At 65%, authorize no continuation and resume from durable state in a fresh session |
+| Context checkpoint | At 45% of decoded last-turn input tokens over the reported positive model context window |
+| Context handoff | At 50%, add no scope, finish only the active atomic slice, and prepare durable handoff |
+| Context rollover | At 55%, authorize no continuation and resume from durable state in a fresh session |
 | Missing or inconsistent telemetry | Pause; never estimate |
 | Checkpoint, cancellation, or fresh-session reconciliation failure | Pause and preserve the original thread |
 | Pause tracker state | `Backlog`, which is outside the configured active-state set |
@@ -67,12 +67,12 @@ stateDiagram-v2
   Preflight --> Exhausted: four worker sessions already accepted
   Preflight --> Quarantined: missing or contradictory evidence
   Launching --> ObservingRun: identities agree; session counter increments
-  ObservingRun --> ProgressCheckpoint: 50 percent after coherent change
+  ObservingRun --> ProgressCheckpoint: 45 percent after coherent change
   ProgressCheckpoint --> ObservingRun: checkpoint persists below handoff
   ProgressCheckpoint --> PausedNeedsReview: checkpoint persistence or verification fails
-  ObservingRun --> HandoffPending: 60 percent, turn cap, or observed compaction
+  ObservingRun --> HandoffPending: 50 percent, turn cap, or observed compaction
   HandoffPending --> CheckpointVerifying: active atomic slice and turn complete
-  ObservingRun --> CheckpointVerifying: context reaches 65 percent between turns
+  ObservingRun --> CheckpointVerifying: context reaches 55 percent between turns
   CheckpointVerifying --> Cancelling: exact checkpoint commit and clean scope verified
   CheckpointVerifying --> Quarantined: dirty, untracked, stale, or out-of-scope state
   ObservingRun --> Evaluating: run completes
@@ -134,9 +134,9 @@ test-artifact, and CI evidence instead.
 
 ## Context checkpoint
 
-At 50% the supervisor checkpoints after the next coherent change and accepts no
-new scope. At 60% it finishes only the active atomic slice and prepares durable
-handoff. At the 65% boundary it:
+At 45% the supervisor checkpoints after the next coherent change. At 50% it
+accepts no new scope, finishes only the active atomic slice, and prepares durable
+handoff. At the 55% boundary it:
 
 1. persists the observation after the current turn completes and denies another continuation;
 2. requires that completed worker result to identify its already-created checkpoint commit and
@@ -278,7 +278,7 @@ effective control.
 - fourth-session completion, fifth-session launch rejection, and 90-minute persistence across
   crashes/restarts;
 - duplicate, missing, and out-of-order events;
-- context values immediately below/at 50%, 60%, and 65%, threshold-crossing turns, null/stale
+- context values immediately below/at 45%, 50%, and 55%, threshold-crossing turns, null/stale
   windows, and compaction events;
 - checkpoint persistence, fresh-session handoff, optional recovery-fork, and cancellation failures;
 - automatic-continuation races;

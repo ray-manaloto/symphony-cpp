@@ -9,9 +9,9 @@
 namespace symphony::supervisor {
 
 struct ContextBudgetConfig {
-  std::uint32_t checkpoint_percent{50};
-  std::uint32_t handoff_percent{60};
-  std::uint32_t rollover_percent{65};
+  std::uint32_t checkpoint_percent{45};
+  std::uint32_t handoff_percent{50};
+  std::uint32_t rollover_percent{55};
   std::uint32_t max_turns{4};
 };
 

@@ -195,15 +195,17 @@ ownership have deterministic fixtures. Until then, keep OpenSymphony's
 
 The percentage rows activate only after the selected worker path supplies the distinct,
 fixture-proven context-pressure telemetry named by its policy. Until then, missing or cumulative-only
-telemetry pauses percentage-based supervisor continuation; observed-compaction and per-session-turn
-rollover remain active.
+telemetry pauses percentage-based supervisor continuation. The standalone C++ app-server path
+already stops its own continuation after observed compaction or its configured per-session turn
+cap. Those remain required signals, but the external OpenSymphony supervisor enforces none of this
+table while its process wiring is disarmed.
 
 | Reported context use | Action |
 | --- | --- |
-| below 50% | normal bounded work |
-| 50% | checkpoint after the next coherent change; add no scope |
-| 60% | prepare durable handoff and finish only the active atomic slice |
-| 65% or configured rollover | start no continuation; resume from the checkpoint in a fresh process/thread |
+| below 45% | normal bounded work |
+| 45% through 49% | checkpoint after the next coherent change |
+| 50% through 54% | add no scope; prepare durable handoff and finish only the active atomic slice |
+| 55% or configured rollover | start no continuation; resume from the checkpoint in a fresh process/thread |
 | any observed compaction | finish the active turn, checkpoint, and use a fresh process/thread |
 | telemetry absent | pause; never estimate or authorize another worker run |
 

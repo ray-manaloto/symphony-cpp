@@ -45,7 +45,7 @@ codex:
   escalation_model: gpt-5.6-sol
   escalation_reasoning_effort: xhigh
   repeated_failure_reasoning_effort: max
-  context_rollover_percent: 65
+  context_rollover_percent: 55
   stall_timeout_ms: 300000
 
 routing:
@@ -95,13 +95,14 @@ normal review against its exact fingerprint. Security, concurrency, persistence,
 credential, workspace cleanup, release, publication, autonomous-merge, and
 policy/control-document changes also require a separate adversarial review;
 unresolved or stale findings block completion. The pure policy uses only decoded
-last-turn input telemetry: at 60% finish the active atomic slice and prepare the
-durable handoff; at 65% authorize no continuation. Missing last-turn telemetry
-pauses rather than using cumulative totals. Stock OpenSymphony does not enforce
-these transitions; the external supervisor process remains disarmed until its
-telemetry/checkpoint wiring passes. Any observed compaction or four completed
-turns in this session also authorizes no continuation and resumes only from a
-verified checkpoint in a fresh session. An issue may use at most four accepted
-model-backed sessions; that issue-wide counter never resets. Never continue a
-compacted session. If two consecutive attempts make no material progress, stop
-and report a stalled/no-progress outcome instead of repeating the same approach.
+last-turn input telemetry: at 45% checkpoint after the next coherent change; at
+50% add no scope, finish the active atomic slice, and prepare the durable handoff;
+at 55% authorize no continuation. Missing last-turn telemetry pauses rather than
+using cumulative totals. Stock OpenSymphony does not enforce these transitions;
+the external supervisor process remains disarmed until its telemetry/checkpoint
+wiring passes. Any observed compaction or four completed turns in this session
+also authorizes no continuation and resumes only from a verified checkpoint in a
+fresh session. An issue may use at most four accepted model-backed sessions; that
+issue-wide counter never resets. Never continue a compacted session. If two
+consecutive attempts make no material progress, stop and report a
+stalled/no-progress outcome instead of repeating the same approach.

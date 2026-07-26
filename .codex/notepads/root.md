@@ -26,8 +26,8 @@ Canonical durable goal checklist:
 
 ## Current evidence
 
-- Native goal status is `blocked`; the goal API rejected replacement because the existing goal is
-  unfinished. User-controlled resume is required before its objective can be replaced.
+- Native goal status is `active`; the owner resumed it on 2026-07-25 with the canonical durable
+  goal file as its objective and completion boundary.
 - Contained `memory-status` failed closed because no qualified OpenSymphony image is present.
 - The current OpenSymphony diagnostic candidate is local-only and unqualified.
 - The unchanged v2.10.0 suite passed 848 library tests and reproduced upstream issue #227 in the
@@ -123,13 +123,63 @@ Canonical durable goal checklist:
   normally without force or rebase. The `gh-watch-run` skill followed exact Source CI run
   `30172928016` to success: preflight passed in 19 seconds and GCC 16.1 source/reflection tests
   passed in 1 minute 46 seconds.
+- Reviewed owner decisions were committed as
+  `afb0996e9f4c27ee47ee15f8c7262043f9bf2057`; exact-commit review, publication scan, and push
+  remain.
+- Exact-commit normal/adversarial reviews have no findings and the three-path publication scan
+  passed with 72 added lines and zero findings. Commit-time fast preflight passed. The unchanged
+  full Docker pre-push hook will not be repeated for this documentation-only push.
+- Documentation-only commit `afb0996e9f4c27ee47ee15f8c7262043f9bf2057` pushed normally without
+  force or rebase. The `gh-watch-run` skill followed exact Source CI run `30173359799` to success:
+  preflight passed in 14 seconds and GCC 16.1 source/reflection tests passed in 1 minute 24 seconds.
+- The canonical goal now contains a copy-ready resume prompt bound to the expected
+  `afb0996e9f4c27ee47ee15f8c7262043f9bf2057` starting state and the failure-first
+  `POLICY-CONTEXT-001` slice.
+- Resume reconciliation matches the expected checkpoint: branch, HEAD/upstream, remote,
+  ahead/behind `0/0`, no open pull requests, and successful exact-HEAD Source CI are unchanged.
+  OpenSymphony issue #227 remains open and its admission remains fail-closed.
+- Added only the six failure-first 44/45/49/50/54/55 cases to
+  `tests/supervisor_policy_tests.cpp`. A host-side build stopped before compilation because the
+  host mise shim has no CMake version; this is not the required behavioral failure. Rebuild and run
+  the focused target inside the pinned GCC 16.1/CMake 4.4 devcontainer.
+- Required red phase observed in the reused pinned devcontainer after rebuilding the focused target:
+  `ctest --preset gcc-debug -R '^symphony_supervisor_policy_tests$' --output-on-failure` reported
+  6 tests passed, 1 revised boundary test failed, and 10 failed assertions under the existing
+  50/60/65 defaults. No implementation or policy documentation changed before this result.
+- After changing only the three default thresholds to 45/50/55, the focused target passed. The
+  complete GCC 16.1 Debug build and all 11 CTest targets pass in the pinned devcontainer.
+  Dependency policy, `git diff --check`, and the quick local preflight pass. Documentation and the
+  existing repository-owned session-policy dependency decision are synchronized; exact-current-byte
+  normal and adversarial reviews remain.
+- Normal review found no issues on manifest `ccfa2a35…`. Adversarial review blocked closure because
+  `WORKFLOW.md`, `CONTEXT.md`, and `ops/opensymphony/README.md` retain active 50/60/65 guidance, and
+  the focused fixture lacks non-divisible-window ceiling and combined-trigger precedence cases.
+  Correct only those surfaces and tests, then rerun focused/full validation and both reviews.
+- Both findings are corrected: all three controlling surfaces and the workflow metadata now use
+  45/50/55; a 101-token fixture proves ceiling boundaries, and a combined-trigger fixture proves
+  compaction then turn-cap reason precedence. Focused and all 11 GCC Debug tests, dependency policy,
+  diff check, and quick preflight pass. Fresh reviews must bind to the expanded final manifest.
+- Final normal review and the split code/test adversary found no issues on `94fa2b8e…`; the
+  oversized final adversarial packet was stopped at its time bound. The smaller docs adversary
+  found three accuracy gaps: disarmed external-supervisor behavior was written as active,
+  standalone app-server versus external-supervisor enforcement was blurred, and the cumulative
+  daemon metric was conflated with the pure reducer's fresh-last-turn metric. Correct those docs
+  without changing code/tests, then rerun docs validation and final docs adversarial review.
+- All three documentation-boundary findings are corrected without code/test changes. The external
+  supervisor is explicitly planned/disarmed; standalone app-server enforcement and external policy
+  signals are distinct; cumulative daemon rollover and fresh-last-turn pure-reducer policy are
+  separately named. Diff check, dependency policy, contradiction search, and quick preflight pass.
+- Final corrected-byte docs normal/adversarial reviews found no issues on `63f2bb4d…`; code/test
+  adversarial review remains clean, and the full implementation/document manifest is `e1467d75…`.
+  `POLICY-CONTEXT-001` is complete. The oversized adversarial packet was stopped and successfully
+  replaced by smaller code/test and docs packets; retain that split for future policy reviews.
 
 ## Active task list
 
 - [x] Reconcile research advisor, policy planner, and adversarial findings.
 - [ ] Define one versioned notepad/task-packet schema with required fields and redaction rules.
-- [ ] Define fail-closed behavior for missing, stale, or non-positive context telemetry.
-- [ ] Replace the 50/60/65 continuation policy with an exact 50% target and bounded hard rollover.
+- [x] Define fail-closed behavior for missing, stale, or non-positive context telemetry.
+- [x] Replace the 50/60/65 continuation policy with an exact 50% target and bounded hard rollover.
 - [x] Define objective model/effort escalation and de-escalation triggers.
 - [x] Define failure-to-guard promotion criteria; executable fixtures remain open.
 - [x] Define read-only parallel roles and serialized write/integration ownership.
@@ -141,7 +191,7 @@ Canonical durable goal checklist:
 - [ ] Add drift checks for required policy, diagrams, and task-packet fields.
 - [x] Run focused checks, independent review, adversarial closure review, and repository preflight
       for this governance/configuration slice.
-- [ ] Resume and update the native goal when its controller permits objective replacement.
+- [x] Resume and update the native goal when its controller permits objective replacement.
 
 ## File and resource ownership
 
@@ -152,8 +202,6 @@ Canonical durable goal checklist:
 
 ## Next bounded action
 
-Keep `POLICY-CONTEXT-001` as the sole current implementation slice. Add failing
-44/45/49/50/54/55 default-boundary cases to `tests/supervisor_policy_tests.cpp`, with initial write
-scope limited to that test plus `include/symphony/supervisor/policy.hpp` and
-`src/supervisor/policy.cpp`. First prove the existing 50/60/65 defaults fail the new expectation
-using `ctest --preset gcc-debug -R '^symphony_supervisor_policy_tests$' --output-on-failure`.
+Commit and publish the completed `POLICY-CONTEXT-001` slice after exact-commit review and the
+redacted publication gate. Then begin `CONTROL-RECORDS-001` in a fresh bounded context with a new
+dependency-first acceptance contract; do not mix its schema work into this commit.

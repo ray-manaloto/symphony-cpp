@@ -194,7 +194,7 @@ rollover fields, and it does not enforce `agent.max_turns`. While an issue
 remains active, a successful worker is continued after one second and retryable
 failures have no maximum retry count. A separate local C++26 supervisor will
 enforce the approved four-run, 90-minute, repeated-failure, no-progress, and
-50/60/65% context boundaries around the stock process. It may stop, checkpoint,
+45/50/55% context boundaries around the stock process. It may stop, checkpoint,
 and restart its child and select only preapproved Codex overlays; it must not
 replace OpenSymphony's issue discovery, priority, concurrency, or retry
 scheduler. Keep concurrency at one until write-lane isolation is fixture-proven.
