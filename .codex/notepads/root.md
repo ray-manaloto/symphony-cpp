@@ -9,31 +9,20 @@ product subsystem. Canonical checklist: `.codex/goals/standalone-cpp26-v2.md`.
 
 - Root: `/Users/rmanaloto/dev/symphony-cpp`
 - Branch: `codex/implementation`
-- Local HEAD: `8cdf0802f04e5b40ee08137e95b99605d037e7e2`
-- Upstream/remote: `b0b9d8b8f832f0c55688cd571688172dfdde8b51`
-- Divergence: ahead 1, behind 0
+- Local/upstream/live remote: `105d77c70acf2d71a7f7b498aafb24be57e03d6a`
+- Divergence: ahead 0, behind 0
 - Remote: `git@github.com:ray-manaloto/symphony-cpp.git`
-- Published checkpoint: reviewed, publication-scanned, and Source-CI-green
-  `CONTROL-EVIDENCE-DOMAIN-001`
+- Published checkpoint: reviewed, publication-scanned, and Source-CI-green control-plane reset
 
 ## Active phase
 
-`R1 — Make orchestration mechanically efficient`.
+G0/R1 is closed. Receipt preparation is 51–53 seconds, hook verification is under two seconds,
+and exact-HEAD Source CI `30228797505` passed in 2m14s (metadata 21s, GCC 16.1 1m50s).
 
-`R1-GOAL-RESET-001B` is committed as `8cdf0802…` with exact reviewed tree `0edc4edb…`.
-The reset commit remains parked local ahead-one.
-
-`R1-CHANGE-ROUTED-HOOK-001` is closed fail-closed after four review inferences. Final normal review
-passed immutable tree `4ca0115a…`; final adversarial review found path-reopen TOCTOU and missing
-post-context receipt revalidation. No commit or push followed.
-
-`R1-RECEIPT-ATOMIC-READ-001` passed both reviews, committed as exact tree `0a47fd0d…`, prepared in
-about 52.4 seconds, and pushed normally in 2.00 seconds as `3b177518…`.
-
-Source CI `30228487196` failed before GCC because a disposable fixture invoked a mise shim without
-the owning repository's tool context. `R1-CI-PRECOMMIT-RESOLVE-001` is the only active writable
-slice. The real pinned executable is resolved from the repository; focused/quick gates pass in
-23.37/48.44 seconds. Freeze one bounded review, publish, and then freeze R1.
+Writable lane: `G1-RUNTIME-GRAPH-001`, qualifying a generic GCC 16.1 runtime without rebuilding
+the already-qualified compiler artifacts. Read-only queue: OpenSymphony v2.10.1/#227 gap packet,
+then native-platform/devcontainer digest contract. Only one specialist may run beside the
+controller until `AGENT-GOV-005` passes. Do not run concurrent local Docker builds.
 
 ## Reset evidence
 
@@ -47,6 +36,8 @@ slice. The real pinned executable is resolved from the repository; focused/quick
 - Adversarial three-command review: 109,495 tokens, 59.8% lower, same zero-finding result.
 - A broad xhigh reset adversary again exceeded repeated stop requests and was terminated without
   evidence; packet shape, not more effort, is the controlling correction.
+- The final process review separated real blockers (upstream #227 and publication governance) from
+  self-created serial gates. Runtime and upstream discovery now run in parallel after G0.
 
 ## Environment state
 
@@ -57,7 +48,8 @@ slice. The real pinned executable is resolved from the repository; focused/quick
 - Analysis and clang-p2996 admitted devcontainer images are unavailable.
 - Dev Container CLI is exactly 0.88.0.
 - OpenSymphony qualified image is absent; `memory-status` fails closed before container startup.
-- Upstream #227 remains open; upstream `main` remains pinned v2.10.0 commit `0cc21ddd…`.
+- Upstream #227 remains open; `main` is pinned v2.10.0 `0cc21ddd…`.
+- New tag v2.10.1 peels to `d72bb0a…`; its two commits do not touch #227.
 
 ## Authority
 
@@ -71,28 +63,15 @@ slice. The real pinned executable is resolved from the repository; focused/quick
 
 ## Counters carried across reset
 
-- Historical review/process failures and token use do not reset; see archived ledger.
-- Current reset advisors: one completed xhigh report; one broad xhigh adversary terminated for
-  noncompliant latency/stop behavior.
-- Bounded reset-document reviewer found one R0/R1 receipt-ordering P1; corrected by separating the
-  one-time legacy retry from future reusable receipt machinery.
-- Fresh bounded reset adversary found and the goal now corrects: missing-telemetry rollover,
-  slice-wide cumulative retry budgets, and mandatory reproducible slice capsules.
-- First atomic-tree normal review found two P1 routing false accepts: ignored untracked references
-  and Git object-read diagnostics reported with exit status 1. Corrected fixtures now cover both;
-  a fresh identical-byte review pair remains required.
-- Corrected-tree normal review found one coverage gap and one `ls-files` diagnostic gap. A new
-  tracked-worktree case disproves the claimed false accept; the valid diagnostic gap is fixed.
-- Final-tree normal review found two P2 fixture defects: index-only restoration used the index, and
-  checker lookup depended on the caller's directory. Both are corrected and focused-regressed.
+- Historical review/process failures and token use do not reset; see archived ledger and capsules.
+- An unbounded replacement adversary was stopped and replaced by a three-command reviewer, which
+  passed. Future immutable review packets stay bounded.
 - Credential safety incident: a process diagnostic emitted inherited environment data into this
   task's tool output. No values were written to the repository. Treat affected credentials as
   exposed and rotate them outside repository scope; never repeat their values.
 - Current native context utilization/compaction telemetry: unavailable; do not estimate.
 - Missing-telemetry fallback: one atomic slice, 12 controller tool calls, or 30 minutes per turn,
-  followed by a durable checkpoint and fresh turn/process.
-- Expensive pre-push result passed once for exact `b0b9d8b8…`; the exception was consumed.
-- Source CI `30222627774`: success; preflight 23s, GCC 16.1 job 4m20s, total execution 4m46s.
+  followed by a durable checkpoint and ordinary fresh task/process, not a blocked state.
 
 ## Stop conditions
 

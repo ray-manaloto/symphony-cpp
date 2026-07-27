@@ -1,238 +1,126 @@
-# Standalone C++26 Symphony goal v2 — control-plane reset
+# Standalone C++26 Symphony — active goal
 
-Updated: 2026-07-26
-
-This is the canonical active checklist and handoff. It is a control document, not an execution
-transcript. Keep it below 250 lines. Replace the current checkpoint in place; put chronological
-evidence in `docs/implementation-log.md`. The pre-reset ledger is archived at
-`.codex/goals/archive/standalone-cpp26-2026-07-26-pre-reset.md` and is never a required reviewer
-input.
+This is the canonical evolving checklist and handoff record. Update it only when identity, evidence,
+task order, authority, or blockers change. Put chronological detail in `docs/implementation-log.md`
+and one capsule under `.codex/notepads/` per atomic slice.
 
 ## Objective
 
-Deliver the standalone OpenAI Symphony Draft v1 service in C++26, but first restore the intended
-development control plane:
+Implement OpenAI Symphony Draft v1 as a standalone C++26 service, using an admitted local GCC 16.1
+devcontainer and a fully qualified stock OpenSymphony workflow for development orchestration.
+OpenSymphony is an external controller, never a product dependency or conformance authority.
 
-1. a clean, immutable, GCC 16.1 local development container operated through Dev Container CLI;
-2. admitted stock OpenSymphony running locally as the external Codex orchestrator;
-3. bounded review, publication, context, and authority workflows that do not repeatedly pause the
-   native goal;
-4. C++ implementation slices executed through that admitted workflow.
+## Non-negotiable boundaries
 
-No new standalone product subsystem may begin until the GCC devcontainer and OpenSymphony
-admission phases below pass. Preserve already completed product work.
+- GCC 16.1 defines executable semantics; Bloomberg clang-p2996 `7220baff…` is differential-only.
+- Core/product code is C++26. Use the project `dependency-first` skill before capability work.
+- All third-party C++ code is pinned through vcpkg manifest/overlays; no FetchContent or vendoring.
+- Generic runtime images contain no Symphony source, project/vcpkg state, OpenSymphony, or secrets.
+- Devcontainers are built locally with Dev Container CLI 0.88.0 from immutable generic images.
+- Builds run locally inside admitted devcontainers; CI validates exact source and publishes only
+  separately authorized generic runtime artifacts. Never publish a configured devcontainer or
+  OpenSymphony image.
+- Fixture-first; no production credentials, deployment, force-push, rebase, privileged install,
+  unapproved tracker mutation, or unqualified image.
+- Keep OpenSymphony fail-closed until every admission row passes. Never weaken upstream tests.
 
-## Governing boundaries
+## Operating protocol
 
-- `AGENTS.md` and its named files/skills govern.
-- OpenAI Symphony Draft v1 remains normative.
-- Core product code is C++26. GCC 16.1 defines executable semantics; Bloomberg clang-p2996 at
-  `7220baff` is differential-only.
-- Use CMake 4.4, Ninja, CTest, ccache, pinned vcpkg, and NVIDIA stdexec at its selected seam.
-- Run `dependency-first` before covered capability work; no custom commodity replacement without
-  explicit owner authorization recorded in `docs/dependency-decisions.md`.
-- OpenSymphony remains external, stock, local-only, and unmodified until an upstream-reviewed
-  immutable correction is deliberately repinned.
-- No deployment, force-push, rebase, production credential inspection, unapproved tracker
-  mutation, mutable image admission, or unrelated repository work. The pre-reset canary is
-  historically consumed; the owner-provided native reset objective separately authorizes exactly
-  one post-reset fixture-only canary after admission and explicitly forbids a second post-reset
-  canary.
+- One atomic slice: observable contract, failing fixture, owned paths, focused command, pass
+  condition, and stop/split condition in a capsule under `.codex/notepads/`.
+- One writable integration lane and at most one read-only specialist beside the controller until
+  `AGENT-GOV-005` admits higher concurrency. Additional useful lanes remain queued.
+- Review only immutable milestone-final bytes. Normal review uses Sol/high; security, concurrency,
+  publication, and architecture adversaries use Sol/xhigh. Controller/planner uses Sol/xhigh.
+  Inventory/log watching uses Terra/medium. Increase effort only after two matching reasoning
+  defects with changed evidence, never for external waits or missing authority.
+- Standing review authority is read-only against an immutable packet: no edits, staging, commits,
+  pushes, network, containers, project memory, or delegation. Each reviewer gets at most three
+  commands or 15 minutes; each slice gets at most four successful review inferences, 12 reviewer
+  commands, or 60 minutes cumulatively. Exhaustion closes the slice fail-closed.
+- A review finding closes or remediates its finite slice; it does not pause the whole goal.
+  Mark the goal blocked only for a genuine external/authority impasse after three repeated audits.
+- Checkpoint durable state at 45% context; at 50% add no scope and prepare handoff; at 55% continue
+  only in a fresh task/session. Compaction requires a fresh-task handoff. If telemetry is absent,
+  use 12 controller tool calls or 30 minutes as a normal rollover boundary, not a blocker.
+- Keep this file under 150 lines, root notepad under 150, slice capsules under 80, and reviewer
+  packets near 15k–25k tokens. Never fork a long context; start fresh from durable files.
+- Research maintained mechanisms first. Human questions follow research and include evidence plus
+  pros/cons only when material ambiguity or new authority remains.
 
-## Goal and context operating policy
+## Gates
 
-- Keep this file below 250 lines and `.codex/notepads/root.md` below 150 lines.
-- Update only on a material state transition: new evidence, decision, red/green boundary, review,
-  commit, push, CI terminal state, blocker, or reordered task.
-- Replace `Current checkpoint`; do not append a turn-by-turn narrative.
-- Store exact long logs and generated packets under ignored `.build/` or disposable `/tmp`; retain
-  only hashes, commands, results, and paths here.
-- Reviewers receive a preassembled bounded packet and the exact changed paths, not this archive,
-  the full goal history, private memory, or broad repository access.
-- Verify durable state by 45% reported context utilization, target clean handoff at 50%, add no
-  scope after 50%, and authorize no next model turn at or above 55%.
-- Never estimate missing utilization or compaction. After observed compaction, end the process and
-  restore from this file plus the root notepad in a fresh thread/process.
-- When utilization telemetry is unavailable, execute at most one atomic slice, 12 controller tool
-  calls, or 30 minutes in the current turn, whichever ends first; checkpoint both durable files
-  and start a fresh turn/process before taking another slice.
-- Native `blocked` is reserved for the same true impasse after three consecutive goal turns.
-  Ordinary review lifecycle, CI, and upstream waits remain explicit task states while other
-  meaningful work exists.
+### G0 — Preserve and publish recovered control state
 
-## Agent and review policy
+- [x] Domain checkpoint `b0b9d8b8…` passed exact review and Source CI `30222627774`.
+- [x] Goal reset `8cdf0802…` and exact-HEAD routed receipt `3b177518…` published normally.
+- [x] Atomic receipt fixes use one-open/no-follow descriptor reads and final revalidation.
+- [x] CI portability fix `105d77c7…` published; Source CI `30228797505` passed in 2m14s.
+- [x] Freeze R1. Packet-efficiency measurement and specialist-admission fixtures are backlog items,
+  not prerequisites for runtime or devcontainer work.
 
-- One writable integration lane. Read-only research/review may run concurrently only on immutable
-  snapshots; until `AGENT-GOV-005/006` pass, run at most one specialist beside the controller.
-- Reset architecture and high-risk adversarial review: `gpt-5.6-sol` / `xhigh`.
-- Normal implementation and review: `gpt-5.6-sol` / `high`.
-- Focused read-heavy triage may use `gpt-5.6-terra` / `medium`.
-- Do not raise effort for missing authority, credentials, external service state, oversized
-  packets, schema launch errors, or absent telemetry.
+### G1 — Qualify the generic GCC 16.1 runtime
 
-Standing read-only review envelope for each independently testable slice:
+- [ ] Execute GitHub issue #4 without rebuilding qualified compiler children.
+- [ ] Assemble native AMD64/ARM64 Codex Universal descendants from exact qualified GCC children.
+- [ ] Prove GCC 16.1, CMake 4.4, C++26 reflection, `/opt` runtime linkage, rootfs cleanliness, and
+  absence of repository/vcpkg/build/cache/OpenSymphony/credential state.
+- [ ] Keep validation capability-absent. Obtain explicit GHCR publication authority, then publish
+  exact child digests and a reviewed multi-platform index; no mutable accepted tag.
 
-- one normal review and one risk-triggered adversarial review;
-- one fresh corrected-byte pair after accepted findings change reviewed bytes;
-- at most four successful-inference reviewer processes: the initial pair and one corrected pair;
-- at most two schema/transport launch retries before inference, counted separately;
-- immutable no-remote snapshot, no network, no delegation, no edits, no memory lookup;
-- at most three tool commands and 15 minutes per inferred reviewer;
-- target at most 150,000 cumulative input tokens per process and 400,000 per slice; if post-run
-  telemetry exceeds a target, redesign the next packet rather than retry or raise effort;
-- at most twelve inferred-review commands and 60 inferred-review minutes per slice;
-- stop fail-closed with a partial result when any measurable hard limit is exhausted.
+### G2 — Admit and use the daily local GCC devcontainer
 
-This envelope never authorizes source-scope expansion, publication, credentials, tracker mutation,
-image promotion, merge, or a live canary.
+- [ ] Pin only the GCC profile to the reviewed immutable multi-platform runtime digest.
+- [ ] Remove the unconditional AMD64 override for native Apple Silicon and reject mutable refs.
+- [ ] Recreate through Dev Container CLI 0.88.0; print and verify the resolved digest.
+- [ ] Prove lifecycle setup, mise/pre-commit, architecture-scoped ccache/vcpkg archive reuse,
+  GCC 16.1, CMake 4.4, reflection, focused tests, and full CTest inside the container.
+- [ ] Qualify analysis and clang-p2996 devcontainers independently after the GCC daily loop.
 
-Before starting any unchecked phase item, create or refresh its bounded slice capsule under
-`.codex/notepads/`. The capsule must name one observable contract, failing fixture, owned paths,
-exact validation command, expected evidence artifact/hash, pass condition, and stop/split
-condition. A phase item cannot be checked from prose or reviewer opinion alone.
+### G3 — Resolve and admit stock OpenSymphony
 
-## Publication policy
+- [ ] Assess candidate tag `v2.10.1` (`d72bb0a…`) against pinned `v2.10.0` (`0cc21ddd…`);
+  no GitHub release object exists, `main` remains at v2.10.0, and issue #227 remains open.
+- [ ] Because v2.10.1 does not touch #227, reproduce the minimal upstream-first correction in a
+  disposable clone and run focused, memory-integration, locked-workspace, and full upstream suites.
+- [ ] Request separate authority before publishing any upstream fork/branch/PR.
+- [ ] Repin only to an upstream-reviewed immutable correction whose unchanged suite passes.
+- [ ] Build the local-only admitted image with exact labels and `upstream-tests=passed`.
 
-- Exact-byte review binds to a manifest and is invalidated by reviewed-path changes.
-- Change-route validation:
-  - ordinary C++ source: formatting, dependency/static checks, focused and full GCC devcontainer
-    tests;
-  - workflow/container inputs: only affected Docker/Bake contracts;
-  - compiler/runtime recipes: complete toolchain graph.
-- The supported local ceremony is one normal push of the current checked-out existing branch.
-  Before transport, `scripts/check-push-route.mjs prepare` classifies the exact fast-forward range,
-  runs routed validation, and writes the existing redacted exact-base/head publication result as a
-  15-minute receipt. The pre-push hook only revalidates the actual range, allowed checkpoint drift,
-  and that strict zero-finding receipt.
-- Documentation/control and hook-self preparation runs quick preflight plus the publication scan
-  without Docker and must finish within 60 seconds; hook verification must finish within 5 seconds.
-  Other routes fail closed until their phase admits exact validation.
-- Do not expand this narrow receipt into a general publisher/ref/storage protocol without measured
-  evidence and a new dependency-first decision.
-- Run `scripts/check-adaptive-orchestration.mjs` on the exact reviewed range before public push.
-- Require exact-HEAD Source CI after every push.
+### G4 — Prove every required OpenSymphony feature
 
-## Reset phase order
+- [ ] Run contained login only if needed, then memory init/status/context, preflight, doctor, and
+  no-model dry run in documented order.
+- [ ] Give each feature-matrix row one bounded fixture and status: working, unsupported by pinned
+  upstream, or failed. Required failed rows block activation; no silent disabling.
+- [ ] Cover recovery, lifecycle, workspace isolation, retries, reconciliation, task graph,
+  code/knowledge memory, dashboard/TUI/API, Codex, model/effort observability, and OpenHands.
+- [ ] Keep OpenHands a separate local service; it is an alternate harness, not part of the C++
+  devcontainer.
+- [x] Reconcile canary documentation to the owner-authorized single post-reset fixture-only canary.
 
-### R0 — Preserve the completed domain checkpoint
+### G5 — Activate one fixture canary, then resume C++
 
-- [x] `CONTROL-EVIDENCE-DOMAIN-001` implementation is committed as
-      `b0b9d8b8f832f0c55688cd571688172dfdde8b51`.
-- [x] Focused/full GCC 16.1 tests, deterministic checks, exact-byte normal/adversarial reviews,
-      commit-tree manifest `04743d935781a0d8d0aff46f43e18bc9c0e59c10`, and redacted
-      publication scan pass.
-- [x] Full pre-push gate passed on the exact commit; SSH transport expired afterward.
-- [x] After this reset is activated, perform one explicitly bounded legacy transport retry:
-      reverify local HEAD `b0b9d8b8…`, remote `179d0dbe…`, commit-tree manifest `04743d93…`,
-      no staged paths, no implementation/configuration drift, and only reset documents dirty;
-      then push normally while skipping exactly the already-passed `symphony-push-preflight`
-      hook. Remote now equals `b0b9d8b8…`. This exception is consumed and cannot be reused.
-- [x] Obtain exact-HEAD Source CI: run `30222627774` passed in 4m46s.
-- [x] Freeze `CONTROL-EVIDENCE-VERIFY/WIRE`; do not start either during control-plane reset.
+- [ ] After all G4 admission rows pass, activate exactly one fixture-only Linear canary at
+  concurrency one; native goal is admission monitor/handoff authority only.
+- [ ] Prove zero unauthorized tracker mutation, workspace/hook/recovery/review/context evidence,
+  and deterministic cleanup. No second canary.
+- [ ] Resume `CONTROL-EVIDENCE-VERIFY-001`, then `CONTROL-EVIDENCE-WIRE-001`, as small
+  OpenSymphony-managed work inside the admitted GCC devcontainer.
+- [ ] Continue the remaining standalone C++26 backlog under the same dependency, review, and
+  conformance gates.
 
-### R1 — Make orchestration mechanically efficient
+## Parallel work and current checkpoint
 
-- [x] Update `docs/agent-orchestration.md` and deterministic link checks from the archived v1 goal
-      path to this canonical v2 path.
-- [ ] Add failure-first fixtures for change-routed pre-push selection and strict exact-HEAD receipt
-      verification.
-- [ ] Prove documentation/control/self receipt preparation rejects wrong refs, routes,
-      stale/malformed/forged receipts, and non-checkpoint drift; executes no Docker within 60
-      seconds; then prove the normal push hook verifies within 5 seconds.
-- [ ] Publish the reviewed reset plus routed-hook commits and obtain exact-HEAD Source CI.
-- [ ] Generate a single preassembled review-evidence packet and measure token/latency reduction
-      against the recorded 272,331-token and 109,495-token reviews.
-- [ ] Add representative specialist admission fixtures before raising read-only concurrency above
-      one.
+- Writable lane: `G1-RUNTIME-GRAPH-001` — qualify the generic GCC runtime without compiler rebuild.
+- Read-only queue A: complete the v2.10.1/#227 upstream gap packet and proposed test plan.
+- Read-only queue B: verify the GCC devcontainer digest/native-platform contract before G1
+  publication. Activate it only after queue A finishes.
+- Do not run concurrent local Docker builds. While GitHub runtime CI runs, continue the one active
+  read-only lane and documentation reconciliation.
 
-### R2 — Admit the daily GCC 16.1 devcontainer
-
-- [ ] Treat the running `symphony-dev:edge` container as prohibited migration evidence; it is not
-      an authoritative development environment.
-- [ ] Execute GitHub issue #4: qualify a clean runnable generic GCC runtime from pinned
-      Codex Universal plus the exact qualified GCC child, with no Symphony source, vcpkg installed
-      tree, build tree, OpenSymphony, or credentials.
-- [ ] Obtain separate image-publication authority before pushing the candidate/runtime index.
-- [ ] Pin `.devcontainer/devcontainer.json` to the reviewed immutable multi-platform digest and
-      make `scripts/devcontainer-build.sh` reject mutable tags and report the resolved digest.
-- [ ] Recreate through Dev Container CLI 0.88.0 and prove current lifecycle, mise/pre-commit
-      mounts, architecture-scoped ccache/vcpkg archives, GCC 16.1, CMake 4.4, C++26 reflection,
-      focused tests, and full CTest.
-- [ ] Qualify analysis and clang-p2996 devcontainers independently; they do not block the admitted
-      GCC daily loop.
-
-### R3 — Resolve OpenSymphony upstream admission
-
-- [ ] Run read-only upstream discovery concurrently with the R2 writable lane after R1 publication;
-      do not wait for the devcontainer to finish before collecting immutable upstream evidence.
-- [ ] Keep `symphony-opensymphony:candidate` non-operational.
-- [ ] Recheck upstream issue #227, linked PRs, releases, and `main` by immutable identity.
-- [ ] If no upstream correction exists, reproduce the proposed PATH/exit-127 fix and its focused,
-      memory-integration, and locked-workspace tests in a disposable upstream clone.
-- [ ] Present the exact upstream patch and request separate authorization before fork/branch/PR
-      publication; do not carry an unreviewed local patch in the admitted image.
-- [ ] Repin only after an upstream-reviewed immutable correction passes the unchanged suite.
-
-### R4 — Prove every required OpenSymphony feature
-
-- [ ] Build the admitted local image with exact source/build-input identities and
-      `upstream-tests=passed`.
-- [ ] Run contained login only if required, then memory initialization/status/context, preflight,
-      doctor, and no-model dry run in documented order.
-- [ ] Execute every disposable feature-matrix gate, including recovery and the OpenHands
-      acceptance lane; OpenHands remains a separate local service, not a devcontainer dependency.
-- [ ] Classify each feature as proven working, proven unsupported, or blocked with exact evidence.
-      Do not silently disable features.
-
-### R5 — Migrate real work to OpenSymphony
-
-- [ ] Consume exactly one owner-authorized post-reset fixture-only canary after every R4 gate
-      passes; the historical pre-reset canary remains consumed and no second post-reset canary is
-      authorized.
-- [ ] Run that bounded OpenSymphony-managed issue with concurrency one and the native goal acting
-      only as admission monitor/handoff authority.
-- [ ] Prove workspace isolation, lifecycle hooks, review evidence, context rollover, recovery,
-      task-state projection, and no unauthorized tracker mutation.
-- [ ] Resume `CONTROL-EVIDENCE-VERIFY-001` and the remaining standalone C++ backlog only after the
-      canary is healthy.
-
-## Completion criteria
-
-- [ ] R0–R5 are complete with exact evidence.
-- [ ] The admitted daily GCC devcontainer is immutable, current, and used for all local builds.
-- [ ] Stock/repinned-upstream OpenSymphony passes full admission and successfully orchestrates one
-      authorized fixture issue.
-- [ ] Review, publication, goal, context, and authority fixtures prevent the recurring pause and
-      latency signatures.
-- [ ] The remaining standalone C++26 product backlog is completed and verified under the admitted
-      workflow.
-
-## Current checkpoint
-
-R0 is complete at local/tracking/live remote `b0b9d8b8…`; Source CI `30222627774` passed and the
-one-time legacy hook exception is consumed. OpenSymphony remains fail-closed without a qualified
-image; the stale mutable devcontainer remains prohibited.
-
-`R1-GOAL-RESET-001B` completed as commit `8cdf0802f04e5b40ee08137e95b99605d037e7e2`.
-Its exact reviewed tree is `0edc4edbf48cc71655f21ed9830d1c067e00b9d3`; normal/high and
-adversarial/xhigh reviews passed the identical snapshot, and the commit tree equals it.
-
-`R1-CHANGE-ROUTED-HOOK-001` stopped fail-closed after exhausting its four-inference review budget.
-Successive reviews found and fixtures corrected concurrent ref movement and multiple push
-destinations; final normal review passed. Final adversarial review of immutable tree
-`4ca0115a…` found two valid P2s: receipt verification reopened a path after `lstat`, and the hook
-did not reverify the receipt after its final context check. The prior slice is closed without a
-commit or push; its exact review history is in
-`.codex/notepads/r1-change-routed-hook-001.md`.
-
-`R1-RECEIPT-ATOMIC-READ-001` passed focused/full/quick gates and both bounded reviews. Commit
-`3b177518…` exactly matches reviewed tree `0a47fd0d…`; receipt preparation took about 52.4 seconds,
-the hook took 2.00 seconds, and live remote advanced normally.
-
-Source CI `30228487196` failed in nine seconds before GCC: the disposable fixture invoked the mise
-`pre-commit` shim outside the repository that selects version 4.6.1. Active independent remediation
-`R1-CI-PRECOMMIT-RESOLVE-001` resolves the real executable once from the owning repository with
-`mise which`, then passes that path into fixtures. Focused and complete quick gates pass in
-23.37/48.44 seconds without Docker. Freeze one bounded review, commit, push through the admitted
-route, and require exact-HEAD Source CI. Do not extend R1 after this portability fix; defer
-packet-efficiency measurement and specialist-admission fixtures.
+Current branch/local/live remote is `codex/implementation` at `105d77c70acf2d71a7f7b498aafb24be57e03d6a`.
+Working-tree checkpoint edits are this goal, root/capsule evidence, upstream watch evidence, and
+reset documentation only. OpenSymphony remains fail-closed; the current devcontainer still points
+to prohibited mutable `symphony-dev:edge`. Real unresolved authority: generic GHCR runtime
+publication and any upstream OpenSymphony branch/PR. The goal is active, not paused or blocked.

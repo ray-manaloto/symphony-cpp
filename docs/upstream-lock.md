@@ -1,11 +1,11 @@
 # Upstream lock
 
-Accessed 2026-07-22 through 2026-07-24.
+Accessed 2026-07-22 through 2026-07-27.
 
 | Input | Immutable identity | Role |
 | --- | --- | --- |
 | OpenAI Symphony | `1f3219bb1ea5f69a1305dc594e79b0db57c113c5`; latest assessed release `v0.0.2` at commit `653f8b3cc476db03420479ba6f95b2ed7281c401`; identical `SPEC.md` blob `a6b44e162383e7241a76bce85afb7a8e8d704c45` | Normative Draft v1 specification; release evolution is tracked without moving the conformance pin automatically |
-| OpenSymphony | `v2.10.0` / `0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb`; historical ceremony GHCR manifest `sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982`; historical smoke-only `edge` manifest `sha256:56d7fd2274e2d7eda4ff1d3556a6a9315014e3a05055422e9c4c68849be36911` | External contained development orchestrator; never a C++ runtime dependency or conformance authority. The historical GHCR manifests predate the clean-runtime audit and are retained only as prior evidence, not selectable current runtimes |
+| OpenSymphony | Pinned `v2.10.0` / `0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb`; latest assessed tag object `26750bbd9aa648297a083db24fb48681a523713b`, peeled `v2.10.1` commit `d72bb0a409c006e20f2b0d766a0def218f94cd41`; historical ceremony GHCR manifest `sha256:65be3f2e87f57c9698567a3d6830ab93bd70c6268d8a36fcf1b5dad094ba6982`; historical smoke-only `edge` manifest `sha256:56d7fd2274e2d7eda4ff1d3556a6a9315014e3a05055422e9c4c68849be36911` | External contained development orchestrator; never a C++ runtime dependency or conformance authority. Pin remains v2.10.0 pending the v2.10.1 and #227 admission packet. Historical GHCR manifests predate the clean-runtime audit and are prior evidence only, not selectable runtimes |
 | OpenSymphony template | commit `84a6c1d49926ccc663c5ad8018d2742f777917e3`; root tree `7960ff709b1c372cf9397f270203d3154d8fd03b` | Immutable disposable `init` acceptance input; the canonical checkout is never initialized from mutable template state |
 | OpenSymphony builder and historical runtime inputs | `rust:1.93.0-bookworm` AMD64 manifest `sha256:d0a4aa3ca2e1088ac0c81690914a0d810f2eee188197034edf366ed010a2b382`; historical `debian:bookworm-slim` AMD64 manifest `sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818`; Codex CLI `0.145.0` | Rust and Codex are current external-orchestrator build/tool inputs. Debian slim is retained only as historical provenance; the current runtime derives from the clean Codex Universal GCC composition |
 | Historical rejected OpenSymphony GCC runtime base | `ghcr.io/ray-manaloto/symphony-dev` AMD64 manifest `sha256:d4ee55fe474d331705a6f6c786ef6740aa1c76111e9eb519e7f37e0601f6b698` | Proven contaminated by `/opt/symphony-cpp-seed` and vcpkg/project state; retained only as migration provenance and prohibited as a current OpenSymphony or generic-runtime input |
@@ -38,3 +38,20 @@ The Codex Universal MIT notice and image SBOM are stored under its `LICENSES/` d
 owning repository explicitly permits publishing and distribution. Derived images retain that
 material, and the GCC image includes the exact signed corresponding-source archive and COPYING
 files under `/opt/gcc-16.1/sources/`.
+
+## Upstream watch ledger
+
+### 2026-07-27 — kumanday/OpenSymphony
+
+- Baseline: `v2.10.0`, commit `0cc21ddda5d1853a8fbd11add578b43b6ebd6fcb`.
+- Candidate: annotated tag object `26750bbd9aa648297a083db24fb48681a523713b`, peeled
+  `v2.10.1` commit `d72bb0a409c006e20f2b0d766a0def218f94cd41`.
+- Authority: comparative external orchestrator; pin moved: no.
+- Surfaces: GitHub releases endpoint has no release object; `main` remains at the baseline; issue
+  [#227](https://github.com/kumanday/OpenSymphony/issues/227) is open; no matching pull request or
+  discussion was found.
+- Delta: two commits change legacy memory-catalog tolerance and graph rendering/release metadata.
+  They do not change the missing-`gh` memory diagnostic or its failing test.
+- Local impact: assess v2.10.1 first, then reproduce the minimal #227 correction upstream-first.
+  Do not build an admitted image or move the pin until the unchanged complete suite passes.
+- Recheck: #227 or a linked PR changes, a later tag appears, or upstream `main` advances.

@@ -31,3 +31,7 @@ fixture regression, new workflow/tool installation, or review finding.
 
 - Focused quick fixtures: PASS, 23.37 seconds.
 - Complete quick preflight: PASS, 48.44 seconds, no Docker.
+- Bounded review: PASS on exact tree `63a7c68c…`.
+- Commit `105d77c70acf2d71a7f7b498aafb24be57e03d6a` has exact tree `63a7c68c…`.
+- Receipt preparation: PASS, about 51.9 seconds; normal hook/push: PASS, 1.84 seconds.
+- Exact-HEAD Source CI `30228797505`: PASS, 2m14s; metadata 21s, GCC 16.1 1m50s.
