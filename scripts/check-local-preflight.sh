@@ -3,9 +3,9 @@ set -euo pipefail
 
 readonly mode="${1:-quick}"
 case "${mode}" in
-  quick | pre-push | docker) ;;
+  quick | docker) ;;
   *)
-    echo "usage: $0 [quick|pre-push|docker]" >&2
+    echo "usage: $0 [quick|docker]" >&2
     exit 64
     ;;
 esac
@@ -23,6 +23,7 @@ git diff --cached --check
 git diff --check
 ./scripts/test-goal-routing.sh
 ./scripts/check-goal-routing.sh
+node scripts/test-push-route.mjs --quick
 
 pre-commit validate-config .pre-commit-config.yaml
 bash -n scripts/*.sh
@@ -82,12 +83,6 @@ if [[ "${mode}" == "docker" ]]; then
     exit 1
   fi
   run_docker_checks=true
-elif [[ "${mode}" == "pre-push" ]]; then
-  if command -v docker >/dev/null && docker buildx version >/dev/null 2>&1; then
-    run_docker_checks=true
-  else
-    echo "Docker Buildx unavailable; completed non-Docker push checks" >&2
-  fi
 fi
 
 if [[ "${run_docker_checks}" == true ]]; then

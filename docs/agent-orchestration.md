@@ -84,6 +84,15 @@ at a publication/review gate when their token or attention cost would delay exac
 Parallel writers remain prohibited until the claim, worktree, crash-recovery, and serialized
 integration fixtures in the canonical goal pass.
 
+Publication follows the same small-slice rule. Before one normal fast-forward update of the
+current checked-out existing branch, `scripts/check-push-route.mjs prepare` routes the exact HEAD,
+runs documentation/control or hook-self validation without Docker, and writes the existing
+redacted exact-range result as a strict 15-minute receipt. The pre-push hook only verifies the
+actual Git range, allowed checkpoint drift, and that receipt, keeping validation outside the SSH
+session. Source, devcontainer, container-recipe, and unknown routes fail closed until admitted. A
+general receipt/publisher was rejected after it grew into a second control subsystem and blocked
+R2; the narrow design adds no transport wrapper, new-branch mode, or custom receipt store.
+
 The named `*V1` reports and input envelope are provisional contracts until
 `CONTROL-RECORDS-001` and `AGENT-GOV-005` add schemas and hostile fixtures. A goal-delta synthesis
 must reject unvalidated, truncated-without-`partial`, or different-snapshot reports.

@@ -76,3 +76,13 @@ line-ceiling, tree, manifest, patch, and fresh review evidence.
 
 Stop on archive drift, scope drift, any false accept/reject, nonportable Git/Shell behavior,
 review-envelope exhaustion, or commit-tree mismatch. Do not split routing from its guard again.
+
+## Completion
+
+Completed as commit `8cdf0802f04e5b40ee08137e95b99605d037e7e2` with exact reviewed tree
+`0edc4edbf48cc71655f21ed9830d1c067e00b9d3`. The final immutable packet had patch SHA-256
+`b2284083468b67e83800f475b557069cf589401cf3e96453ccbc132219dab362` and manifest SHA-256
+`051b7da81d86c98d73207749bc5d25795d2025f4f51a47c709f2ba946bf965ad`.
+Normal/high and adversarial/xhigh both returned PASS. The commit hook passed and the commit tree
+equals the reviewed tree. Publication is deliberately deferred to the minimal change-routed hook
+slice.

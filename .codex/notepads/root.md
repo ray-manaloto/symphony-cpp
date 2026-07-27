@@ -9,9 +9,9 @@ product subsystem. Canonical checklist: `.codex/goals/standalone-cpp26-v2.md`.
 
 - Root: `/Users/rmanaloto/dev/symphony-cpp`
 - Branch: `codex/implementation`
-- Local HEAD: `b0b9d8b8f832f0c55688cd571688172dfdde8b51`
+- Local HEAD: `8cdf0802f04e5b40ee08137e95b99605d037e7e2`
 - Upstream/remote: `b0b9d8b8f832f0c55688cd571688172dfdde8b51`
-- Divergence: ahead 0, behind 0
+- Divergence: ahead 1, behind 0
 - Remote: `git@github.com:ray-manaloto/symphony-cpp.git`
 - Published checkpoint: reviewed, publication-scanned, and Source-CI-green
   `CONTROL-EVIDENCE-DOMAIN-001`
@@ -20,22 +20,20 @@ product subsystem. Canonical checklist: `.codex/goals/standalone-cpp26-v2.md`.
 
 `R1 — Make orchestration mechanically efficient`.
 
-R0 is complete. `R1-GOAL-RESET-001B` is the active atomic slice after two archived partial
-attempts. It owns the reset documents, dependency evidence, exact Git index/worktree guard, and
-hostile fixtures together. A first normal review found ignored-untracked and Git-diagnostic false
-accepts; corrected bytes now pass Bash syntax, ShellCheck, the real repository guard, and all 12
-valid/hostile cases. Complete quick preflight, archive hashes, executable modes, dependency
-policy, diff hygiene, and line ceilings pass on exactly 19 staged paths. Next, freeze one immutable
-snapshot, obtain a fresh corrected normal/adversarial pair, and commit without pushing. A normal
-review of tree `8609e520…` subsequently found a missing modified-tracked fixture and a valid
-`ls-files` error-handling gap. Corrected focused tests now pass all 14 cases, but the full
-preflight, dependency policy, archive hashes, executable modes, diff hygiene, and line ceilings
-also pass on exactly 19 staged paths with no unstaged drift. Freeze a new immutable snapshot for the
-fresh normal/adversarial pair. The normal review of tree `f9ffff79…` then found a non-index-only
-fixture and caller-directory coupling. Corrected focused tests prove true index-only rejection and
-pass from both the repository root and `/tmp`; full-preflight/snapshot evidence is invalidated.
-Stage and revalidate before a new review. Do not split the guard again or start
-publisher/verifier work first.
+`R1-GOAL-RESET-001B` is committed as `8cdf0802…` with exact reviewed tree `0edc4edb…`.
+The reset commit remains parked local ahead-one.
+
+`R1-CHANGE-ROUTED-HOOK-001` is closed fail-closed after four review inferences. Final normal review
+passed immutable tree `4ca0115a…`; final adversarial review found path-reopen TOCTOU and missing
+post-context receipt revalidation. No commit or push followed.
+
+`R1-RECEIPT-ATOMIC-READ-001` now owns only the two review findings. Use Node's maintained
+one-open/no-follow descriptor APIs, verify bounded bytes and stable descriptor metadata, and
+reverify after the final hook context check. Its capsule is
+`.codex/notepads/r1-receipt-atomic-read-001.md`. Failure-first rejected the replacement race;
+focused/full/quick gates now pass in 23.15/40.77/52.97 seconds without Docker. Freeze one new packet
+for a fresh normal/adversarial pair. Broader OpenSymphony/devcontainer/root-cause review resumes
+only after this atomic publication-control remediation stops or passes.
 
 ## Reset evidence
 
@@ -98,8 +96,9 @@ publisher/verifier work first.
 
 ## Stop conditions
 
-- Stop the R0 retry on identity drift, reviewed-byte change, staged paths, unexpected dirty paths,
-  or failed Source CI. Require the durable receipt binding for every later push.
+- Stop publication on identity drift, reviewed-byte change, unexpected non-checkpoint drift, a
+  route/receipt mismatch, preparation over 60 seconds, hook verification over 5 seconds, or failed
+  Source CI.
 - Keep OpenSymphony fail-closed without exact upstream suite and image labels.
 - Do not use the stale devcontainer as final conformance evidence.
 - Do not append history here; replace this checkpoint and keep the file below 150 lines.

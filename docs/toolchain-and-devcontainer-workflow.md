@@ -287,6 +287,38 @@ The expensive image workflow must not run merely because application source, doc
 metadata, or the local devcontainer configuration changed. Conversely, Source CI is not evidence
 that a new compiler image is publishable.
 
+The local push preparation currently admits only documentation/control and router-self ranges. It
+runs quick preflight plus the exact-range redacted publication scan before transport, never
+Docker, and has a 60-second budget. The scan result is the strict 15-minute exact-HEAD receipt; the
+pre-push hook only verifies it and the actual range within 5 seconds. Source, devcontainer, and
+container-recipe ranges fail closed until their validations above are wired and proven. This lets
+the reset publish without rebuilding every compiler image or idling SSH behind validation.
+
+```mermaid
+sequenceDiagram
+    participant P as "Receipt prepare"
+    participant G as "Normal git push"
+    participant H as "pre-commit pre-push"
+    participant R as "Closed range router"
+    participant Q as "Quick preflight"
+    participant S as "Redacted exact-range scan"
+    participant C as "GitHub Source CI"
+    P->>R: "Exact upstream base and HEAD"
+    alt "documentation, control, or router self"
+        R->>Q: "No Docker"
+        Q-->>R: "Pass"
+        R->>S: "Exact base and head"
+        S-->>P: "Strict 15-minute receipt"
+        P-->>G: "Open transport"
+        G->>H: "Current existing branch update"
+        H->>R: "Verify actual range and receipt"
+        R-->>G: "Fast pass"
+        G->>C: "Publish exact HEAD"
+    else "source, devcontainer, container recipe, or unknown"
+        R-->>G: "Fail closed until route admission"
+    end
+```
+
 ## Cache policy
 
 - Buildx uses a distinct GitHub Actions cache scope per toolchain lineage, architecture, and policy

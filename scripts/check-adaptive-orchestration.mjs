@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const [, , operation, baseRef, reviewedHead] = process.argv;
@@ -25,8 +25,16 @@ if (head !== reviewedHead) {
   process.exit(2);
 }
 
-const changedPaths = git(["diff", "--name-only", "--diff-filter=ACMR", base, head])
-  .split("\n")
+const changedPaths = git([
+  "diff",
+  "--name-only",
+  "-z",
+  "--find-renames",
+  "--diff-filter=ACDMRTUXB",
+  base,
+  head,
+])
+  .split("\0")
   .filter(Boolean);
 const diff = git(["diff", "--no-ext-diff", "--unified=0", base, head]);
 const addedLines = diff
@@ -61,15 +69,18 @@ const receipt = {
   generatedAt: new Date().toISOString(),
 };
 mkdirSync(".build", { recursive: true });
-writeFileSync(".build/publication-receipt.json", `${JSON.stringify(receipt, null, 2)}\n`, {
-  mode: 0o600,
-});
+const receiptPath = ".build/publication-receipt.json";
+const temporaryReceiptPath = `${receiptPath}.tmp-${process.pid}`;
+rmSync(receiptPath, { force: true });
+rmSync(temporaryReceiptPath, { force: true });
 
 if (findingCount !== 0) {
   process.stderr.write(`publication scan blocked: ${findingCount} redacted finding(s) require classification\n`);
   process.exit(1);
 }
+writeFileSync(temporaryReceiptPath, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+renameSync(temporaryReceiptPath, receiptPath);
+chmodSync(receiptPath, 0o600);
 process.stdout.write(
   `publication scan passed: ${changedPaths.length} path(s), ${addedLines.length} added line(s), 0 redacted findings\n`,
 );
-

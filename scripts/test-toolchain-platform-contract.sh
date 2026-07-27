@@ -287,6 +287,12 @@ grep -Fq \
   scripts/check-local-preflight.sh
 grep -Fq 'containers/gcc16-runtime-candidate.bake.hcl' \
   scripts/check-local-preflight.sh
+if grep -Fq 'pre-push' scripts/check-local-preflight.sh; then
+  echo "local preflight retained the obsolete transport-time validation mode" >&2
+  exit 1
+fi
+grep -Fq 'node scripts/test-push-route.mjs --quick' scripts/check-local-preflight.sh
+grep -Fq 'entry: node scripts/check-push-route.mjs pre-push' .pre-commit-config.yaml
 grep -Fq \
   'for analysis_target in symphony-analysis-format-validation symphony-analysis-source-validation; do' \
   scripts/check-local-preflight.sh

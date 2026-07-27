@@ -74,13 +74,13 @@ Standing read-only review envelope for each independently testable slice:
 
 - one normal review and one risk-triggered adversarial review;
 - one fresh corrected-byte pair after accepted findings change reviewed bytes;
-- at most two retries for schema/transport failures that occur before inference;
+- at most four successful-inference reviewer processes: the initial pair and one corrected pair;
+- at most two schema/transport launch retries before inference, counted separately;
 - immutable no-remote snapshot, no network, no delegation, no edits, no memory lookup;
-- at most three tool commands and 15 minutes per reviewer;
+- at most three tool commands and 15 minutes per inferred reviewer;
 - target at most 150,000 cumulative input tokens per process and 400,000 per slice; if post-run
   telemetry exceeds a target, redesign the next packet rather than retry or raise effort;
-- retries are cumulative within the slice: at most three total attempts, nine total reviewer
-  commands, 45 total reviewer minutes, and the 400,000-token slice target;
+- at most twelve inferred-review commands and 60 inferred-review minutes per slice;
 - stop fail-closed with a partial result when any measurable hard limit is exhausted.
 
 This envelope never authorizes source-scope expansion, publication, credentials, tracker mutation,
@@ -99,9 +99,16 @@ condition. A phase item cannot be checked from prose or reviewer opinion alone.
     tests;
   - workflow/container inputs: only affected Docker/Bake contracts;
   - compiler/runtime recipes: complete toolchain graph.
-- Do not keep an SSH push connection idle during a 12–16 minute gate. Run the required exact-HEAD
-  gate first, write a receipt bound to HEAD and relevant-input manifest, then perform one immediate
-  ordinary push that skips only that proven hook. Add hostile fixtures before adopting this path.
+- The supported local ceremony is one normal push of the current checked-out existing branch.
+  Before transport, `scripts/check-push-route.mjs prepare` classifies the exact fast-forward range,
+  runs routed validation, and writes the existing redacted exact-base/head publication result as a
+  15-minute receipt. The pre-push hook only revalidates the actual range, allowed checkpoint drift,
+  and that strict zero-finding receipt.
+- Documentation/control and hook-self preparation runs quick preflight plus the publication scan
+  without Docker and must finish within 60 seconds; hook verification must finish within 5 seconds.
+  Other routes fail closed until their phase admits exact validation.
+- Do not expand this narrow receipt into a general publisher/ref/storage protocol without measured
+  evidence and a new dependency-first decision.
 - Run `scripts/check-adaptive-orchestration.mjs` on the exact reviewed range before public push.
 - Require exact-HEAD Source CI after every push.
 
@@ -125,12 +132,14 @@ condition. A phase item cannot be checked from prose or reviewer opinion alone.
 
 ### R1 — Make orchestration mechanically efficient
 
-- [ ] Update `docs/agent-orchestration.md` and deterministic link checks from the archived v1 goal
+- [x] Update `docs/agent-orchestration.md` and deterministic link checks from the archived v1 goal
       path to this canonical v2 path.
-- [ ] Add failure-first fixtures for change-routed pre-push selection.
-- [ ] Add an exact-HEAD validation receipt and immediate transport-only publisher with stale
-      HEAD/worktree/relevant-input rejection.
-- [ ] Prove ordinary C++ changes do not execute unrelated compiler/OpenSymphony graph checks.
+- [ ] Add failure-first fixtures for change-routed pre-push selection and strict exact-HEAD receipt
+      verification.
+- [ ] Prove documentation/control/self receipt preparation rejects wrong refs, routes,
+      stale/malformed/forged receipts, and non-checkpoint drift; executes no Docker within 60
+      seconds; then prove the normal push hook verifies within 5 seconds.
+- [ ] Publish the reviewed reset plus routed-hook commits and obtain exact-HEAD Source CI.
 - [ ] Generate a single preassembled review-evidence packet and measure token/latency reduction
       against the recorded 272,331-token and 109,495-token reviews.
 - [ ] Add representative specialist admission fixtures before raising read-only concurrency above
@@ -154,6 +163,8 @@ condition. A phase item cannot be checked from prose or reviewer opinion alone.
 
 ### R3 — Resolve OpenSymphony upstream admission
 
+- [ ] Run read-only upstream discovery concurrently with the R2 writable lane after R1 publication;
+      do not wait for the devcontainer to finish before collecting immutable upstream evidence.
 - [ ] Keep `symphony-opensymphony:candidate` non-operational.
 - [ ] Recheck upstream issue #227, linked PRs, releases, and `main` by immutable identity.
 - [ ] If no upstream correction exists, reproduce the proposed PATH/exit-127 fix and its focused,
@@ -202,23 +213,24 @@ R0 is complete at local/tracking/live remote `b0b9d8b8…`; Source CI `302226277
 one-time legacy hook exception is consumed. OpenSymphony remains fail-closed without a qualified
 image; the stale mutable devcontainer remains prohibited.
 
-`R1-GOAL-RESET-001B` is the active atomic slice. Two partial attempts are archived with all review
-findings and counters. Candidate scope recombines v1 deletion, v2 routing, archives, live
-references, dependency evidence, an exact Git index/worktree guard, and hostile fixtures. The
-first final-byte normal review found two P1 false accepts: ignored untracked references and Git
-object-read diagnostics returned with status 1. Corrected bytes now inspect ignored files and
-treat nonempty no-match diagnostics as failure; all 12 valid/hostile cases, Bash syntax,
-ShellCheck, the real repository guard, and complete quick preflight pass on exactly 19 staged
-paths. Archive hashes, executable modes, dependency policy, diff hygiene, and line ceilings pass.
-A fresh normal review of tree `8609e520…` then found a missing modified-tracked fixture and a real
-`ls-files` diagnostic/no-match gap. The new fixture proves the existing worktree scan rejects
-modified tracked references; the production guard now also rejects `ls-files` failures, and all 14
-valid/hostile cases pass. Complete quick preflight, dependency policy, archive hashes, executable
-modes, diff hygiene, and line ceilings pass on exactly 19 staged paths with no unstaged drift.
-A final normal review of tree `f9ffff79…` found two P2 fixture defects: the index-only case restored
-from the index, and the test resolved its checker from the caller's directory. Corrected focused
-tests now prove true index-only rejection and pass both repository-root and `/tmp` invocation.
-These changes invalidate the complete-preflight and snapshot evidence. Next, stage and rerun the
-complete preflight, freeze one new immutable snapshot, and obtain a fresh corrected-byte
-normal/adversarial pair before committing without pushing. Do not begin publisher/product work
-first.
+`R1-GOAL-RESET-001B` completed as commit `8cdf0802f04e5b40ee08137e95b99605d037e7e2`.
+Its exact reviewed tree is `0edc4edbf48cc71655f21ed9830d1c067e00b9d3`; normal/high and
+adversarial/xhigh reviews passed the identical snapshot, and the commit tree equals it.
+
+`R1-CHANGE-ROUTED-HOOK-001` stopped fail-closed after exhausting its four-inference review budget.
+Successive reviews found and fixtures corrected concurrent ref movement and multiple push
+destinations; final normal review passed. Final adversarial review of immutable tree
+`4ca0115a…` found two valid P2s: receipt verification reopened a path after `lstat`, and the hook
+did not reverify the receipt after its final context check. The prior slice is closed without a
+commit or push; its exact review history is in
+`.codex/notepads/r1-change-routed-hook-001.md`.
+
+`R1-RECEIPT-ATOMIC-READ-001` is the active independent remediation slice. Replace path-based
+receipt reads with one-open, no-follow, same-descriptor bounded verification; verify descriptor
+metadata stability; and verify the receipt again after the final hook context check. Add
+deterministic path-replacement and between-check mutation fixtures. Failure-first evidence rejected
+the reopened replacement as malformed. After implementation, focused fixtures pass in 23.15
+seconds, full integration in 40.77 seconds, and complete quick preflight in 52.97 seconds without
+Docker. Freeze these staged bytes for a new immutable review packet. Detailed contract and stop
+conditions are in `.codex/notepads/r1-receipt-atomic-read-001.md`. Do not commit or push until the
+new normal and adversarial review pair passes identical bytes.
