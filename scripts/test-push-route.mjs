@@ -44,6 +44,11 @@ function git(cwd, ...args) {
   return command(cwd, "git", args);
 }
 
+const preCommitExecutable = command(resolve(scriptDirectory, ".."), "mise", [
+  "which",
+  "pre-commit",
+]);
+
 function write(path, value, mode) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, value, mode === undefined ? {} : { mode });
@@ -95,7 +100,7 @@ repos:
   git(repo, "remote", "add", "origin", remote);
   git(repo, "push", "-u", "origin", "refs/heads/codex/implementation");
   git(repo, "config", "--unset", "core.hooksPath");
-  command(repo, "pre-commit", ["install", "--hook-type", "pre-push"]);
+  command(repo, preCommitExecutable, ["install", "--hook-type", "pre-push"]);
   return { repo, remote };
 }
 

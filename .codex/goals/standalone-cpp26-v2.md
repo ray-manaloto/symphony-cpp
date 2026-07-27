@@ -225,12 +225,14 @@ did not reverify the receipt after its final context check. The prior slice is c
 commit or push; its exact review history is in
 `.codex/notepads/r1-change-routed-hook-001.md`.
 
-`R1-RECEIPT-ATOMIC-READ-001` is the active independent remediation slice. Replace path-based
-receipt reads with one-open, no-follow, same-descriptor bounded verification; verify descriptor
-metadata stability; and verify the receipt again after the final hook context check. Add
-deterministic path-replacement and between-check mutation fixtures. Failure-first evidence rejected
-the reopened replacement as malformed. After implementation, focused fixtures pass in 23.15
-seconds, full integration in 40.77 seconds, and complete quick preflight in 52.97 seconds without
-Docker. Freeze these staged bytes for a new immutable review packet. Detailed contract and stop
-conditions are in `.codex/notepads/r1-receipt-atomic-read-001.md`. Do not commit or push until the
-new normal and adversarial review pair passes identical bytes.
+`R1-RECEIPT-ATOMIC-READ-001` passed focused/full/quick gates and both bounded reviews. Commit
+`3b177518…` exactly matches reviewed tree `0a47fd0d…`; receipt preparation took about 52.4 seconds,
+the hook took 2.00 seconds, and live remote advanced normally.
+
+Source CI `30228487196` failed in nine seconds before GCC: the disposable fixture invoked the mise
+`pre-commit` shim outside the repository that selects version 4.6.1. Active independent remediation
+`R1-CI-PRECOMMIT-RESOLVE-001` resolves the real executable once from the owning repository with
+`mise which`, then passes that path into fixtures. Focused and complete quick gates pass in
+23.37/48.44 seconds without Docker. Freeze one bounded review, commit, push through the admitted
+route, and require exact-HEAD Source CI. Do not extend R1 after this portability fix; defer
+packet-efficiency measurement and specialist-admission fixtures.

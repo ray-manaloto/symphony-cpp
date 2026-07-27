@@ -27,13 +27,13 @@ The reset commit remains parked local ahead-one.
 passed immutable tree `4ca0115a…`; final adversarial review found path-reopen TOCTOU and missing
 post-context receipt revalidation. No commit or push followed.
 
-`R1-RECEIPT-ATOMIC-READ-001` now owns only the two review findings. Use Node's maintained
-one-open/no-follow descriptor APIs, verify bounded bytes and stable descriptor metadata, and
-reverify after the final hook context check. Its capsule is
-`.codex/notepads/r1-receipt-atomic-read-001.md`. Failure-first rejected the replacement race;
-focused/full/quick gates now pass in 23.15/40.77/52.97 seconds without Docker. Freeze one new packet
-for a fresh normal/adversarial pair. Broader OpenSymphony/devcontainer/root-cause review resumes
-only after this atomic publication-control remediation stops or passes.
+`R1-RECEIPT-ATOMIC-READ-001` passed both reviews, committed as exact tree `0a47fd0d…`, prepared in
+about 52.4 seconds, and pushed normally in 2.00 seconds as `3b177518…`.
+
+Source CI `30228487196` failed before GCC because a disposable fixture invoked a mise shim without
+the owning repository's tool context. `R1-CI-PRECOMMIT-RESOLVE-001` is the only active writable
+slice. The real pinned executable is resolved from the repository; focused/quick gates pass in
+23.37/48.44 seconds. Freeze one bounded review, publish, and then freeze R1.
 
 ## Reset evidence
 

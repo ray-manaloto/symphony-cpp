@@ -50,6 +50,8 @@ all inherited fixtures remain green, and reviewed bytes match the staged tree.
 - Implemented quick fixtures: PASS, 23.15 seconds.
 - Full integration: PASS, 40.77 seconds.
 - Complete quick preflight: PASS, 52.97 seconds, no Docker.
+- Normal/xhigh and bounded adversarial/xhigh reviews: PASS on tree `0a47fd0d…`.
+- Commit `3b17751887f5192e7b0b2bbe4be7a4faaaf77463` has exact tree `0a47fd0d…`.
 
 ## Stop conditions
 
