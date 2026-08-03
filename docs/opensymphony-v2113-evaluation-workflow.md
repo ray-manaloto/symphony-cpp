@@ -37,14 +37,46 @@ scanner. The pre-push hook then reads the exact zero-finding receipt twice aroun
 range check. No generic new-branch, container-recipe, unknown-path, or `--no-verify` exemption is
 introduced.
 
-After a separately authorized exact-path commit, the owner ceremony is:
+The separately authorized initial publication produced commit
+`e7f2bf480c79d8c1c5d6b81e3c474b576250fc55` on the exact target branch and triggered push-event
+run `30839315779`, attempt 1. That run is immutable and failed before image construction: the
+runner sent GitHub's 40-character lowercase `github.sha` through the 64-character SHA-256
+validator. It produced no transfer artifact. The workflow also supplied `install: false` to
+`docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c`, whose pinned action
+metadata has no `install` input. The correction removes only that unsupported input and retains
+the supported `cleanup: true` input.
+
+## Exact fast-forward correction
+
+The correction guard admits exactly one child commit of
+`e7f2bf480c79d8c1c5d6b81e3c474b576250fc55`, containing exactly these six paths:
+
+- `.github/workflows/opensymphony-v2113-evaluation.yml`
+- `docs/opensymphony-v2113-evaluation-workflow.md`
+- `scripts/check-push-route.mjs`
+- `scripts/run-opensymphony-v2113-github-actions.sh`
+- `scripts/test-opensymphony-v2113-github-actions.mjs`
+- `scripts/test-push-route.mjs`
+
+It requires local ref `refs/heads/codex/implementation`, remote `origin`, push URL
+`git@github.com:ray-manaloto/symphony-cpp.git`, remote destination
+`refs/heads/codex/opensymphony-v2113-gha`, and a matching remote-tracking base at the failed commit.
+It rejects any wrong base or parent, extra commit, missing or extra path, dirty owned path,
+destination drift, or stale remote-tracking state. The runner now validates `github.sha` as exactly
+40 lowercase hexadecimal characters while retaining the distinct exact-64-character validator for
+SHA-256 fields.
+
+After a separately authorized correction commit, the preparation command and proposed
+fast-forward push are:
 
 ```sh
-node scripts/check-push-route.mjs prepare-opensymphony-v2113-github-actions
+node scripts/check-push-route.mjs prepare-opensymphony-v2113-github-actions-correction
 git push origin refs/heads/codex/implementation:refs/heads/codex/opensymphony-v2113-gha
 ```
 
-This document records those commands but does not authorize or perform the commit or push.
+This local correction packet does not authorize or perform that push. A separately approved second
+push and its new automatic Actions run are still required; the failed run is not rerun, cancelled,
+or replaced, and no success is claimed here.
 
 ## Native build and evidence
 

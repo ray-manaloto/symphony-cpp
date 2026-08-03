@@ -33,6 +33,10 @@ docker() {
     docker "$@"
 }
 
+require_lower_git_oid() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "$2 is not a lowercase Git OID"
+}
+
 require_lower_sha256() {
   [[ "$1" =~ ^[0-9a-f]{64}$ ]] || fail "$2 is not a lowercase SHA-256"
 }
@@ -91,7 +95,7 @@ verify_host_boundary() {
       ;;
     *) fail "unsupported workflow event" ;;
   esac
-  require_lower_sha256 "${OPENSYMPHONY_GITHUB_SHA}" "github.sha"
+  require_lower_git_oid "${OPENSYMPHONY_GITHUB_SHA}" "github.sha"
   [[ "${OPENSYMPHONY_GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]] || fail "invalid run ID"
   [[ "${OPENSYMPHONY_GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ]] ||
     fail "invalid run attempt"
@@ -658,9 +662,15 @@ preflight() {
   printf 'OpenSymphony v2.11.3 runner collision boundary passed\n'
 }
 
-case "${1:-}" in
-  preflight) preflight ;;
-  execute) execute_build ;;
-  cleanup-only) cleanup_only ;;
-  *) fail "usage: run-opensymphony-v2113-github-actions.sh preflight | execute | cleanup-only" ;;
-esac
+main() {
+  case "${1:-}" in
+    preflight) preflight ;;
+    execute) execute_build ;;
+    cleanup-only) cleanup_only ;;
+    *) fail "usage: run-opensymphony-v2113-github-actions.sh preflight | execute | cleanup-only" ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

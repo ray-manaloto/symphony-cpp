@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -106,6 +107,9 @@ function validateWorkflow(workflow) {
     workflow,
     /test "\$\(dpkg --print-architecture\)" = amd64\n\s+test "\$\(uname -m\)" = x86_64/,
   );
+  if (/^\s+install:/m.test(workflow)) {
+    fail("workflow configures unsupported setup-buildx input install");
+  }
   requireInOrder(workflow, [
     "Verify native x64 runner and private Docker boundary",
     'test "$(dpkg --print-architecture)" = amd64',
@@ -142,6 +146,9 @@ function validateWorkflow(workflow) {
 function validateRunner(runner) {
   for (const token of [
     "set -euo pipefail",
+    "require_lower_git_oid() {",
+    "require_lower_sha256() {",
+    'require_lower_git_oid "${OPENSYMPHONY_GITHUB_SHA}" "github.sha"',
     'readonly expected_profile="github-actions-native-amd64"',
     'readonly expected_image="symphony-opensymphony:osv2113-019fc0ca-ticket47"',
     'readonly expected_builder="symphony-osv2113-019fc0ca-ticket47-builder"',
@@ -237,6 +244,39 @@ const buildContract = readFileSync(
 );
 validateWorkflow(workflow);
 validateRunner(runner);
+
+const validGitOid = "e7f2bf480c79d8c1c5d6b81e3c474b576250fc55";
+const runGitOidValidation = (value) =>
+  spawnSync(
+    "bash",
+    [
+      "-c",
+      'source "$1"; require_lower_git_oid "$2" "github.sha"',
+      "opensymphony-v2113-git-oid-contract",
+      resolve(root, runnerPath),
+      value,
+    ],
+    { encoding: "utf8" },
+  );
+
+assert.equal(
+  runGitOidValidation(validGitOid).status,
+  0,
+  "exactly 40 lowercase hexadecimal characters must be accepted as a Git OID",
+);
+for (const [name, value] of [
+  ["39-character Git OID", "a".repeat(39)],
+  ["41-character Git OID", "a".repeat(41)],
+  ["64-character SHA-256", "a".repeat(64)],
+  ["uppercase Git OID", "A".repeat(40)],
+  ["non-hexadecimal Git OID", "g".repeat(40)],
+]) {
+  assert.notEqual(
+    runGitOidValidation(value).status,
+    0,
+    `${name} must be rejected by the executable Git OID validator`,
+  );
+}
 for (const path of [workflowPath, runnerPath, "scripts/test-opensymphony-v2113-github-actions.mjs"]) {
   assert.ok(inputId.includes(path), `build-input identity omitted ${path}`);
 }
@@ -309,6 +349,14 @@ assert.throws(
   undefined,
   "hostile trigger",
 );
+assert.throws(
+  () =>
+    validateWorkflow(
+      workflow.replace("          cleanup: true", "          install: false\n          cleanup: true"),
+    ),
+  undefined,
+  "unsupported setup-buildx install input",
+);
 const runnerMutations = [
   ["nondeterministic archive", "--mtime=@0", "--mtime=now"],
   ["builder cleanup", "docker buildx rm", "docker buildx inspect"],
@@ -322,7 +370,18 @@ const runnerMutations = [
 for (const [name, before, after] of runnerMutations) {
   assert.throws(() => validateRunner(runner.replaceAll(before, after)), undefined, name);
 }
+assert.throws(
+  () =>
+    validateRunner(
+      runner.replace(
+        'require_lower_git_oid "${OPENSYMPHONY_GITHUB_SHA}" "github.sha"',
+        'require_lower_sha256 "${OPENSYMPHONY_GITHUB_SHA}" "github.sha"',
+      ),
+    ),
+  undefined,
+  "GitHub SHA routed through the SHA-256 validator",
+);
 
 process.stdout.write(
-  `OpenSymphony v2.11.3 GitHub Actions contracts passed: ${workflowMutations.length + expectedPaths.length + runnerMutations.length + 1} hostile mutations rejected\n`,
+  `OpenSymphony v2.11.3 GitHub Actions contracts passed: ${workflowMutations.length + expectedPaths.length + runnerMutations.length + 1} prior hostile mutations plus 7 correction hostile mutations rejected\n`,
 );

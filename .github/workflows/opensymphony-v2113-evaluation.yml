@@ -77,7 +77,6 @@ jobs:
           driver-opts: |
             image=moby/buildkit@sha256:2caaaf9bc673a82d5b0a87824f8375e6b2b36b55001dad611230516c724e9fba
           buildkitd-flags: --debug
-          install: false
           cleanup: true
 
       - name: Build, test, export, and clean the stock image

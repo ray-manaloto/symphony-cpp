@@ -20,11 +20,14 @@ import { performance } from "node:perf_hooks";
 import {
   PushRouteError,
   OPENSYMPHONY_V2113_GHA_BASE,
+  OPENSYMPHONY_V2113_GHA_CORRECTION_BASE,
+  OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS,
   OPENSYMPHONY_V2113_GHA_PATHS,
   OPENSYMPHONY_V2113_GHA_REMOTE_URL,
   buildRouteState,
   classifyPaths,
   prepareOpenSymphonyV2113GitHubActions,
+  prepareOpenSymphonyV2113GitHubActionsCorrection,
   preparePush,
   verifyPrePush,
   verifyHookContext,
@@ -48,6 +51,15 @@ const expectedOpenSymphonyV2113GhaPaths = [
   "scripts/test-opensymphony-v2113-upstream.sh",
   "scripts/test-push-route.mjs",
 ];
+const expectedOpenSymphonyV2113GhaCorrectionPaths = [
+  ".github/workflows/opensymphony-v2113-evaluation.yml",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+  "scripts/check-push-route.mjs",
+  "scripts/run-opensymphony-v2113-github-actions.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-push-route.mjs",
+];
+const opensymphonyV2113GhaRemoteRef = "refs/heads/codex/opensymphony-v2113-gha";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = mkdtempSync(join(tmpdir(), "symphony-push-route-"));
@@ -157,6 +169,21 @@ function commitOpenSymphonyV2113GhaPacket(repo) {
   git(repo, "commit", "-m", "exact #47 native workflow packet");
 }
 
+function configureOpenSymphonyV2113GhaCorrection(repo, remote, base) {
+  git(remote, "fetch", repo, `${base}:${opensymphonyV2113GhaRemoteRef}`);
+  git(repo, "update-ref", "refs/remotes/origin/codex/opensymphony-v2113-gha", base);
+  git(repo, "config", "branch.codex/implementation.merge", opensymphonyV2113GhaRemoteRef);
+}
+
+function commitOpenSymphonyV2113GhaCorrection(repo) {
+  for (const path of expectedOpenSymphonyV2113GhaCorrectionPaths) {
+    const absolute = join(repo, path);
+    writeFileSync(absolute, `${readFileSync(absolute, "utf8")}\n# exact #47 correction: ${path}\n`);
+  }
+  git(repo, "add", "--", ...expectedOpenSymphonyV2113GhaCorrectionPaths);
+  git(repo, "commit", "-m", "exact #47 native workflow correction");
+}
+
 assert.deepEqual(classifyPaths(["docs/readme.md"]).routes, ["documentation"]);
 assert.deepEqual(classifyPaths(["scripts/check-push-route.mjs"]).routes, ["hook-self"]);
 assert.deepEqual(classifyPaths([".codex/hooks.json"]).routes, [
@@ -199,7 +226,15 @@ assert.equal(
   OPENSYMPHONY_V2113_GHA_REMOTE_URL,
   "git@github.com:ray-manaloto/symphony-cpp.git",
 );
+assert.equal(
+  OPENSYMPHONY_V2113_GHA_CORRECTION_BASE,
+  "e7f2bf480c79d8c1c5d6b81e3c474b576250fc55",
+);
 assert.deepEqual(OPENSYMPHONY_V2113_GHA_PATHS, expectedOpenSymphonyV2113GhaPaths);
+assert.deepEqual(
+  OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS,
+  expectedOpenSymphonyV2113GhaCorrectionPaths,
+);
 assert.deepEqual(classifyPaths(expectedOpenSymphonyV2113GhaPaths), {
   routes: ["opensymphony-v2113-github-actions"],
   blocked: [],
@@ -210,6 +245,18 @@ assert.throws(
 );
 assert.throws(
   () => classifyPaths([...expectedOpenSymphonyV2113GhaPaths, "unknown.bin"]),
+  /unknown route/,
+);
+assert.deepEqual(classifyPaths(expectedOpenSymphonyV2113GhaCorrectionPaths), {
+  routes: ["opensymphony-v2113-github-actions-correction"],
+  blocked: [],
+});
+assert.throws(
+  () => classifyPaths(expectedOpenSymphonyV2113GhaCorrectionPaths.slice(1)),
+  PushRouteError,
+);
+assert.throws(
+  () => classifyPaths([...expectedOpenSymphonyV2113GhaCorrectionPaths, "unknown.bin"]),
   /unknown route/,
 );
 
@@ -266,6 +313,175 @@ verifyPrePush(opensymphonyGha.repo, opensymphonyGhaEnvironment, {
   expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase,
   expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGha.remote,
 });
+
+const opensymphonyGhaCorrection = initializeFixture("opensymphony-v2113-gha-correction");
+commitOpenSymphonyV2113GhaPacket(opensymphonyGhaCorrection.repo);
+const opensymphonyGhaCorrectionBase = git(
+  opensymphonyGhaCorrection.repo,
+  "rev-parse",
+  "HEAD",
+);
+configureOpenSymphonyV2113GhaCorrection(
+  opensymphonyGhaCorrection.repo,
+  opensymphonyGhaCorrection.remote,
+  opensymphonyGhaCorrectionBase,
+);
+commitOpenSymphonyV2113GhaCorrection(opensymphonyGhaCorrection.repo);
+const opensymphonyGhaCorrectionHead = git(
+  opensymphonyGhaCorrection.repo,
+  "rev-parse",
+  "HEAD",
+);
+const opensymphonyGhaCorrectionEnvironment = hookEnvironment(
+  opensymphonyGhaCorrection.repo,
+  opensymphonyGhaCorrectionBase,
+  { PRE_COMMIT_REMOTE_BRANCH: opensymphonyV2113GhaRemoteRef },
+);
+const opensymphonyGhaCorrectionDependencies = {
+  expectedOpenSymphonyV2113GhaCorrectionBase: opensymphonyGhaCorrectionBase,
+  expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGhaCorrection.remote,
+};
+const opensymphonyGhaCorrectionState = verifyHookContext(
+  opensymphonyGhaCorrection.repo,
+  opensymphonyGhaCorrectionEnvironment,
+  opensymphonyGhaCorrectionDependencies,
+);
+assert.equal(opensymphonyGhaCorrectionState.base, opensymphonyGhaCorrectionBase);
+assert.equal(opensymphonyGhaCorrectionState.head, opensymphonyGhaCorrectionHead);
+assert.deepEqual(
+  opensymphonyGhaCorrectionState.paths,
+  expectedOpenSymphonyV2113GhaCorrectionPaths,
+);
+assert.deepEqual(opensymphonyGhaCorrectionState.routes, [
+  "opensymphony-v2113-github-actions-correction",
+]);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaCorrection.repo,
+      {
+        ...opensymphonyGhaCorrectionEnvironment,
+        PRE_COMMIT_REMOTE_BRANCH: "refs/heads/not-authorized",
+      },
+      opensymphonyGhaCorrectionDependencies,
+    ),
+  /destination|upstream/,
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaCorrection.repo,
+      opensymphonyGhaCorrectionEnvironment,
+      {
+        ...opensymphonyGhaCorrectionDependencies,
+        expectedOpenSymphonyV2113GhaRemoteUrl: "git@github.com:not-authorized/repository.git",
+      },
+    ),
+  /destination/,
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaCorrection.repo,
+      opensymphonyGhaCorrectionEnvironment,
+      {
+        ...opensymphonyGhaCorrectionDependencies,
+        expectedOpenSymphonyV2113GhaCorrectionBase: git(
+          opensymphonyGhaCorrection.repo,
+          "rev-parse",
+          `${opensymphonyGhaCorrectionBase}^`,
+        ),
+      },
+    ),
+  /base/,
+);
+git(
+  opensymphonyGhaCorrection.repo,
+  "update-ref",
+  "refs/remotes/origin/codex/opensymphony-v2113-gha",
+  git(opensymphonyGhaCorrection.repo, "rev-parse", `${opensymphonyGhaCorrectionBase}^`),
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaCorrection.repo,
+      opensymphonyGhaCorrectionEnvironment,
+      opensymphonyGhaCorrectionDependencies,
+    ),
+  /upstream|base/,
+);
+git(
+  opensymphonyGhaCorrection.repo,
+  "update-ref",
+  "refs/remotes/origin/codex/opensymphony-v2113-gha",
+  opensymphonyGhaCorrectionBase,
+);
+const dirtyCorrectionPath = join(
+  opensymphonyGhaCorrection.repo,
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+);
+const cleanCorrectionContents = readFileSync(dirtyCorrectionPath, "utf8");
+writeFileSync(dirtyCorrectionPath, `${cleanCorrectionContents}\n# dirty\n`);
+assert.throws(
+  () =>
+    prepareOpenSymphonyV2113GitHubActionsCorrection(
+      opensymphonyGhaCorrection.repo,
+      opensymphonyGhaCorrectionDependencies,
+    ),
+  /clean/,
+);
+writeFileSync(dirtyCorrectionPath, cleanCorrectionContents);
+prepareOpenSymphonyV2113GitHubActionsCorrection(opensymphonyGhaCorrection.repo, {
+  ...opensymphonyGhaCorrectionDependencies,
+  runStaticChecks() {},
+});
+verifyPrePush(
+  opensymphonyGhaCorrection.repo,
+  opensymphonyGhaCorrectionEnvironment,
+  opensymphonyGhaCorrectionDependencies,
+);
+
+const opensymphonyGhaMultipleCorrection = initializeFixture(
+  "opensymphony-v2113-gha-multiple-correction",
+);
+commitOpenSymphonyV2113GhaPacket(opensymphonyGhaMultipleCorrection.repo);
+const opensymphonyGhaMultipleCorrectionBase = git(
+  opensymphonyGhaMultipleCorrection.repo,
+  "rev-parse",
+  "HEAD",
+);
+configureOpenSymphonyV2113GhaCorrection(
+  opensymphonyGhaMultipleCorrection.repo,
+  opensymphonyGhaMultipleCorrection.remote,
+  opensymphonyGhaMultipleCorrectionBase,
+);
+commitOpenSymphonyV2113GhaCorrection(opensymphonyGhaMultipleCorrection.repo);
+writeFileSync(
+  join(opensymphonyGhaMultipleCorrection.repo, "docs/opensymphony-v2113-evaluation-workflow.md"),
+  "# second correction commit\n",
+);
+git(
+  opensymphonyGhaMultipleCorrection.repo,
+  "add",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+);
+git(opensymphonyGhaMultipleCorrection.repo, "commit", "-m", "second correction commit");
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaMultipleCorrection.repo,
+      hookEnvironment(
+        opensymphonyGhaMultipleCorrection.repo,
+        opensymphonyGhaMultipleCorrectionBase,
+        { PRE_COMMIT_REMOTE_BRANCH: opensymphonyV2113GhaRemoteRef },
+      ),
+      {
+        expectedOpenSymphonyV2113GhaCorrectionBase: opensymphonyGhaMultipleCorrectionBase,
+        expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGhaMultipleCorrection.remote,
+      },
+    ),
+  /one exact commit/,
+);
 
 const hostile = initializeFixture("hostile");
 const hostileBase = git(hostile.repo, "rev-parse", "HEAD");
