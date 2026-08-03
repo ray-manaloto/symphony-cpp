@@ -19,13 +19,35 @@ import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import {
   PushRouteError,
+  OPENSYMPHONY_V2113_GHA_BASE,
+  OPENSYMPHONY_V2113_GHA_PATHS,
+  OPENSYMPHONY_V2113_GHA_REMOTE_URL,
   buildRouteState,
   classifyPaths,
+  prepareOpenSymphonyV2113GitHubActions,
   preparePush,
   verifyPrePush,
   verifyHookContext,
   verifyPublicationReceipt,
 } from "./check-push-route.mjs";
+
+const expectedOpenSymphonyV2113GhaPaths = [
+  ".github/workflows/opensymphony-v2113-evaluation.yml",
+  "containers/OpenSymphony-v2113-evaluation.Containerfile",
+  "containers/opensymphony-v2113-evaluation.bake.hcl",
+  "docs/dependency-decisions.md",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+  "docs/upstream-lock.md",
+  "ops/opensymphony/evaluation/v2.11.3/input-manifest-v1.json",
+  "scripts/build-opensymphony-v2113-evaluation.sh",
+  "scripts/check-push-route.mjs",
+  "scripts/opensymphony-v2113-build-input-id.sh",
+  "scripts/run-opensymphony-v2113-github-actions.sh",
+  "scripts/test-opensymphony-v2113-build.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-opensymphony-v2113-upstream.sh",
+  "scripts/test-push-route.mjs",
+];
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = mkdtempSync(join(tmpdir(), "symphony-push-route-"));
@@ -122,8 +144,45 @@ function hookEnvironment(repo, base, overrides = {}) {
   };
 }
 
+function commitOpenSymphonyV2113GhaPacket(repo) {
+  for (const path of expectedOpenSymphonyV2113GhaPaths) {
+    const absolute = join(repo, path);
+    if (path === "scripts/check-push-route.mjs") {
+      write(absolute, `${readFileSync(absolute, "utf8")}\n// exact #47 fixture delta\n`, 0o755);
+    } else {
+      write(absolute, `# exact #47 fixture: ${path}\n`, path.endsWith(".sh") ? 0o755 : undefined);
+    }
+  }
+  git(repo, "add", "--", ...expectedOpenSymphonyV2113GhaPaths);
+  git(repo, "commit", "-m", "exact #47 native workflow packet");
+}
+
 assert.deepEqual(classifyPaths(["docs/readme.md"]).routes, ["documentation"]);
 assert.deepEqual(classifyPaths(["scripts/check-push-route.mjs"]).routes, ["hook-self"]);
+assert.deepEqual(classifyPaths([".codex/hooks.json"]).routes, [
+  "hook-self",
+  "documentation",
+]);
+assert.deepEqual(classifyPaths([".github/workflows/source-ci.yml"]).routes, [
+  "source",
+  "container-recipe",
+]);
+assert.deepEqual(
+  classifyPaths(["scripts/codex-lifecycle-hook.mjs"]).routes,
+  ["hook-self"],
+);
+assert.deepEqual(
+  classifyPaths(["scripts/test-codex-lifecycle-hook.mjs"]).routes,
+  ["hook-self"],
+);
+assert.deepEqual(
+  classifyPaths(["scripts/codex-lifecycle-receipt.py"]).routes,
+  ["hook-self"],
+);
+assert.deepEqual(
+  classifyPaths(["scripts/test-codex-lifecycle-receipt.py"]).routes,
+  ["hook-self"],
+);
 assert.deepEqual(
   classifyPaths(["docs/readme.md", "scripts/check-push-route.mjs"]).routes,
   ["hook-self", "documentation"],
@@ -132,6 +191,81 @@ assert.match(classifyPaths(["src/main.cpp"]).blocked[0], /GCC devcontainer/);
 assert.match(classifyPaths([".devcontainer/devcontainer.json"]).blocked[0], /R2/);
 assert.match(classifyPaths(["containers/Containerfile"]).blocked[0], /static-contract/);
 assert.throws(() => classifyPaths(["unknown.bin"]), /unknown route/);
+assert.equal(
+  OPENSYMPHONY_V2113_GHA_BASE,
+  "b682ef362494936b38f99468b0e84788cceec17e",
+);
+assert.equal(
+  OPENSYMPHONY_V2113_GHA_REMOTE_URL,
+  "git@github.com:ray-manaloto/symphony-cpp.git",
+);
+assert.deepEqual(OPENSYMPHONY_V2113_GHA_PATHS, expectedOpenSymphonyV2113GhaPaths);
+assert.deepEqual(classifyPaths(expectedOpenSymphonyV2113GhaPaths), {
+  routes: ["opensymphony-v2113-github-actions"],
+  blocked: [],
+});
+assert.throws(
+  () => classifyPaths(expectedOpenSymphonyV2113GhaPaths.slice(1)),
+  PushRouteError,
+);
+assert.throws(
+  () => classifyPaths([...expectedOpenSymphonyV2113GhaPaths, "unknown.bin"]),
+  /unknown route/,
+);
+
+const opensymphonyGha = initializeFixture("opensymphony-v2113-gha");
+const opensymphonyGhaBase = git(opensymphonyGha.repo, "rev-parse", "HEAD");
+commitOpenSymphonyV2113GhaPacket(opensymphonyGha.repo);
+const opensymphonyGhaHead = git(opensymphonyGha.repo, "rev-parse", "HEAD");
+const opensymphonyGhaEnvironment = hookEnvironment(opensymphonyGha.repo, "0".repeat(40), {
+  PRE_COMMIT_REMOTE_BRANCH: "refs/heads/codex/opensymphony-v2113-gha",
+});
+const opensymphonyGhaState = verifyHookContext(
+  opensymphonyGha.repo,
+  opensymphonyGhaEnvironment,
+  {
+    expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase,
+    expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGha.remote,
+  },
+);
+assert.equal(opensymphonyGhaState.base, opensymphonyGhaBase);
+assert.equal(opensymphonyGhaState.head, opensymphonyGhaHead);
+assert.deepEqual(opensymphonyGhaState.paths, expectedOpenSymphonyV2113GhaPaths);
+assert.deepEqual(opensymphonyGhaState.routes, ["opensymphony-v2113-github-actions"]);
+assert.throws(
+  () => verifyHookContext(
+    opensymphonyGha.repo,
+    opensymphonyGhaEnvironment,
+    {
+      expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase,
+      expectedOpenSymphonyV2113GhaRemoteUrl: "git@github.com:not-authorized/repository.git",
+    },
+  ),
+  /destination/,
+);
+assert.throws(
+  () => verifyHookContext(opensymphonyGha.repo, {
+    ...opensymphonyGhaEnvironment,
+    PRE_COMMIT_REMOTE_BRANCH: "refs/heads/not-authorized",
+  }, { expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase }),
+  PushRouteError,
+);
+assert.throws(
+  () => verifyHookContext(opensymphonyGha.repo, {
+    ...opensymphonyGhaEnvironment,
+    PRE_COMMIT_FROM_REF: opensymphonyGhaBase,
+  }, { expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase }),
+  PushRouteError,
+);
+prepareOpenSymphonyV2113GitHubActions(opensymphonyGha.repo, {
+  expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase,
+  expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGha.remote,
+  runStaticChecks() {},
+});
+verifyPrePush(opensymphonyGha.repo, opensymphonyGhaEnvironment, {
+  expectedOpenSymphonyV2113GhaBase: opensymphonyGhaBase,
+  expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGha.remote,
+});
 
 const hostile = initializeFixture("hostile");
 const hostileBase = git(hostile.repo, "rev-parse", "HEAD");

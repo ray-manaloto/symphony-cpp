@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "kind": "opensymphony_v2113_evaluation_build_inputs",
+  "program": "opensymphony-v2.11.3-three-arm",
+  "controller": "019fc0ca-dde9-7132-91a5-8530d7d76592",
+  "ticket": 47,
+  "platform": "linux/amd64",
+  "openSymphony": {
+    "repository": "https://github.com/kumanday/OpenSymphony",
+    "tag": "v2.11.3",
+    "tagObject": "ed265b58f1b17c0184775635444e1e2be383177f",
+    "commit": "af6a65459385104fcef4e249980701bf8e7964d4",
+    "tree": "ddde2287e4bd975dc721b131f039cec6b32f437b",
+    "archiveUrl": "https://codeload.github.com/kumanday/OpenSymphony/tar.gz/refs/tags/v2.11.3",
+    "archiveSha256": "6376662ac21d930f0b4b488a7d13e5b8e7fbf94a02d67ab552d7e341ae257a1c",
+    "cargoLockSha256": "99f92f0a22a89c42a33474bf7b34f4433ef877371f0da10ff532c47b20b74301",
+    "rust": "1.97.1",
+    "license": "MIT",
+    "licenseSha256": "d22aeaebdf4cf94f10801bddcfb204b296581a94023ab92350b18b24c631199f"
+  },
+  "codex": {
+    "repository": "https://github.com/openai/codex",
+    "tag": "rust-v0.146.0",
+    "tagObject": "be449751a978f02e5bbba886999662956c7f38f5",
+    "commit": "e363b08c9175ac1cbe5893615dd2cb9ddf95043b",
+    "assetUrl": "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-x86_64-unknown-linux-musl.tar.gz",
+    "assetSha256": "5ba3b9405543953081f661d0854d266f76e2abbe51d41349355a36de7673776a",
+    "binarySha256": "2e863156ed35ecc5253b1e2f907a9143077b9f7cb51942070c61996471ff6e04",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://raw.githubusercontent.com/openai/codex/e363b08c9175ac1cbe5893615dd2cb9ddf95043b/LICENSE",
+    "licenseSha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+  },
+  "rustImage": {
+    "reference": "docker.io/library/rust:1.97.1-bookworm",
+    "index": "sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa",
+    "platform": "linux/amd64",
+    "manifest": "sha256:389c1ae98c20fbcadca68a685482749267cec3c90893ae4671c5a37cc894c416",
+    "licenses": [
+      {
+        "spdx": "Apache-2.0",
+        "url": "https://raw.githubusercontent.com/rust-lang/rust/1.97.1/LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+      },
+      {
+        "spdx": "MIT",
+        "url": "https://raw.githubusercontent.com/rust-lang/rust/1.97.1/LICENSE-MIT",
+        "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+      }
+    ]
+  },
+  "dockerfileFrontend": {
+    "reference": "docker.io/docker/dockerfile:1.10",
+    "digest": "sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5",
+    "license": "Apache-2.0"
+  },
+  "buildkit": {
+    "reference": "docker.io/moby/buildkit:v0.31.1",
+    "index": "sha256:6b59b7df63a8cb9902736f9ddf7fcff8261613d3e7449b8ea8b7537fc399c03a",
+    "platform": "linux/amd64",
+    "manifest": "sha256:2caaaf9bc673a82d5b0a87824f8375e6b2b36b55001dad611230516c724e9fba",
+    "license": "Apache-2.0",
+    "licenseUrl": "https://raw.githubusercontent.com/moby/buildkit/v0.31.1/LICENSE",
+    "licenseSha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  "githubActions": {
+    "runner": {
+      "label": "ubuntu-24.04",
+      "os": "linux",
+      "architecture": "amd64",
+      "machine": "x86_64"
+    },
+    "checkout": {
+      "repository": "https://github.com/actions/checkout",
+      "version": "v7.0.1",
+      "commit": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "license": "MIT",
+      "licenseSha256": "3e855f20f94c4a0d285b4198c609d14c55e330b7ca8a1317913d62a9046a60f1"
+    },
+    "setupBuildx": {
+      "repository": "https://github.com/docker/setup-buildx-action",
+      "version": "v4.2.0",
+      "commit": "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c",
+      "license": "Apache-2.0",
+      "licenseSha256": "7c8787fd833802883d414292aa511473f36f989fc7b4ff63c5621f3912c6d0d3"
+    },
+    "buildx": {
+      "repository": "https://github.com/docker/buildx",
+      "version": "v0.35.0",
+      "tagObject": "151a92201622eeb80e19bdd9681af2266772875f",
+      "commit": "a319e5b15052cf6557ceb666eb8ff6e32380b782",
+      "license": "Apache-2.0"
+    },
+    "uploadArtifact": {
+      "repository": "https://github.com/actions/upload-artifact",
+      "version": "v4.6.2",
+      "commit": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+      "retentionDays": 1,
+      "license": "MIT",
+      "licenseSha256": "3e855f20f94c4a0d285b4198c609d14c55e330b7ca8a1317913d62a9046a60f1"
+    }
+  },
+  "buildEnvironment": {
+    "dockerDesktop": {
+      "version": "4.84.0",
+      "build": "234817"
+    },
+    "engine": {
+      "version": "29.6.2",
+      "gitCommit": "3d80467",
+      "api": "1.55",
+      "os": "linux",
+      "architecture": "arm64"
+    },
+    "dockerCli": {
+      "version": "29.7.1",
+      "gitCommit": "e9452d6",
+      "sha256": "e109bb333ae9e78ff8fcef016aa65505c2803a712dda660ac6fc8f785ceb760d"
+    },
+    "buildx": {
+      "version": "v0.35.0-desktop.2",
+      "gitCommit": "b554ce1decd8b509893b1e7c6227eabfb923d094",
+      "sha256": "77d47bc962b3095110c153bedac111353c4729179124c780f206845b7f33c2e7",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://raw.githubusercontent.com/docker/buildx/b554ce1decd8b509893b1e7c6227eabfb923d094/LICENSE",
+      "licenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  },
+  "licenseSources": [
+    {
+      "component": "OpenSymphony v2.11.3",
+      "spdx": "MIT",
+      "url": "https://raw.githubusercontent.com/kumanday/OpenSymphony/af6a65459385104fcef4e249980701bf8e7964d4/LICENSE",
+      "sha256": "d22aeaebdf4cf94f10801bddcfb204b296581a94023ab92350b18b24c631199f"
+    },
+    {
+      "component": "Codex rust-v0.146.0",
+      "spdx": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/openai/codex/e363b08c9175ac1cbe5893615dd2cb9ddf95043b/LICENSE",
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    },
+    {
+      "component": "Docker Buildx v0.35.0-desktop.2",
+      "spdx": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/docker/buildx/b554ce1decd8b509893b1e7c6227eabfb923d094/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "component": "BuildKit v0.31.1",
+      "spdx": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/moby/buildkit/v0.31.1/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "component": "actions/checkout v7.0.1 and actions/upload-artifact v4.6.2",
+      "spdx": "MIT",
+      "url": "https://raw.githubusercontent.com/actions/checkout/3d3c42e5aac5ba805825da76410c181273ba90b1/LICENSE",
+      "sha256": "3e855f20f94c4a0d285b4198c609d14c55e330b7ca8a1317913d62a9046a60f1"
+    },
+    {
+      "component": "docker/setup-buildx-action v4.2.0",
+      "spdx": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/docker/setup-buildx-action/bb05f3f5519dd87d3ba754cc423b652a5edd6d2c/LICENSE",
+      "sha256": "7c8787fd833802883d414292aa511473f36f989fc7b4ff63c5621f3912c6d0d3"
+    }
+  ],
+  "exclusions": [
+    "standalone-cpp26-product",
+    "devcontainer",
+    "credentials",
+    "daemon-launch",
+    "tracker",
+    "relay",
+    "proxy",
+    "tui-launch",
+    "codex-app-server-launch",
+    "model",
+    "publication",
+    "deployment"
+  ]
+}

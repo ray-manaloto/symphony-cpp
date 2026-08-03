@@ -24,13 +24,39 @@ const RECEIPT_KEYS = [
 const RECEIPT_MAX_BYTES = 64 * 1024;
 const RECEIPT_MAX_AGE_MS = 15 * 60 * 1000;
 const ROUTE_ORDER = [
+  "opensymphony-v2113-github-actions",
   "hook-self",
   "documentation",
   "source",
   "devcontainer",
   "container-recipe",
 ];
+export const OPENSYMPHONY_V2113_GHA_BASE =
+  "b682ef362494936b38f99468b0e84788cceec17e";
+export const OPENSYMPHONY_V2113_GHA_REMOTE_URL =
+  "git@github.com:ray-manaloto/symphony-cpp.git";
+export const OPENSYMPHONY_V2113_GHA_PATHS = Object.freeze([
+  ".github/workflows/opensymphony-v2113-evaluation.yml",
+  "containers/OpenSymphony-v2113-evaluation.Containerfile",
+  "containers/opensymphony-v2113-evaluation.bake.hcl",
+  "docs/dependency-decisions.md",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+  "docs/upstream-lock.md",
+  "ops/opensymphony/evaluation/v2.11.3/input-manifest-v1.json",
+  "scripts/build-opensymphony-v2113-evaluation.sh",
+  "scripts/check-push-route.mjs",
+  "scripts/opensymphony-v2113-build-input-id.sh",
+  "scripts/run-opensymphony-v2113-github-actions.sh",
+  "scripts/test-opensymphony-v2113-build.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-opensymphony-v2113-upstream.sh",
+  "scripts/test-push-route.mjs",
+]);
+const OPENSYMPHONY_V2113_GHA_LOCAL_REF = "refs/heads/codex/implementation";
+const OPENSYMPHONY_V2113_GHA_REMOTE_REF =
+  "refs/heads/codex/opensymphony-v2113-gha";
 const HOOK_SELF_PATHS = new Set([
+  ".codex/hooks.json",
   ".pre-commit-config.yaml",
   "docs/agent-orchestration.md",
   "docs/dependency-decisions.md",
@@ -39,6 +65,10 @@ const HOOK_SELF_PATHS = new Set([
   "scripts/check-goal-routing.sh",
   "scripts/check-local-preflight.sh",
   "scripts/check-push-route.mjs",
+  "scripts/codex-lifecycle-hook.mjs",
+  "scripts/codex-lifecycle-receipt.py",
+  "scripts/test-codex-lifecycle-hook.mjs",
+  "scripts/test-codex-lifecycle-receipt.py",
   "scripts/test-goal-routing.sh",
   "scripts/test-push-route.mjs",
   "scripts/test-toolchain-platform-contract.sh",
@@ -123,6 +153,7 @@ function isDocumentation(path) {
 
 function isSource(path) {
   return (
+    path === ".github/workflows/source-ci.yml" ||
     path === "CMakeLists.txt" ||
     path === "CMakePresets.json" ||
     path === "vcpkg.json" ||
@@ -146,6 +177,7 @@ function isContainerRecipe(path) {
   return (
     path.startsWith("containers/") ||
     path === "scripts/install-cmake.sh" ||
+    path === ".github/workflows/source-ci.yml" ||
     path === ".github/workflows/compiler-matrix.yml" ||
     path === ".github/workflows/opensymphony-image.yml"
   );
@@ -153,6 +185,12 @@ function isContainerRecipe(path) {
 
 export function classifyPaths(paths) {
   if (!Array.isArray(paths) || paths.length === 0) fail("push range has no changed paths");
+  if (
+    paths.length === OPENSYMPHONY_V2113_GHA_PATHS.length &&
+    OPENSYMPHONY_V2113_GHA_PATHS.every((path) => paths.includes(path))
+  ) {
+    return { routes: ["opensymphony-v2113-github-actions"], blocked: [] };
+  }
   const routes = new Set();
   const unknown = [];
   for (const path of paths) {
@@ -247,6 +285,32 @@ function assertOnlyCheckpointDrift(repo) {
       !path.startsWith(CHECKPOINT_PATHS[1]),
   );
   if (disallowed.length !== 0) fail("non-checkpoint worktree drift is not publishable");
+}
+
+function assertCleanIndex(repo) {
+  const index = spawnSync("git", ["diff", "--cached", "--quiet", "--exit-code"], {
+    cwd: repo,
+    encoding: "utf8",
+    env: process.env,
+  });
+  if (index.status === 1) fail("index must be clean before publication");
+  if (index.status !== 0) fail("git index inspection failed");
+}
+
+function assertOpenSymphonyV2113GhaPathsClean(repo) {
+  assertCleanIndex(repo);
+  const tracked = gitBuffer(repo, ["diff", "--name-only", "-z", "--no-renames", "HEAD"]);
+  const untracked = gitBuffer(repo, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const dirty = new Set(
+    Buffer.concat([tracked, untracked])
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean),
+  );
+  const scopedDrift = OPENSYMPHONY_V2113_GHA_PATHS.filter((path) => dirty.has(path));
+  if (scopedDrift.length !== 0) {
+    fail("the exact #47 GitHub Actions packet must be clean before publication");
+  }
 }
 
 function receiptPath(repo) {
@@ -397,7 +461,36 @@ export function buildRouteState(repoInput, baseInput, headInput) {
   return { repo, base, head, paths, ...plan };
 }
 
-export function verifyHookContext(repoInput, environment = process.env) {
+function isZeroOid(value, length) {
+  return value.length === length && new RegExp(`^0{${length}}$`).test(value);
+}
+
+function buildOpenSymphonyV2113GhaState(
+  repo,
+  headInput,
+  expectedBase = OPENSYMPHONY_V2113_GHA_BASE,
+) {
+  const oidLength = objectLength(repo);
+  requireOid(expectedBase, oidLength, "#47 GitHub Actions base");
+  requireOid(headInput, oidLength, "push head");
+  const head = git(repo, ["rev-parse", "--verify", `${headInput}^{commit}`]);
+  if (head !== headInput) fail("push head must use an exact commit ID");
+  const parents = git(repo, ["rev-list", "--parents", "-n", "1", head]).split(" ");
+  if (parents.length !== 2 || parents[1] !== expectedBase) {
+    fail("#47 GitHub Actions publication must be one exact commit on the approved base");
+  }
+  const state = buildRouteState(repo, expectedBase, head);
+  if (
+    state.routes.length !== 1 ||
+    state.routes[0] !== "opensymphony-v2113-github-actions" ||
+    state.blocked.length !== 0
+  ) {
+    fail("push range is not the exact #47 GitHub Actions packet");
+  }
+  return state;
+}
+
+export function verifyHookContext(repoInput, environment = process.env, dependencies = {}) {
   const repo = repositoryRoot(repoInput);
   const oidLength = objectLength(repo);
   const base = environment.PRE_COMMIT_FROM_REF ?? "";
@@ -406,17 +499,42 @@ export function verifyHookContext(repoInput, environment = process.env) {
   const remoteRef = environment.PRE_COMMIT_REMOTE_BRANCH ?? "";
   const remoteName = environment.PRE_COMMIT_REMOTE_NAME ?? "";
   const remoteUrl = environment.PRE_COMMIT_REMOTE_URL ?? "";
-  requireOid(base, oidLength, "pre-push base");
   requireOid(head, oidLength, "pre-push head");
   requireString(remoteName, "pre-push remote name");
   requireString(remoteUrl, "pre-push remote URL");
+  const upstream = configuredUpstream(repo);
+  const currentHead = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  if (head !== currentHead) {
+    fail("pre-push update is not the current checked-out HEAD");
+  }
+  if (isZeroOid(base, oidLength)) {
+    const expectedRemoteUrl =
+      dependencies.expectedOpenSymphonyV2113GhaRemoteUrl ??
+      OPENSYMPHONY_V2113_GHA_REMOTE_URL;
+    if (
+      localRef !== OPENSYMPHONY_V2113_GHA_LOCAL_REF ||
+      localRef !== upstream.localRef ||
+      remoteRef !== OPENSYMPHONY_V2113_GHA_REMOTE_REF ||
+      remoteName !== "origin" ||
+      remoteName !== upstream.remoteName ||
+      remoteUrl !== upstream.pushUrl ||
+      remoteUrl !== expectedRemoteUrl
+    ) {
+      fail("new-branch destination is not the exact #47 GitHub Actions route");
+    }
+    assertOpenSymphonyV2113GhaPathsClean(repo);
+    return buildOpenSymphonyV2113GhaState(
+      repo,
+      head,
+      dependencies.expectedOpenSymphonyV2113GhaBase,
+    );
+  }
+  requireOid(base, oidLength, "pre-push base");
   if (!localRef.startsWith("refs/heads/") || !remoteRef.startsWith("refs/heads/")) {
     fail("only an existing branch update is supported");
   }
-  const upstream = configuredUpstream(repo);
-  const currentHead = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
-  if (localRef !== upstream.localRef || head !== currentHead) {
-    fail("pre-push update is not the current checked-out HEAD");
+  if (localRef !== upstream.localRef) {
+    fail("pre-push update is not the current checked-out branch");
   }
   if (
     remoteName !== upstream.remoteName ||
@@ -430,6 +548,141 @@ export function verifyHookContext(repoInput, environment = process.env) {
   const state = buildRouteState(repo, base, head);
   if (state.blocked.length !== 0) fail(state.blocked[0]);
   return state;
+}
+
+function runOpenSymphonyV2113GhaStaticChecks(repo) {
+  run(repo, "node", ["scripts/test-opensymphony-v2113-github-actions.mjs"], {
+    label: "#47 GitHub Actions workflow contracts",
+    stdio: "inherit",
+  });
+  run(
+    repo,
+    "bash",
+    [
+      "-n",
+      "scripts/run-opensymphony-v2113-github-actions.sh",
+      "scripts/test-opensymphony-v2113-build.sh",
+      "scripts/test-opensymphony-v2113-upstream.sh",
+      "scripts/opensymphony-v2113-build-input-id.sh",
+    ],
+    { label: "#47 shell syntax", stdio: "inherit" },
+  );
+  run(
+    repo,
+    "mise",
+    [
+      "exec",
+      "--",
+      "shellcheck",
+      "scripts/run-opensymphony-v2113-github-actions.sh",
+      "scripts/test-opensymphony-v2113-build.sh",
+      "scripts/test-opensymphony-v2113-upstream.sh",
+      "scripts/opensymphony-v2113-build-input-id.sh",
+    ],
+    { label: "#47 ShellCheck", stdio: "inherit" },
+  );
+  const inputId = run(repo, "./scripts/opensymphony-v2113-build-input-id.sh", [], {
+    label: "#47 build-input identity",
+  }).trim();
+  if (!/^[0-9a-f]{64}$/.test(inputId)) fail("#47 build-input identity is invalid");
+  run(repo, "node", ["scripts/check-dependency-policy.mjs"], {
+    label: "dependency policy",
+    stdio: "inherit",
+  });
+  run(repo, "node", ["scripts/test-push-route.mjs", "--quick"], {
+    label: "push-route fixtures",
+    stdio: "inherit",
+  });
+  run(
+    repo,
+    "mise",
+    ["exec", "--", "actionlint", ".github/workflows/opensymphony-v2113-evaluation.yml"],
+    { label: "#47 actionlint", stdio: "inherit" },
+  );
+  for (const schema of [
+    "vendor.github-workflows",
+    "custom.github-workflows-require-timeout",
+  ]) {
+    run(
+      repo,
+      "mise",
+      [
+        "exec",
+        "--",
+        "check-jsonschema",
+        "--builtin-schema",
+        schema,
+        ".github/workflows/opensymphony-v2113-evaluation.yml",
+      ],
+      { label: `#47 ${schema}`, stdio: "inherit" },
+    );
+  }
+  run(
+    repo,
+    "mise",
+    [
+      "exec",
+      "--",
+      "zizmor",
+      "--offline",
+      "--strict-collection",
+      "--persona",
+      "regular",
+      "--min-confidence",
+      "high",
+      "--format",
+      "plain",
+      "--color",
+      "never",
+      ".github/workflows/opensymphony-v2113-evaluation.yml",
+    ],
+    { label: "#47 zizmor", stdio: "inherit" },
+  );
+}
+
+export function prepareOpenSymphonyV2113GitHubActions(
+  repoInput = process.cwd(),
+  dependencies = {},
+) {
+  const repo = repositoryRoot(repoInput);
+  assertOpenSymphonyV2113GhaPathsClean(repo);
+  const upstream = configuredUpstream(repo);
+  if (upstream.localRef !== OPENSYMPHONY_V2113_GHA_LOCAL_REF) {
+    fail("#47 GitHub Actions publication must originate from codex/implementation");
+  }
+  const head = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  const expectedBase =
+    dependencies.expectedOpenSymphonyV2113GhaBase ?? OPENSYMPHONY_V2113_GHA_BASE;
+  const expectedRemoteUrl =
+    dependencies.expectedOpenSymphonyV2113GhaRemoteUrl ?? OPENSYMPHONY_V2113_GHA_REMOTE_URL;
+  if (upstream.remoteName !== "origin" || upstream.pushUrl !== expectedRemoteUrl) {
+    fail("#47 GitHub Actions publication destination drifted");
+  }
+  const before = buildOpenSymphonyV2113GhaState(repo, head, expectedBase);
+  (dependencies.runStaticChecks ?? runOpenSymphonyV2113GhaStaticChecks)(repo);
+  run(
+    repo,
+    "node",
+    ["scripts/check-adaptive-orchestration.mjs", "--publication-scan", before.base, before.head],
+    { label: "publication scan", stdio: "inherit" },
+  );
+  const afterUpstream = configuredUpstream(repo);
+  const afterHead = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  const after = buildOpenSymphonyV2113GhaState(repo, afterHead, expectedBase);
+  assertOpenSymphonyV2113GhaPathsClean(repo);
+  if (
+    before.base !== after.base ||
+    before.head !== after.head ||
+    upstream.localRef !== afterUpstream.localRef ||
+    upstream.remoteName !== afterUpstream.remoteName ||
+    upstream.pushUrl !== afterUpstream.pushUrl ||
+    JSON.stringify(before.paths) !== JSON.stringify(after.paths)
+  ) {
+    fail("#47 GitHub Actions push range changed during receipt preparation");
+  }
+  verifyPublicationReceipt(repo, after.base, after.head);
+  process.stdout.write(`exact #47 GitHub Actions receipt prepared: ${after.head}\n`);
+  return after;
 }
 
 export function preparePush(repoInput = process.cwd()) {
@@ -482,7 +735,7 @@ export function verifyPrePush(
   environment = process.env,
   dependencies = {},
 ) {
-  const before = verifyHookContext(repoInput, environment);
+  const before = verifyHookContext(repoInput, environment, dependencies);
   verifyPublicationReceipt(
     before.repo,
     before.base,
@@ -491,7 +744,7 @@ export function verifyPrePush(
     dependencies.firstReceipt,
   );
   dependencies.afterFirstReceipt?.();
-  const after = verifyHookContext(before.repo, environment);
+  const after = verifyHookContext(before.repo, environment, dependencies);
   if (before.base !== after.base || before.head !== after.head) {
     fail("push range changed during receipt verification");
   }
@@ -516,6 +769,10 @@ function main() {
     preparePush();
     return;
   }
+  if (operation === "prepare-opensymphony-v2113-github-actions" && args.length === 0) {
+    prepareOpenSymphonyV2113GitHubActions();
+    return;
+  }
   if (operation === "pre-push" && args.length === 0) {
     runPrePush();
     return;
@@ -526,7 +783,9 @@ function main() {
     process.stdout.write(`${state.routes.join(",")}\n`);
     return;
   }
-  fail("usage: check-push-route.mjs prepare | pre-push | classify BASE HEAD");
+  fail(
+    "usage: check-push-route.mjs prepare | prepare-opensymphony-v2113-github-actions | pre-push | classify BASE HEAD",
+  );
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
