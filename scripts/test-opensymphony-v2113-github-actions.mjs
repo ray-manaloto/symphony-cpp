@@ -2,11 +2,13 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const workflowPath = ".github/workflows/opensymphony-v2113-evaluation.yml";
+const inputIdPath = "scripts/opensymphony-v2113-build-input-id.sh";
 const runnerPath = "scripts/run-opensymphony-v2113-github-actions.sh";
 const expectedPaths = [
   workflowPath,
@@ -64,6 +66,9 @@ function extractPushPaths(workflow) {
 }
 
 function validateWorkflow(workflow) {
+  const portableInputStepName = "Prove portable build-input identity before Docker";
+  const portableInputCommand =
+    'build_input_sha256="$(scripts/opensymphony-v2113-build-input-id.sh)"';
   for (const token of [
     "name: OpenSymphony v2.11.3 stock evaluation image",
     "on:\n  push:\n    branches:\n      - codex/opensymphony-v2113-gha",
@@ -90,6 +95,9 @@ function validateWorkflow(workflow) {
     "if: ${{ always() }}",
     "Prove fresh runner Docker collision boundary",
     `${runnerPath} preflight`,
+    portableInputStepName,
+    portableInputCommand,
+    '[[ "${build_input_sha256}" =~ ^[0-9a-f]{64}$ ]]',
   ]) {
     if (!workflow.includes(token)) fail(`workflow omitted ${token}`);
   }
@@ -111,6 +119,9 @@ function validateWorkflow(workflow) {
     fail("workflow configures unsupported setup-buildx input install");
   }
   requireInOrder(workflow, [
+    checkoutPin,
+    portableInputStepName,
+    portableInputCommand,
     "Verify native x64 runner and private Docker boundary",
     'test "$(dpkg --print-architecture)" = amd64',
     'test "$(uname -m)" = x86_64',
@@ -225,7 +236,7 @@ function validateRunner(runner) {
 const workflow = readFileSync(resolve(root, workflowPath), "utf8");
 const runner = readFileSync(resolve(root, runnerPath), "utf8");
 const inputId = readFileSync(
-  resolve(root, "scripts/opensymphony-v2113-build-input-id.sh"),
+  resolve(root, inputIdPath),
   "utf8",
 );
 const inputManifest = JSON.parse(
@@ -244,6 +255,309 @@ const buildContract = readFileSync(
 );
 validateWorkflow(workflow);
 validateRunner(runner);
+
+const portabilityFixtureRoot = mkdtempSync(
+  join(tmpdir(), "symphony-osv2113-build-input-portability-"),
+);
+process.on("exit", () => rmSync(portabilityFixtureRoot, { recursive: true, force: true }));
+
+function writeExecutable(name, contents) {
+  const path = join(portabilityFixtureRoot, name);
+  writeFileSync(path, contents);
+  chmodSync(path, 0o755);
+}
+
+const nativeOs = spawnSync("uname", ["-s"], { encoding: "utf8" }).stdout.trim();
+assert.ok(["Darwin", "Linux"].includes(nativeOs), `unsupported test host ${nativeOs}`);
+const oppositeOs = nativeOs === "Darwin" ? "Linux" : "Darwin";
+writeExecutable("uname", `#!/usr/bin/env bash\nprintf '%s\\n' '${oppositeOs}'\n`);
+if (oppositeOs === "Linux") {
+  writeExecutable(
+    "stat",
+    `#!/usr/bin/env bash
+set -euo pipefail
+if test "\${1:-}" != -c || test "\${2:-}" != %a || test "\${3:-}" != --; then
+  printf '%s\\n' "simulated GNU stat rejected non-GNU arguments: $*" >&2
+  exit 64
+fi
+exec /usr/bin/stat -f '%Lp' "\${4:-}"
+`,
+  );
+  writeExecutable(
+    "sha256sum",
+    `#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/bin/shasum -a 256 "$@"
+`,
+  );
+} else {
+  writeExecutable(
+    "stat",
+    `#!/usr/bin/env bash
+set -euo pipefail
+if test "\${1:-}" != -f || test "\${2:-}" != %Lp; then
+  printf '%s\\n' "simulated BSD stat rejected non-BSD arguments: $*" >&2
+  exit 64
+fi
+exec /usr/bin/stat -c '%a' -- "\${3:-}"
+`,
+  );
+  writeExecutable(
+    "shasum",
+    `#!/usr/bin/env bash
+set -euo pipefail
+test "\${1:-}" = -a
+test "\${2:-}" = 256
+shift 2
+exec /usr/bin/sha256sum "$@"
+`,
+  );
+}
+
+const runBuildInput = (environment = process.env) =>
+  spawnSync("/bin/bash", [resolve(root, inputIdPath)], {
+    cwd: root,
+    env: environment,
+    encoding: "utf8",
+  });
+const nativeBuildInput = runBuildInput();
+assert.equal(nativeBuildInput.status, 0, nativeBuildInput.stderr);
+assert.match(nativeBuildInput.stdout, /^[0-9a-f]{64}\n$/);
+assert.equal(nativeBuildInput.stderr, "");
+const oppositeBuildInput = runBuildInput({
+  ...process.env,
+  PATH: `${portabilityFixtureRoot}:${process.env.PATH}`,
+});
+assert.equal(oppositeBuildInput.status, 0, oppositeBuildInput.stderr);
+assert.equal(
+  oppositeBuildInput.stdout,
+  nativeBuildInput.stdout,
+  `${nativeOs} and simulated ${oppositeOs} build-input identities must be byte-identical`,
+);
+assert.ok(inputId.includes("uname -s"), "build-input script must select from exact uname -s");
+
+function writeTool(directory, name, contents) {
+  const path = join(directory, name);
+  writeFileSync(path, contents);
+  chmodSync(path, 0o755);
+}
+
+function makeIsolatedToolchain({
+  os = nativeOs,
+  omit = [],
+  unameBehavior = "native",
+  statBehavior = "native",
+  hashBehavior = "native",
+} = {}) {
+  const directory = mkdtempSync(join(portabilityFixtureRoot, "toolchain-"));
+  const omitted = new Set(omit);
+  writeTool(directory, "dirname", "#!/bin/bash\nexec /usr/bin/dirname \"$@\"\n");
+  writeTool(directory, "awk", "#!/bin/bash\nexec /usr/bin/awk \"$@\"\n");
+
+  if (!omitted.has("uname")) {
+    writeTool(
+      directory,
+      "uname",
+      unameBehavior === "fail"
+        ? "#!/bin/bash\nprintf '%s\\n' 'simulated uname failure' >&2\nexit 41\n"
+        : `#!/bin/bash\nprintf '%s\\n' '${os}'\n`,
+    );
+  }
+
+  if (!omitted.has("stat")) {
+    const reportedPath = os === "Linux" ? "${4:-}" : "${3:-}";
+    const expectedArguments =
+      os === "Linux"
+        ? 'test "${1:-}" = -c && test "${2:-}" = %a && test "${3:-}" = --'
+        : 'test "${1:-}" = -f && test "${2:-}" = %Lp';
+    const nativeStat =
+      nativeOs === "Darwin"
+        ? `/usr/bin/stat -f '%Lp' "${reportedPath}"`
+        : `/usr/bin/stat -c '%a' -- "${reportedPath}"`;
+    const statResult =
+      statBehavior === "fail"
+        ? "printf '%s\\n' 'simulated stat failure' >&2\nexit 42"
+        : statBehavior === "malformed"
+          ? "printf '%s\\n' 600"
+          : `exec ${nativeStat}`;
+    writeTool(
+      directory,
+      "stat",
+      `#!/bin/bash
+set -euo pipefail
+${expectedArguments} || { printf '%s\\n' 'unexpected stat arguments' >&2; exit 64; }
+${statResult}
+`,
+    );
+  }
+
+  const hashCommand = os === "Linux" ? "sha256sum" : "shasum";
+  if (!omitted.has(hashCommand)) {
+    const normalizeArguments =
+      os === "Darwin"
+        ? `test "\${1:-}" = -a && test "\${2:-}" = 256 || exit 64
+shift 2`
+        : "";
+    const nativeHash =
+      nativeOs === "Darwin"
+        ? 'exec /usr/bin/shasum -a 256 "$@"'
+        : 'exec /usr/bin/sha256sum "$@"';
+    const hashResult =
+      hashBehavior === "fail"
+        ? "printf '%s\\n' 'simulated hash failure' >&2\nexit 43"
+        : hashBehavior === "malformed-file"
+          ? `if test "$#" -gt 0; then
+  printf '%s  %s\\n' NOT-A-SHA256 "\${!#}"
+  exit 0
+fi
+${nativeHash}`
+          : hashBehavior === "empty-file"
+            ? `if test "$#" -gt 0; then
+  exit 0
+fi
+${nativeHash}`
+          : hashBehavior === "malformed-final"
+            ? `if test "$#" -eq 0; then
+  /bin/cat >/dev/null
+  printf '%s  -\\n' NOT-A-SHA256
+  exit 0
+fi
+${nativeHash}`
+            : hashBehavior === "empty-final"
+              ? `if test "$#" -eq 0; then
+  /bin/cat >/dev/null
+  exit 0
+fi
+${nativeHash}`
+            : nativeHash;
+    writeTool(
+      directory,
+      hashCommand,
+      `#!/bin/bash
+set -euo pipefail
+${normalizeArguments}
+${hashResult}
+`,
+    );
+  }
+  return directory;
+}
+
+function runBuildInputWithToolchain(options) {
+  const directory = makeIsolatedToolchain(options);
+  return runBuildInput({ ...process.env, PATH: directory });
+}
+
+function requireBuildInputFailure(name, options, pattern) {
+  const result = runBuildInputWithToolchain(options);
+  assert.notEqual(result.status, 0, `${name} must fail`);
+  assert.equal(result.stdout, "", `${name} must not emit a partial identity`);
+  assert.match(result.stderr, pattern, `${name} must fail explicitly`);
+}
+
+requireBuildInputFailure("missing uname", { omit: ["uname"] }, /required command.*uname/i);
+requireBuildInputFailure("failed uname", { unameBehavior: "fail" }, /uname -s failed/i);
+requireBuildInputFailure("unknown host OS", { os: "Plan9" }, /unsupported host OS Plan9/i);
+requireBuildInputFailure("missing stat", { omit: ["stat"] }, /required command.*stat/i);
+requireBuildInputFailure("failed stat", { statBehavior: "fail" }, /stat failed/i);
+requireBuildInputFailure(
+  "missing hash tool",
+  { omit: [nativeOs === "Linux" ? "sha256sum" : "shasum"] },
+  /required command.*(sha256sum|shasum)/i,
+);
+requireBuildInputFailure("failed hash tool", { hashBehavior: "fail" }, /SHA-256.*failed/i);
+requireBuildInputFailure("malformed mode", { statBehavior: "malformed" }, /invalid mode/i);
+requireBuildInputFailure(
+  "malformed file digest",
+  { hashBehavior: "malformed-file" },
+  /invalid file SHA-256/i,
+);
+requireBuildInputFailure(
+  "empty file digest",
+  { hashBehavior: "empty-file" },
+  /invalid file SHA-256/i,
+);
+requireBuildInputFailure(
+  "malformed final digest",
+  { hashBehavior: "malformed-final" },
+  /invalid final SHA-256/i,
+);
+requireBuildInputFailure(
+  "empty final digest",
+  { hashBehavior: "empty-final" },
+  /invalid final SHA-256/i,
+);
+
+const expectedBuildInputPaths = [
+  workflowPath,
+  "containers/OpenSymphony-v2113-evaluation.Containerfile",
+  "containers/opensymphony-v2113-evaluation.bake.hcl",
+  "ops/opensymphony/evaluation/v2.11.3/input-manifest-v1.json",
+  "scripts/build-opensymphony-v2113-evaluation.sh",
+  inputIdPath,
+  runnerPath,
+  "scripts/test-opensymphony-v2113-build.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-opensymphony-v2113-upstream.sh",
+];
+
+function validateBuildInputSource(source) {
+  const paths = source.match(
+    /readonly -a input_paths=\(\n(?<paths>(?:  [^\n]+\n)+)\)/,
+  )?.groups?.paths;
+  if (!paths) fail("build-input script omitted its exact path array");
+  assert.deepEqual(
+    paths.trimEnd().split("\n").map((line) => line.trim()),
+    expectedBuildInputPaths,
+  );
+  requireOnce(
+    source,
+    "opensymphony-v2113-evaluation-build-input-v2\\0",
+    "build-input v2 domain",
+  );
+  for (const token of [
+    'host_os="$(uname -s)"',
+    "Linux) stat -c '%a' -- \"$1\" ;;",
+    "Darwin) stat -f '%Lp' \"$1\" ;;",
+    'Linux) sha256sum -- "$1" ;;',
+    'Darwin) shasum -a 256 -- "$1" ;;',
+    "^(644|755)$",
+    "^[0-9a-f]{64}$",
+    "required command",
+    "unsupported host OS",
+    "invalid mode",
+  ]) {
+    if (!source.includes(token)) fail(`build-input script omitted ${token}`);
+  }
+}
+
+validateBuildInputSource(inputId);
+for (const [name, candidate] of [
+  [
+    "GNU branch restored to BSD stat",
+    inputId.replace("Linux) stat -c '%a' -- \"$1\" ;;", "Linux) stat -f '%Lp' \"$1\" ;;"),
+  ],
+  [
+    "BSD branch changed to GNU stat",
+    inputId.replace("Darwin) stat -f '%Lp' \"$1\" ;;", "Darwin) stat -c '%a' -- \"$1\" ;;"),
+  ],
+  [
+    "domain drift",
+    inputId.replace(
+      "opensymphony-v2113-evaluation-build-input-v2\\0",
+      "opensymphony-v2113-evaluation-build-input-v3\\0",
+    ),
+  ],
+  [
+    "path-order drift",
+    inputId.replace(
+      `${expectedBuildInputPaths[0]}\n  ${expectedBuildInputPaths[1]}`,
+      `${expectedBuildInputPaths[1]}\n  ${expectedBuildInputPaths[0]}`,
+    ),
+  ],
+]) {
+  assert.throws(() => validateBuildInputSource(candidate), undefined, name);
+}
 
 const validGitOid = "e7f2bf480c79d8c1c5d6b81e3c474b576250fc55";
 const runGitOidValidation = (value) =>
@@ -357,6 +671,39 @@ assert.throws(
   undefined,
   "unsupported setup-buildx install input",
 );
+const portabilityWorkflowMutations = [
+  [
+    "missing pre-Docker build-input proof",
+    "Prove portable build-input identity before Docker",
+    "Skip portable build-input identity before Docker",
+  ],
+  [
+    "hardcoded build-input identity",
+    'build_input_sha256="$(scripts/opensymphony-v2113-build-input-id.sh)"',
+    `build_input_sha256="${"a".repeat(64)}"`,
+  ],
+  [
+    "40-character build-input validation",
+    '[[ "${build_input_sha256}" =~ ^[0-9a-f]{64}$ ]]',
+    '[[ "${build_input_sha256}" =~ ^[0-9a-f]{40}$ ]]',
+  ],
+];
+for (const [name, before, after] of portabilityWorkflowMutations) {
+  assert.throws(() => validateWorkflow(workflow.replace(before, after)), undefined, name);
+}
+const portableStepName = "Prove portable build-input identity before Docker";
+const dockerBoundaryStepName = "Verify native x64 runner and private Docker boundary";
+assert.throws(
+  () =>
+    validateWorkflow(
+      workflow
+        .replace(portableStepName, "__PORTABLE_STEP__")
+        .replace(dockerBoundaryStepName, portableStepName)
+        .replace("__PORTABLE_STEP__", dockerBoundaryStepName),
+    ),
+  undefined,
+  "build-input proof moved after Docker setup",
+);
 const runnerMutations = [
   ["nondeterministic archive", "--mtime=@0", "--mtime=now"],
   ["builder cleanup", "docker buildx rm", "docker buildx inspect"],
@@ -383,5 +730,5 @@ assert.throws(
 );
 
 process.stdout.write(
-  `OpenSymphony v2.11.3 GitHub Actions contracts passed: ${workflowMutations.length + expectedPaths.length + runnerMutations.length + 1} prior hostile mutations plus 7 correction hostile mutations rejected\n`,
+  `OpenSymphony v2.11.3 GitHub Actions contracts passed: ${workflowMutations.length + expectedPaths.length + runnerMutations.length + 1} prior hostile mutations plus 7 correction hostile mutations plus ${portabilityWorkflowMutations.length + 5} portability hostile mutations rejected\n`,
 );

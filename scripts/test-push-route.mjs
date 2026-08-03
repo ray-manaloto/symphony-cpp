@@ -22,12 +22,15 @@ import {
   OPENSYMPHONY_V2113_GHA_BASE,
   OPENSYMPHONY_V2113_GHA_CORRECTION_BASE,
   OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS,
+  OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE,
+  OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS,
   OPENSYMPHONY_V2113_GHA_PATHS,
   OPENSYMPHONY_V2113_GHA_REMOTE_URL,
   buildRouteState,
   classifyPaths,
   prepareOpenSymphonyV2113GitHubActions,
   prepareOpenSymphonyV2113GitHubActionsCorrection,
+  prepareOpenSymphonyV2113GitHubActionsPortabilityCorrection,
   preparePush,
   verifyPrePush,
   verifyHookContext,
@@ -56,6 +59,14 @@ const expectedOpenSymphonyV2113GhaCorrectionPaths = [
   "docs/opensymphony-v2113-evaluation-workflow.md",
   "scripts/check-push-route.mjs",
   "scripts/run-opensymphony-v2113-github-actions.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-push-route.mjs",
+];
+const expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths = [
+  ".github/workflows/opensymphony-v2113-evaluation.yml",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+  "scripts/check-push-route.mjs",
+  "scripts/opensymphony-v2113-build-input-id.sh",
   "scripts/test-opensymphony-v2113-github-actions.mjs",
   "scripts/test-push-route.mjs",
 ];
@@ -184,6 +195,15 @@ function commitOpenSymphonyV2113GhaCorrection(repo) {
   git(repo, "commit", "-m", "exact #47 native workflow correction");
 }
 
+function commitOpenSymphonyV2113GhaPortabilityCorrection(repo) {
+  for (const path of expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths) {
+    const absolute = join(repo, path);
+    writeFileSync(absolute, `${readFileSync(absolute, "utf8")}\n# exact #47 portability: ${path}\n`);
+  }
+  git(repo, "add", "--", ...expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths);
+  git(repo, "commit", "-m", "exact #47 native workflow portability correction");
+}
+
 assert.deepEqual(classifyPaths(["docs/readme.md"]).routes, ["documentation"]);
 assert.deepEqual(classifyPaths(["scripts/check-push-route.mjs"]).routes, ["hook-self"]);
 assert.deepEqual(classifyPaths([".codex/hooks.json"]).routes, [
@@ -230,10 +250,18 @@ assert.equal(
   OPENSYMPHONY_V2113_GHA_CORRECTION_BASE,
   "e7f2bf480c79d8c1c5d6b81e3c474b576250fc55",
 );
+assert.equal(
+  OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE,
+  "e68094924412a8d4248e67e2717aad49e0576907",
+);
 assert.deepEqual(OPENSYMPHONY_V2113_GHA_PATHS, expectedOpenSymphonyV2113GhaPaths);
 assert.deepEqual(
   OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS,
   expectedOpenSymphonyV2113GhaCorrectionPaths,
+);
+assert.deepEqual(
+  OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS,
+  expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths,
 );
 assert.deepEqual(classifyPaths(expectedOpenSymphonyV2113GhaPaths), {
   routes: ["opensymphony-v2113-github-actions"],
@@ -257,6 +285,19 @@ assert.throws(
 );
 assert.throws(
   () => classifyPaths([...expectedOpenSymphonyV2113GhaCorrectionPaths, "unknown.bin"]),
+  /unknown route/,
+);
+assert.deepEqual(classifyPaths(expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths), {
+  routes: ["opensymphony-v2113-github-actions-portability-correction"],
+  blocked: [],
+});
+assert.throws(
+  () => classifyPaths(expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths.slice(1)),
+  PushRouteError,
+);
+assert.throws(
+  () =>
+    classifyPaths([...expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths, "unknown.bin"]),
   /unknown route/,
 );
 
@@ -478,6 +519,183 @@ assert.throws(
       {
         expectedOpenSymphonyV2113GhaCorrectionBase: opensymphonyGhaMultipleCorrectionBase,
         expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGhaMultipleCorrection.remote,
+      },
+    ),
+  /one exact commit/,
+);
+
+const opensymphonyGhaPortability = initializeFixture(
+  "opensymphony-v2113-gha-portability-correction",
+);
+commitOpenSymphonyV2113GhaPacket(opensymphonyGhaPortability.repo);
+commitOpenSymphonyV2113GhaCorrection(opensymphonyGhaPortability.repo);
+const opensymphonyGhaPortabilityBase = git(
+  opensymphonyGhaPortability.repo,
+  "rev-parse",
+  "HEAD",
+);
+configureOpenSymphonyV2113GhaCorrection(
+  opensymphonyGhaPortability.repo,
+  opensymphonyGhaPortability.remote,
+  opensymphonyGhaPortabilityBase,
+);
+commitOpenSymphonyV2113GhaPortabilityCorrection(opensymphonyGhaPortability.repo);
+const opensymphonyGhaPortabilityHead = git(
+  opensymphonyGhaPortability.repo,
+  "rev-parse",
+  "HEAD",
+);
+const opensymphonyGhaPortabilityEnvironment = hookEnvironment(
+  opensymphonyGhaPortability.repo,
+  opensymphonyGhaPortabilityBase,
+  { PRE_COMMIT_REMOTE_BRANCH: opensymphonyV2113GhaRemoteRef },
+);
+const opensymphonyGhaPortabilityDependencies = {
+  expectedOpenSymphonyV2113GhaPortabilityCorrectionBase: opensymphonyGhaPortabilityBase,
+  expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGhaPortability.remote,
+};
+const opensymphonyGhaPortabilityState = verifyHookContext(
+  opensymphonyGhaPortability.repo,
+  opensymphonyGhaPortabilityEnvironment,
+  opensymphonyGhaPortabilityDependencies,
+);
+assert.equal(opensymphonyGhaPortabilityState.base, opensymphonyGhaPortabilityBase);
+assert.equal(opensymphonyGhaPortabilityState.head, opensymphonyGhaPortabilityHead);
+assert.deepEqual(
+  opensymphonyGhaPortabilityState.paths,
+  expectedOpenSymphonyV2113GhaPortabilityCorrectionPaths,
+);
+assert.deepEqual(opensymphonyGhaPortabilityState.routes, [
+  "opensymphony-v2113-github-actions-portability-correction",
+]);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaPortability.repo,
+      {
+        ...opensymphonyGhaPortabilityEnvironment,
+        PRE_COMMIT_REMOTE_BRANCH: "refs/heads/not-authorized",
+      },
+      opensymphonyGhaPortabilityDependencies,
+    ),
+  /destination|upstream/,
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaPortability.repo,
+      opensymphonyGhaPortabilityEnvironment,
+      {
+        ...opensymphonyGhaPortabilityDependencies,
+        expectedOpenSymphonyV2113GhaRemoteUrl: "git@github.com:not-authorized/repository.git",
+      },
+    ),
+  /destination/,
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaPortability.repo,
+      opensymphonyGhaPortabilityEnvironment,
+      {
+        ...opensymphonyGhaPortabilityDependencies,
+        expectedOpenSymphonyV2113GhaPortabilityCorrectionBase: git(
+          opensymphonyGhaPortability.repo,
+          "rev-parse",
+          `${opensymphonyGhaPortabilityBase}^`,
+        ),
+      },
+    ),
+  /base/,
+);
+git(
+  opensymphonyGhaPortability.repo,
+  "update-ref",
+  "refs/remotes/origin/codex/opensymphony-v2113-gha",
+  git(opensymphonyGhaPortability.repo, "rev-parse", `${opensymphonyGhaPortabilityBase}^`),
+);
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaPortability.repo,
+      opensymphonyGhaPortabilityEnvironment,
+      opensymphonyGhaPortabilityDependencies,
+    ),
+  /upstream|base/,
+);
+git(
+  opensymphonyGhaPortability.repo,
+  "update-ref",
+  "refs/remotes/origin/codex/opensymphony-v2113-gha",
+  opensymphonyGhaPortabilityBase,
+);
+const dirtyPortabilityPath = join(
+  opensymphonyGhaPortability.repo,
+  "scripts/opensymphony-v2113-build-input-id.sh",
+);
+const cleanPortabilityContents = readFileSync(dirtyPortabilityPath, "utf8");
+writeFileSync(dirtyPortabilityPath, `${cleanPortabilityContents}\n# dirty\n`);
+assert.throws(
+  () =>
+    prepareOpenSymphonyV2113GitHubActionsPortabilityCorrection(
+      opensymphonyGhaPortability.repo,
+      opensymphonyGhaPortabilityDependencies,
+    ),
+  /clean/,
+);
+writeFileSync(dirtyPortabilityPath, cleanPortabilityContents);
+prepareOpenSymphonyV2113GitHubActionsPortabilityCorrection(
+  opensymphonyGhaPortability.repo,
+  {
+    ...opensymphonyGhaPortabilityDependencies,
+    runStaticChecks() {},
+  },
+);
+verifyPrePush(
+  opensymphonyGhaPortability.repo,
+  opensymphonyGhaPortabilityEnvironment,
+  opensymphonyGhaPortabilityDependencies,
+);
+
+const opensymphonyGhaMultiplePortability = initializeFixture(
+  "opensymphony-v2113-gha-multiple-portability-correction",
+);
+commitOpenSymphonyV2113GhaPacket(opensymphonyGhaMultiplePortability.repo);
+commitOpenSymphonyV2113GhaCorrection(opensymphonyGhaMultiplePortability.repo);
+const opensymphonyGhaMultiplePortabilityBase = git(
+  opensymphonyGhaMultiplePortability.repo,
+  "rev-parse",
+  "HEAD",
+);
+configureOpenSymphonyV2113GhaCorrection(
+  opensymphonyGhaMultiplePortability.repo,
+  opensymphonyGhaMultiplePortability.remote,
+  opensymphonyGhaMultiplePortabilityBase,
+);
+commitOpenSymphonyV2113GhaPortabilityCorrection(opensymphonyGhaMultiplePortability.repo);
+writeFileSync(
+  join(opensymphonyGhaMultiplePortability.repo, "docs/opensymphony-v2113-evaluation-workflow.md"),
+  "# second portability correction commit\n",
+);
+git(
+  opensymphonyGhaMultiplePortability.repo,
+  "add",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+);
+git(opensymphonyGhaMultiplePortability.repo, "commit", "-m", "second portability commit");
+assert.throws(
+  () =>
+    verifyHookContext(
+      opensymphonyGhaMultiplePortability.repo,
+      hookEnvironment(
+        opensymphonyGhaMultiplePortability.repo,
+        opensymphonyGhaMultiplePortabilityBase,
+        { PRE_COMMIT_REMOTE_BRANCH: opensymphonyV2113GhaRemoteRef },
+      ),
+      {
+        expectedOpenSymphonyV2113GhaPortabilityCorrectionBase:
+          opensymphonyGhaMultiplePortabilityBase,
+        expectedOpenSymphonyV2113GhaRemoteUrl: opensymphonyGhaMultiplePortability.remote,
       },
     ),
   /one exact commit/,

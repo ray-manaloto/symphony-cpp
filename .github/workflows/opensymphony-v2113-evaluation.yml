@@ -47,6 +47,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prove portable build-input identity before Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_input_sha256="$(scripts/opensymphony-v2113-build-input-id.sh)"
+          [[ "${build_input_sha256}" =~ ^[0-9a-f]{64}$ ]]
+          printf 'portable build-input SHA-256: %s\n' "${build_input_sha256}"
+
       - name: Verify native x64 runner and private Docker boundary
         run: |
           set -euo pipefail

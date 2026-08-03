@@ -24,6 +24,7 @@ const RECEIPT_KEYS = [
 const RECEIPT_MAX_BYTES = 64 * 1024;
 const RECEIPT_MAX_AGE_MS = 15 * 60 * 1000;
 const ROUTE_ORDER = [
+  "opensymphony-v2113-github-actions-portability-correction",
   "opensymphony-v2113-github-actions-correction",
   "opensymphony-v2113-github-actions",
   "hook-self",
@@ -36,6 +37,8 @@ export const OPENSYMPHONY_V2113_GHA_BASE =
   "b682ef362494936b38f99468b0e84788cceec17e";
 export const OPENSYMPHONY_V2113_GHA_CORRECTION_BASE =
   "e7f2bf480c79d8c1c5d6b81e3c474b576250fc55";
+export const OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE =
+  "e68094924412a8d4248e67e2717aad49e0576907";
 export const OPENSYMPHONY_V2113_GHA_REMOTE_URL =
   "git@github.com:ray-manaloto/symphony-cpp.git";
 export const OPENSYMPHONY_V2113_GHA_PATHS = Object.freeze([
@@ -60,6 +63,14 @@ export const OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS = Object.freeze([
   "docs/opensymphony-v2113-evaluation-workflow.md",
   "scripts/check-push-route.mjs",
   "scripts/run-opensymphony-v2113-github-actions.sh",
+  "scripts/test-opensymphony-v2113-github-actions.mjs",
+  "scripts/test-push-route.mjs",
+]);
+export const OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS = Object.freeze([
+  ".github/workflows/opensymphony-v2113-evaluation.yml",
+  "docs/opensymphony-v2113-evaluation-workflow.md",
+  "scripts/check-push-route.mjs",
+  "scripts/opensymphony-v2113-build-input-id.sh",
   "scripts/test-opensymphony-v2113-github-actions.mjs",
   "scripts/test-push-route.mjs",
 ]);
@@ -196,6 +207,15 @@ function isContainerRecipe(path) {
 
 export function classifyPaths(paths) {
   if (!Array.isArray(paths) || paths.length === 0) fail("push range has no changed paths");
+  if (
+    paths.length === OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS.length &&
+    OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS.every((path) => paths.includes(path))
+  ) {
+    return {
+      routes: ["opensymphony-v2113-github-actions-portability-correction"],
+      blocked: [],
+    };
+  }
   if (
     paths.length === OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS.length &&
     OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS.every((path) => paths.includes(path))
@@ -339,6 +359,14 @@ function assertOpenSymphonyV2113GhaCorrectionPathsClean(repo) {
     repo,
     OPENSYMPHONY_V2113_GHA_CORRECTION_PATHS,
     "the exact #47 GitHub Actions correction",
+  );
+}
+
+function assertOpenSymphonyV2113GhaPortabilityCorrectionPathsClean(repo) {
+  assertPathsClean(
+    repo,
+    OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_PATHS,
+    "the exact #47 GitHub Actions portability correction",
   );
 }
 
@@ -544,6 +572,33 @@ function buildOpenSymphonyV2113GhaCorrectionState(
   return state;
 }
 
+function buildOpenSymphonyV2113GhaPortabilityCorrectionState(
+  repo,
+  headInput,
+  expectedBase = OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE,
+) {
+  const oidLength = objectLength(repo);
+  requireOid(expectedBase, oidLength, "#47 GitHub Actions portability correction base");
+  requireOid(headInput, oidLength, "push head");
+  const head = git(repo, ["rev-parse", "--verify", `${headInput}^{commit}`]);
+  if (head !== headInput) fail("push head must use an exact commit ID");
+  const parents = git(repo, ["rev-list", "--parents", "-n", "1", head]).split(" ");
+  if (parents.length !== 2 || parents[1] !== expectedBase) {
+    fail(
+      "#47 GitHub Actions portability correction must be one exact commit on the approved base",
+    );
+  }
+  const state = buildRouteState(repo, expectedBase, head);
+  if (
+    state.routes.length !== 1 ||
+    state.routes[0] !== "opensymphony-v2113-github-actions-portability-correction" ||
+    state.blocked.length !== 0
+  ) {
+    fail("push range is not the exact #47 GitHub Actions portability correction");
+  }
+  return state;
+}
+
 export function verifyHookContext(repoInput, environment = process.env, dependencies = {}) {
   const repo = repositoryRoot(repoInput);
   const oidLength = objectLength(repo);
@@ -600,6 +655,25 @@ export function verifyHookContext(repoInput, environment = process.env, dependen
   }
   assertOnlyCheckpointDrift(repo);
   const state = buildRouteState(repo, base, head);
+  if (state.routes[0] === "opensymphony-v2113-github-actions-portability-correction") {
+    const expectedBase =
+      dependencies.expectedOpenSymphonyV2113GhaPortabilityCorrectionBase ??
+      OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE;
+    const expectedRemoteUrl =
+      dependencies.expectedOpenSymphonyV2113GhaRemoteUrl ??
+      OPENSYMPHONY_V2113_GHA_REMOTE_URL;
+    if (
+      localRef !== OPENSYMPHONY_V2113_GHA_LOCAL_REF ||
+      remoteRef !== OPENSYMPHONY_V2113_GHA_REMOTE_REF ||
+      remoteName !== "origin" ||
+      remoteUrl !== expectedRemoteUrl ||
+      base !== expectedBase
+    ) {
+      fail("#47 GitHub Actions portability correction destination or base drifted");
+    }
+    assertOpenSymphonyV2113GhaPortabilityCorrectionPathsClean(repo);
+    return buildOpenSymphonyV2113GhaPortabilityCorrectionState(repo, head, expectedBase);
+  }
   if (state.routes[0] === "opensymphony-v2113-github-actions-correction") {
     const expectedBase =
       dependencies.expectedOpenSymphonyV2113GhaCorrectionBase ??
@@ -809,6 +883,68 @@ export function prepareOpenSymphonyV2113GitHubActionsCorrection(
   return after;
 }
 
+export function prepareOpenSymphonyV2113GitHubActionsPortabilityCorrection(
+  repoInput = process.cwd(),
+  dependencies = {},
+) {
+  const repo = repositoryRoot(repoInput);
+  assertOpenSymphonyV2113GhaPortabilityCorrectionPathsClean(repo);
+  const upstream = configuredUpstream(repo);
+  const expectedBase =
+    dependencies.expectedOpenSymphonyV2113GhaPortabilityCorrectionBase ??
+    OPENSYMPHONY_V2113_GHA_PORTABILITY_CORRECTION_BASE;
+  const expectedRemoteUrl =
+    dependencies.expectedOpenSymphonyV2113GhaRemoteUrl ??
+    OPENSYMPHONY_V2113_GHA_REMOTE_URL;
+  if (
+    upstream.localRef !== OPENSYMPHONY_V2113_GHA_LOCAL_REF ||
+    upstream.remoteName !== "origin" ||
+    upstream.remoteRef !== OPENSYMPHONY_V2113_GHA_REMOTE_REF ||
+    upstream.pushUrl !== expectedRemoteUrl ||
+    upstream.remoteHead !== expectedBase
+  ) {
+    fail("#47 GitHub Actions portability correction destination or base drifted");
+  }
+  const head = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  const before = buildOpenSymphonyV2113GhaPortabilityCorrectionState(
+    repo,
+    head,
+    expectedBase,
+  );
+  (dependencies.runStaticChecks ?? runOpenSymphonyV2113GhaStaticChecks)(repo);
+  run(
+    repo,
+    "node",
+    ["scripts/check-adaptive-orchestration.mjs", "--publication-scan", before.base, before.head],
+    { label: "publication scan", stdio: "inherit" },
+  );
+  const afterUpstream = configuredUpstream(repo);
+  const afterHead = git(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  const after = buildOpenSymphonyV2113GhaPortabilityCorrectionState(
+    repo,
+    afterHead,
+    expectedBase,
+  );
+  assertOpenSymphonyV2113GhaPortabilityCorrectionPathsClean(repo);
+  if (
+    before.base !== after.base ||
+    before.head !== after.head ||
+    upstream.localRef !== afterUpstream.localRef ||
+    upstream.remoteName !== afterUpstream.remoteName ||
+    upstream.remoteRef !== afterUpstream.remoteRef ||
+    upstream.pushUrl !== afterUpstream.pushUrl ||
+    upstream.remoteHead !== afterUpstream.remoteHead ||
+    JSON.stringify(before.paths) !== JSON.stringify(after.paths)
+  ) {
+    fail("#47 GitHub Actions portability correction push range changed during receipt preparation");
+  }
+  verifyPublicationReceipt(repo, after.base, after.head);
+  process.stdout.write(
+    `exact #47 GitHub Actions portability correction receipt prepared: ${after.head}\n`,
+  );
+  return after;
+}
+
 export function preparePush(repoInput = process.cwd()) {
   const repo = repositoryRoot(repoInput);
   assertOnlyCheckpointDrift(repo);
@@ -904,6 +1040,13 @@ function main() {
     prepareOpenSymphonyV2113GitHubActionsCorrection();
     return;
   }
+  if (
+    operation === "prepare-opensymphony-v2113-github-actions-portability-correction" &&
+    args.length === 0
+  ) {
+    prepareOpenSymphonyV2113GitHubActionsPortabilityCorrection();
+    return;
+  }
   if (operation === "pre-push" && args.length === 0) {
     runPrePush();
     return;
@@ -915,7 +1058,7 @@ function main() {
     return;
   }
   fail(
-    "usage: check-push-route.mjs prepare | prepare-opensymphony-v2113-github-actions | prepare-opensymphony-v2113-github-actions-correction | pre-push | classify BASE HEAD",
+    "usage: check-push-route.mjs prepare | prepare-opensymphony-v2113-github-actions | prepare-opensymphony-v2113-github-actions-correction | prepare-opensymphony-v2113-github-actions-portability-correction | pre-push | classify BASE HEAD",
   );
 }
 

@@ -74,9 +74,45 @@ node scripts/check-push-route.mjs prepare-opensymphony-v2113-github-actions-corr
 git push origin refs/heads/codex/implementation:refs/heads/codex/opensymphony-v2113-gha
 ```
 
-This local correction packet does not authorize or perform that push. A separately approved second
-push and its new automatic Actions run are still required; the failed run is not rerun, cancelled,
-or replaced, and no success is claimed here.
+The separately authorized correction produced commit
+`e68094924412a8d4248e67e2717aad49e0576907` and push-event run `30842061123`, run 2 attempt 1.
+That immutable run also failed before image construction and before `docker buildx bake` because
+`scripts/opensymphony-v2113-build-input-id.sh` unconditionally invoked BSD
+`stat -f '%Lp'` on the `ubuntu-24.04` runner. Step 9 cleanup succeeded and removed the exact
+builder; upload was skipped and the run has zero artifacts. Neither failed run is rerun, cancelled,
+or otherwise mutated.
+
+## Final portability correction
+
+The final correction guard admits exactly one child commit of
+`e68094924412a8d4248e67e2717aad49e0576907`, containing exactly these six paths:
+
+- `.github/workflows/opensymphony-v2113-evaluation.yml`
+- `docs/opensymphony-v2113-evaluation-workflow.md`
+- `scripts/check-push-route.mjs`
+- `scripts/opensymphony-v2113-build-input-id.sh`
+- `scripts/test-opensymphony-v2113-github-actions.mjs`
+- `scripts/test-push-route.mjs`
+
+The build-input script selects only from exact `uname -s`: Linux uses GNU `stat -c '%a'` and
+`sha256sum`; Darwin uses BSD `stat -f '%Lp'` and `shasum -a 256`; every other OS, missing or failed
+tool, mode outside 644/755, or non-lowercase/non-64-character digest fails explicitly. Both branches
+serialize the unchanged v2 domain and path order byte-for-byte identically. An early post-checkout,
+pre-Docker workflow step proves the script emits exactly one 64-character lowercase SHA-256.
+
+The guard retains the same local ref, remote, push URL, and destination constraints while requiring
+the remote-tracking base to equal `e68094924412a8d4248e67e2717aad49e0576907`. Its local preparation
+command and proposed fast-forward push are:
+
+```sh
+node scripts/check-push-route.mjs prepare-opensymphony-v2113-github-actions-portability-correction
+git push origin refs/heads/codex/implementation:refs/heads/codex/opensymphony-v2113-gha
+```
+
+This final local correction does not authorize or perform that push. A separately approved third
+push and its new automatic Actions run are required, and no success is claimed here. Another
+pre-build harness failure ends further OpenSymphony correction rather than opening another patch
+cycle.
 
 ## Native build and evidence
 
